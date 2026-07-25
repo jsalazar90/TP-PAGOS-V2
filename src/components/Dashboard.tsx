@@ -10,6 +10,8 @@ interface DashboardProps {
   onOpenStatusModal: (request: PaymentRequest) => void;
   onOpenNewRequest: () => void;
   onRefresh: () => void;
+  onEditRequest?: (request: PaymentRequest) => void;
+  onDeleteRequest?: (request: PaymentRequest) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -19,11 +21,19 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onOpenStatusModal,
   onOpenNewRequest,
   onRefresh,
+  onEditRequest,
+  onDeleteRequest,
 }) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'px_fondos' | 'en_proceso' | 'urgente'>('all');
   const [searchQuery, setSearchQuery] = useState('');
 
-  const activeRequests = requests.filter(r => r.status !== 'realizado');
+  const activeRequests = requests
+    .filter(r => r.status !== 'realizado')
+    .sort((a, b) => {
+      if (a.status === 'urgente' && b.status !== 'urgente') return -1;
+      if (a.status !== 'urgente' && b.status === 'urgente') return 1;
+      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+    });
 
   const filteredRequests = activeRequests.filter(r => {
     if (activeFilter !== 'all' && r.status !== activeFilter) return false;
@@ -176,6 +186,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               currentUser={currentUser}
               onOpenDetails={onOpenDetails}
               onOpenStatusModal={onOpenStatusModal}
+              onEditRequest={onEditRequest}
+              onDeleteRequest={onDeleteRequest}
             />
           ))}
         </div>

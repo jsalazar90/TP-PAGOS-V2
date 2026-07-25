@@ -3,6 +3,8 @@ import { PaymentRequest, UserProfile, RequestStatus, CreatePaymentRequestInput }
 import {
   fetchPaymentRequests,
   createPaymentRequest,
+  updatePaymentRequest,
+  deletePaymentRequest,
   updateRequestStatus,
   fetchUsers,
   createNewUser,
@@ -20,8 +22,20 @@ import { RequestDetailModal } from './components/RequestDetailModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 
+const SESSION_STORAGE_KEY = 'jt_pagos_current_user_v1';
+
 export function App() {
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(() => {
+    const saved = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (saved) {
+      try {
+        return JSON.parse(saved);
+      } catch (e) {
+        return null;
+      }
+    }
+    return null;
+  });
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
@@ -29,6 +43,7 @@ export function App() {
 
   // Modals
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
+  const [editingRequest, setEditingRequest] = useState<PaymentRequest | null>(null);
   const [selectedRequestForStatus, setSelectedRequestForStatus] = useState<PaymentRequest | null>(null);
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<PaymentRequest | null>(null);
 
@@ -42,17 +57,41 @@ export function App() {
 
   // Load users and initial data
   useEffect(() => {
-    const loadInitialUsers = async () => {
+    const loadInitialData = async () => {
       try {
+        setLoading(true);
         const uList = await fetchUsers();
         setUsersList(uList);
+
+        const savedUserJson = localStorage.getItem(SESSION_STORAGE_KEY);
+        if (savedUserJson) {
+          try {
+            const savedUser: UserProfile = JSON.parse(savedUserJson);
+            const matchedUser = uList.find(u => u.id === savedUser.id || u.username === savedUser.username);
+            if (matchedUser && matchedUser.is_active) {
+              setCurrentUser(matchedUser);
+              localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(matchedUser));
+              const data = await fetchPaymentRequests(matchedUser);
+              setRequests(data);
+            } else if (!matchedUser && savedUser) {
+              setCurrentUser(savedUser);
+              const data = await fetchPaymentRequests(savedUser);
+              setRequests(data);
+            } else {
+              setCurrentUser(null);
+              localStorage.removeItem(SESSION_STORAGE_KEY);
+            }
+          } catch (e) {
+            localStorage.removeItem(SESSION_STORAGE_KEY);
+          }
+        }
       } catch (err) {
-        console.error('Error fetching users:', err);
+        console.error('Error fetching initial data:', err);
       } finally {
         setLoading(false);
       }
     };
-    loadInitialUsers();
+    loadInitialData();
   }, []);
 
   // Fetch payment requests when currentUser changes
@@ -69,30 +108,49 @@ export function App() {
   };
 
   const handleLoginSuccess = (user: UserProfile) => {
+    localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
     setCurrentUser(user);
     loadRequests(user);
     showToast(`Bienvenido(a), ${user.full_name}`, 'success');
   };
 
   const handleLogout = () => {
+    localStorage.removeItem(SESSION_STORAGE_KEY);
     setCurrentUser(null);
     setRequests([]);
     setActiveTab('dashboard');
     showToast('Sesión cerrada correctamente', 'success');
   };
 
-
-
-  // Create payment request handler
-  const handleCreateRequest = async (input: CreatePaymentRequestInput) => {
+  // Create or Update payment request handler
+  const handleSaveRequest = async (input: CreatePaymentRequestInput) => {
     if (!currentUser) return;
     try {
-      const newReq = await createPaymentRequest(input, currentUser);
-      setRequests(prev => [newReq, ...prev]);
-      showToast(`Solicitud LOC: #${newReq.locator} creada exitosamente`, 'success');
+      if (editingRequest) {
+        const updated = await updatePaymentRequest(editingRequest.id, input, currentUser);
+        setRequests(prev => prev.map(r => r.id === editingRequest.id ? updated : r));
+        showToast(`Solicitud LOC: #${updated.locator} actualizada exitosamente`, 'success');
+      } else {
+        const newReq = await createPaymentRequest(input, currentUser);
+        setRequests(prev => [newReq, ...prev]);
+        showToast(`Solicitud LOC: #${newReq.locator} creada exitosamente`, 'success');
+      }
+      setEditingRequest(null);
     } catch (err: any) {
-      showToast(`Error al crear la solicitud: ${err.message}`, 'error');
+      showToast(`Error al guardar la solicitud: ${err.message}`, 'error');
       throw err;
+    }
+  };
+
+  // Delete payment request handler
+  const handleDeleteRequest = async (request: PaymentRequest) => {
+    if (!currentUser) return;
+    try {
+      await deletePaymentRequest(request.id, currentUser);
+      setRequests(prev => prev.filter(r => r.id !== request.id));
+      showToast(`Solicitud LOC: #${request.locator} eliminada`, 'success');
+    } catch (err: any) {
+      showToast(`Error al eliminar solicitud: ${err.message}`, 'error');
     }
   };
 
@@ -147,6 +205,16 @@ export function App() {
     return <LoginView onLoginSuccess={handleLoginSuccess} availableUsers={usersList} />;
   }
 
+  const handleOpenNewRequest = () => {
+    setEditingRequest(null);
+    setIsNewRequestOpen(true);
+  };
+
+  const handleOpenEditRequest = (request: PaymentRequest) => {
+    setEditingRequest(request);
+    setIsNewRequestOpen(true);
+  };
+
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
       {/* Navigation Header */}
@@ -154,7 +222,7 @@ export function App() {
         currentUser={currentUser}
         activeTab={activeTab}
         setActiveTab={setActiveTab}
-        onOpenNewRequest={() => setIsNewRequestOpen(true)}
+        onOpenNewRequest={handleOpenNewRequest}
         onLogout={handleLogout}
       />
 
@@ -184,7 +252,9 @@ export function App() {
                 currentUser={currentUser}
                 onOpenDetails={(req) => setSelectedRequestForDetail(req)}
                 onOpenStatusModal={(req) => setSelectedRequestForStatus(req)}
-                onOpenNewRequest={() => setIsNewRequestOpen(true)}
+                onOpenNewRequest={handleOpenNewRequest}
+                onEditRequest={handleOpenEditRequest}
+                onDeleteRequest={handleDeleteRequest}
                 onRefresh={() => loadRequests(currentUser)}
               />
             )}
@@ -231,8 +301,12 @@ export function App() {
       {/* Modals */}
       <NewRequestModal
         isOpen={isNewRequestOpen}
-        onClose={() => setIsNewRequestOpen(false)}
-        onSubmit={handleCreateRequest}
+        editingRequest={editingRequest}
+        onClose={() => {
+          setIsNewRequestOpen(false);
+          setEditingRequest(null);
+        }}
+        onSubmit={handleSaveRequest}
       />
 
       <StatusChangeModal

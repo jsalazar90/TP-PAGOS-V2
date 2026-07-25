@@ -137,18 +137,28 @@ CREATE POLICY "Todos los usuarios pueden actualizar solicitudes"
 -- 7. CONFIGURACIÓN DE BUCKET DE ALMACENAMIENTO (SUPABASE STORAGE)
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('payment-supports', 'payment-supports', true)
-ON CONFLICT (id) DO NOTHING;
+ON CONFLICT (id) DO UPDATE SET public = true;
 
--- Políticas para Storage Bucket
+-- Políticas para Storage Bucket (Permiten subir y ver archivos con anon key)
 DROP POLICY IF EXISTS "Permitir ver archivos a usuarios autenticados" ON storage.objects;
 DROP POLICY IF EXISTS "Permitir subir archivos a usuarios autenticados" ON storage.objects;
+DROP POLICY IF EXISTS "Permitir ver archivos publicos" ON storage.objects;
+DROP POLICY IF EXISTS "Permitir subir archivos publicos" ON storage.objects;
+DROP POLICY IF EXISTS "Permitir actualizar archivos publicos" ON storage.objects;
 DROP POLICY IF EXISTS "Permitir ver archivos" ON storage.objects;
 DROP POLICY IF EXISTS "Permitir subir archivos" ON storage.objects;
 
-CREATE POLICY "Permitir ver archivos"
+CREATE POLICY "Permitir ver archivos publicos"
   ON storage.objects FOR SELECT
+  TO public
   USING (bucket_id = 'payment-supports');
 
-CREATE POLICY "Permitir subir archivos"
+CREATE POLICY "Permitir subir archivos publicos"
   ON storage.objects FOR INSERT
+  TO public
   WITH CHECK (bucket_id = 'payment-supports');
+
+CREATE POLICY "Permitir actualizar archivos publicos"
+  ON storage.objects FOR UPDATE
+  TO public
+  USING (bucket_id = 'payment-supports');

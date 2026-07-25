@@ -23,7 +23,9 @@ import {
   Receipt,
   Hotel,
   Wallet,
-  AlertTriangle
+  AlertTriangle,
+  Pencil,
+  Trash2
 } from 'lucide-react';
 
 interface RequestCardProps {
@@ -31,6 +33,8 @@ interface RequestCardProps {
   currentUser: UserProfile;
   onOpenDetails: (request: PaymentRequest) => void;
   onOpenStatusModal: (request: PaymentRequest) => void;
+  onEditRequest?: (request: PaymentRequest) => void;
+  onDeleteRequest?: (request: PaymentRequest) => void;
 }
 
 export const RequestCard: React.FC<RequestCardProps> = ({
@@ -38,11 +42,14 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   currentUser,
   onOpenDetails,
   onOpenStatusModal,
+  onEditRequest,
+  onDeleteRequest,
 }) => {
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [copiedBank, setCopiedBank] = useState(false);
 
   const isDirectUsd = request.currency === 'USD' || request.bcv_rate === 0;
+  const canEditOrDelete = request.status !== 'realizado' && (currentUser.role === 'admin' || request.created_by === currentUser.id);
 
   const handleCopyBankDetails = () => {
     let textToCopy = `Beneficiario: ${request.bank_details.beneficiary}`;
@@ -171,7 +178,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
             {request.room_type && <span>({request.room_type})</span>}
             <span className="flex items-center gap-1 font-bold text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100/80 text-[10px]">
               <User className="w-3 h-3 text-indigo-600 shrink-0" />
-              Solicitado por: {request.creator_name || 'Solicitante'}
+              Solicitado por: {request.creator_name || 'Usuario'}
             </span>
           </div>
         </div>
@@ -214,14 +221,39 @@ export const RequestCard: React.FC<RequestCardProps> = ({
 
         {/* Right Column: Actions */}
         <div className="flex items-center gap-2 shrink-0 md:flex-col md:items-end justify-between md:justify-center">
-          <div className="flex items-center gap-1.5">
+          <div className="flex flex-wrap items-center gap-1.5">
             <button
               onClick={() => onOpenDetails(request)}
-              className="active-press px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center gap-1 border border-slate-200/80 transition-colors"
+              className="active-press px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs flex items-center gap-1 border border-slate-200/80 transition-colors"
             >
               <Eye className="w-3.5 h-3.5 text-slate-500" />
               <span>Ver Ficha</span>
             </button>
+
+            {canEditOrDelete && onEditRequest && (
+              <button
+                onClick={() => onEditRequest(request)}
+                title="Editar solicitud"
+                className="active-press px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1 border border-amber-200 transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5 text-amber-600" />
+                <span>Editar</span>
+              </button>
+            )}
+
+            {canEditOrDelete && onDeleteRequest && (
+              <button
+                onClick={() => {
+                  if (window.confirm(`¿Estás seguro de eliminar la solicitud LOC: #${request.locator}?`)) {
+                    onDeleteRequest(request);
+                  }
+                }}
+                title="Eliminar solicitud"
+                className="active-press p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
+              >
+                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+              </button>
+            )}
 
             {currentUser.role === 'admin' && request.status !== 'realizado' && (
               <button

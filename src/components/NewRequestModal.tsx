@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { CreatePaymentRequestInput, PaymentCurrency, PaymentMethodType, ServiceCategory } from '../types';
+import React, { useState, useEffect } from 'react';
+import { CreatePaymentRequestInput, PaymentCurrency, PaymentMethodType, PaymentRequest, ServiceCategory } from '../types';
 import {
   X,
   Upload,
@@ -26,12 +26,14 @@ interface NewRequestModalProps {
   isOpen: boolean;
   onClose: () => void;
   onSubmit: (input: CreatePaymentRequestInput) => Promise<void>;
+  editingRequest?: PaymentRequest | null;
 }
 
 export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   isOpen,
   onClose,
   onSubmit,
+  editingRequest,
 }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -98,6 +100,103 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   });
 
   const [supportFile, setSupportFile] = useState<File | null>(null);
+
+  const resetForm = () => {
+    setLoading(false);
+    setErrorMsg('');
+    setShowSmartPaste(true);
+    setRawText('');
+    setCopiedTemplate(false);
+    setActiveTemplateType('bs');
+    setCategory('hospedaje');
+    setIsUrgent(false);
+    setCurrency('VES');
+    setPaymentMethod('transferencia_bs');
+    setGuestList([{ name: '', ci: '' }]);
+    setFormData({
+      title: '',
+      client: 'G1',
+      hotel_name: '',
+      locator: '',
+      location: '',
+      room_type: 'HABITACION SENCILLA',
+      people_count: 1,
+      additionals: 'Desayuno incluido',
+      nights_dates: '',
+      route_from_to: '',
+      expense_concept: '',
+      amount_usd: 100,
+      bcv_rate: 737.88,
+      amount_bs: 73788,
+      bank_beneficiary: '',
+      bank_rif: '',
+      bank_name: 'BANESCO',
+      bank_account: '',
+      pago_movil_phone: '',
+      pago_movil_ci: '',
+      binance_email: '',
+      binance_pay_id: '',
+      zelle_email: '',
+      notes: '',
+    });
+    setSupportFile(null);
+  };
+
+  useEffect(() => {
+    if (isOpen && editingRequest) {
+      setCategory(editingRequest.category || 'hospedaje');
+      setIsUrgent(editingRequest.status === 'urgente');
+      setCurrency(editingRequest.currency || 'VES');
+      setPaymentMethod(editingRequest.bank_details.payment_method || 'transferencia_bs');
+
+      if (editingRequest.guest_name) {
+        const names = editingRequest.guest_name.split(',').map(s => s.trim());
+        const cis = (editingRequest.guest_ci || '').split('/').map(s => s.trim());
+        const parsedList = names.map((name, i) => ({
+          name,
+          ci: cis[i] || ''
+        }));
+        setGuestList(parsedList.length > 0 ? parsedList : [{ name: editingRequest.guest_name, ci: editingRequest.guest_ci || '' }]);
+      } else {
+        setGuestList([{ name: '', ci: '' }]);
+      }
+
+      setFormData({
+        title: editingRequest.title || '',
+        client: editingRequest.client || 'G1',
+        hotel_name: editingRequest.hotel_name || '',
+        locator: editingRequest.locator || '',
+        location: editingRequest.location || '',
+        room_type: editingRequest.room_type || 'HABITACION SENCILLA',
+        people_count: editingRequest.people_count || 1,
+        additionals: editingRequest.additionals || '',
+        nights_dates: editingRequest.nights_dates || '',
+        route_from_to: editingRequest.route_from_to || '',
+        expense_concept: editingRequest.expense_concept || '',
+        amount_usd: editingRequest.amount_usd || 0,
+        bcv_rate: editingRequest.bcv_rate || 0,
+        amount_bs: editingRequest.amount_bs || 0,
+        bank_beneficiary: editingRequest.bank_details.beneficiary || '',
+        bank_rif: editingRequest.bank_details.rif || '',
+        bank_name: editingRequest.bank_details.bank || 'BANESCO',
+        bank_account: editingRequest.bank_details.account_number || '',
+        pago_movil_phone: editingRequest.bank_details.pago_movil_phone || '',
+        pago_movil_ci: editingRequest.bank_details.pago_movil_ci || '',
+        binance_email: editingRequest.bank_details.binance_email || '',
+        binance_pay_id: editingRequest.bank_details.binance_pay_id || '',
+        zelle_email: editingRequest.bank_details.zelle_email || '',
+        notes: editingRequest.bank_details.notes || '',
+      });
+      setShowSmartPaste(false);
+    } else if (isOpen && !editingRequest) {
+      resetForm();
+    }
+  }, [isOpen, editingRequest]);
+
+  const handleClose = () => {
+    resetForm();
+    onClose();
+  };
 
   if (!isOpen) return null;
 
@@ -458,6 +557,7 @@ Binance Email: pedro.colmenares@gmail.com`
         },
         support_file: supportFile,
       });
+      resetForm();
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al guardar la solicitud');
@@ -476,12 +576,14 @@ Binance Email: pedro.colmenares@gmail.com`
               <Sparkles className="w-4 h-4" />
             </div>
             <div>
-              <h2 className="font-bold text-slate-900 text-sm sm:text-base">Nueva Solicitud de Pago</h2>
+              <h2 className="font-bold text-slate-900 text-sm sm:text-base">
+                {editingRequest ? `Editar Solicitud LOC: #${editingRequest.locator}` : 'Nueva Solicitud de Pago'}
+              </h2>
               <p className="text-[11px] text-slate-500">Hospedaje, Traslados y Apoyos / Gastos Logísticos</p>
             </div>
           </div>
           <button
-            onClick={onClose}
+            onClick={handleClose}
             aria-label="Cerrar modal"
             className="p-1.5 rounded-full text-slate-400 hover:text-slate-700 hover:bg-slate-100 transition-colors"
           >
@@ -1264,7 +1366,7 @@ Binance Email: pedro.colmenares@gmail.com`
           <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 sticky bottom-0 bg-white py-2 -mx-4 px-4 rounded-b-2xl z-10">
             <button
               type="button"
-              onClick={onClose}
+              onClick={handleClose}
               className="px-3.5 py-2 rounded-xl bg-slate-100 text-slate-600 hover:bg-slate-200 font-semibold text-xs"
             >
               Cancelar
@@ -1279,7 +1381,7 @@ Binance Email: pedro.colmenares@gmail.com`
               ) : (
                 <>
                   <Sparkles className="w-3.5 h-3.5" />
-                  <span>Crear Solicitud</span>
+                  <span>{editingRequest ? 'Guardar Cambios' : 'Crear Solicitud'}</span>
                 </>
               )}
             </button>

@@ -129,7 +129,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
               <span className="text-slate-500">Solicitado Por:</span>
               <span className="font-bold text-indigo-700 flex items-center gap-1">
                 <User className="w-3.5 h-3.5 text-indigo-600" />
-                {request.creator_name || 'Usuario Solicitante'}
+                {request.creator_name || 'Usuario'}
               </span>
             </div>
           </div>
