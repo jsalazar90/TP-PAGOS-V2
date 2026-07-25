@@ -218,7 +218,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
               ) : (
                 <>
                   <span className="text-base font-extrabold text-indigo-700">
-                    BS {formatBS(request.amount_bs)}
+                    BS {formatBS(request.amount_bs || (request.amount_usd && request.bcv_rate ? request.amount_usd * request.bcv_rate : 0))}
                   </span>
                   <span className="text-[10px] text-slate-400 block">Tasa: BS {request.bcv_rate}</span>
                 </>

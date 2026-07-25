@@ -17,6 +17,7 @@ import { LoginView } from './components/LoginView';
 import { NewRequestModal } from './components/NewRequestModal';
 import { StatusChangeModal } from './components/StatusChangeModal';
 import { RequestDetailModal } from './components/RequestDetailModal';
+import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 
 export function App() {
@@ -169,6 +170,7 @@ export function App() {
 
       {/* Main View Container */}
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-5">
+        <PWAInstallBanner />
         {loading ? (
           <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mr-3"></div>

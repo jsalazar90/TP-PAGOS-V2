@@ -84,6 +84,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     expense_concept: '',
     amount_usd: 100,
     bcv_rate: 737.88,
+    amount_bs: 73788,
     bank_beneficiary: '',
     bank_rif: '',
     bank_name: 'BANESCO',
@@ -97,10 +98,6 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   });
 
   const [supportFile, setSupportFile] = useState<File | null>(null);
-
-  const calculatedBs = currency === 'VES'
-    ? (Number(formData.amount_usd || 0) * Number(formData.bcv_rate || 0)).toFixed(2)
-    : '0.00';
 
   if (!isOpen) return null;
 
@@ -230,11 +227,24 @@ Binance Email: pedro.colmenares@gmail.com`
     const parsedRoute = getValue(['Ruta', 'Origen - Destino', 'Trayecto']);
     const parsedExpenseConcept = getValue(['Concepto', 'Detalle Gasto', 'Justificación']);
 
+    const rawBs = getValue(['Monto BS', 'Monto Bolivares', 'Monto Bolívares', 'Monto en BS', 'Monto en Bolívares', 'Monto Local', 'BS', 'Bs.']);
+    const numBsParsed = rawBs ? parseFloat(rawBs.replace(/[^0-9.]/g, '')) : NaN;
+
     const rawUsd = getValue(['Monto USD', 'Monto Divisas', 'Monto', 'USD', '\\$']);
-    const numUsd = rawUsd ? parseFloat(rawUsd.replace(/[^0-9.]/g, '')) : formData.amount_usd;
+    let numUsd = rawUsd ? parseFloat(rawUsd.replace(/[^0-9.]/g, '')) : formData.amount_usd;
 
     const rawBcv = getValue(['Tasa BCV', 'Tasa', 'BCV']);
-    const numBcv = rawBcv ? parseFloat(rawBcv.replace(/[^0-9.]/g, '')) : formData.bcv_rate;
+    let numBcv = rawBcv ? parseFloat(rawBcv.replace(/[^0-9.]/g, '')) : formData.bcv_rate;
+
+    let finalBs = !isNaN(numBsParsed) ? numBsParsed : NaN;
+
+    if (!isNaN(finalBs) && !isNaN(numBcv) && (isNaN(numUsd) || numUsd === 0) && numBcv > 0) {
+      numUsd = Number((finalBs / numBcv).toFixed(2));
+    } else if (!isNaN(numUsd) && !isNaN(numBcv) && isNaN(finalBs)) {
+      finalBs = Number((numUsd * numBcv).toFixed(2));
+    } else if (!isNaN(numUsd) && !isNaN(finalBs) && (isNaN(numBcv) || numBcv === 0) && numUsd > 0) {
+      numBcv = Number((finalBs / numUsd).toFixed(4));
+    }
 
     const parsedBeneficiary = getValue(['Beneficiario', 'Titular', 'A Nombre de']);
     const parsedRif = getValue(['RIF', 'Rif', 'Rif Beneficiario']);
@@ -324,6 +334,7 @@ Binance Email: pedro.colmenares@gmail.com`
       expense_concept: parsedExpenseConcept || prev.expense_concept,
       amount_usd: isNaN(numUsd) ? prev.amount_usd : numUsd,
       bcv_rate: isNaN(numBcv) ? prev.bcv_rate : numBcv,
+      amount_bs: !isNaN(finalBs) ? finalBs : (!isNaN(numUsd) && !isNaN(numBcv) ? Number((numUsd * numBcv).toFixed(2)) : prev.amount_bs),
       bank_beneficiary: parsedBeneficiary || prev.bank_beneficiary,
       bank_rif: parsedRif || prev.bank_rif,
       bank_name: parsedBank ? parsedBank.toUpperCase() : prev.bank_name,
@@ -429,6 +440,7 @@ Binance Email: pedro.colmenares@gmail.com`
         currency,
         amount_usd: Number(formData.amount_usd),
         bcv_rate: currency === 'USD' ? 0 : Number(formData.bcv_rate),
+        amount_bs: currency === 'USD' ? 0 : Number(formData.amount_bs || (formData.amount_usd * formData.bcv_rate)),
         status: isUrgent ? 'urgente' : 'en_proceso',
         is_urgent: isUrgent,
         bank_details: {
@@ -915,15 +927,19 @@ Binance Email: pedro.colmenares@gmail.com`
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-0.5">Monto USD ($) *</label>
+                  <label className="block text-slate-700 font-semibold mb-0.5">Monto BS (Bolívares) *</label>
                   <input
                     type="number"
                     step="0.01"
-                    placeholder="150"
-                    value={formData.amount_usd}
-                    onChange={(e) => setFormData({ ...formData, amount_usd: parseFloat(e.target.value) || 0 })}
-                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-emerald-700 font-extrabold focus:outline-none focus:border-emerald-600"
-                    required
+                    placeholder="73788.00"
+                    value={formData.amount_bs || ''}
+                    onChange={(e) => {
+                      const bs = parseFloat(e.target.value) || 0;
+                      const usd = formData.bcv_rate > 0 ? Number((bs / formData.bcv_rate).toFixed(2)) : formData.amount_usd;
+                      setFormData({ ...formData, amount_bs: bs, amount_usd: usd });
+                    }}
+                    className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-indigo-700 font-extrabold focus:outline-none focus:border-emerald-600"
+                    required={currency === 'VES'}
                   />
                 </div>
                 <div>
@@ -932,18 +948,31 @@ Binance Email: pedro.colmenares@gmail.com`
                     type="number"
                     step="0.0001"
                     placeholder="737.88"
-                    value={formData.bcv_rate}
-                    onChange={(e) => setFormData({ ...formData, bcv_rate: parseFloat(e.target.value) || 0 })}
+                    value={formData.bcv_rate || ''}
+                    onChange={(e) => {
+                      const rate = parseFloat(e.target.value) || 0;
+                      const bs = rate > 0 && formData.amount_usd > 0 ? Number((formData.amount_usd * rate).toFixed(2)) : formData.amount_bs;
+                      setFormData({ ...formData, bcv_rate: rate, amount_bs: bs });
+                    }}
                     className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-slate-800 font-semibold focus:outline-none focus:border-indigo-500"
                     required={currency === 'VES'}
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-700 font-semibold mb-0.5">Monto BS (Calculado)</label>
-                  <div className="w-full bg-white border border-emerald-300 rounded-lg px-2.5 py-1.5 text-indigo-700 font-black text-sm flex items-center justify-between">
-                    <span>BS {calculatedBs}</span>
-                    <span className="text-[9px] bg-emerald-100 text-emerald-800 px-1 py-0.2 rounded font-bold">AUTO</span>
-                  </div>
+                  <label className="block text-slate-700 font-semibold mb-0.5">Monto USD ($) *</label>
+                  <input
+                    type="number"
+                    step="0.01"
+                    placeholder="100.00"
+                    value={formData.amount_usd || ''}
+                    onChange={(e) => {
+                      const usd = parseFloat(e.target.value) || 0;
+                      const bs = formData.bcv_rate > 0 ? Number((usd * formData.bcv_rate).toFixed(2)) : formData.amount_bs;
+                      setFormData({ ...formData, amount_usd: usd, amount_bs: bs });
+                    }}
+                    className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1.5 text-emerald-700 font-extrabold focus:outline-none focus:border-emerald-600"
+                    required={currency === 'VES'}
+                  />
                 </div>
               </div>
             )}

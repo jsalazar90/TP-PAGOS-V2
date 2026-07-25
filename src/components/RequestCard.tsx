@@ -202,7 +202,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
             ) : (
               <>
                 <span className="text-sm sm:text-base font-black text-indigo-700">
-                  BS {formatBS(request.amount_bs)}
+                  BS {formatBS(request.amount_bs || (request.amount_usd && request.bcv_rate ? request.amount_usd * request.bcv_rate : 0))}
                 </span>
                 <span className="text-[10px] text-slate-400 block font-medium">
                   Tasa: BS {request.bcv_rate}

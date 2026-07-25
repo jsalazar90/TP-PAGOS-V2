@@ -32,7 +32,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   });
 
   const totalUSD = historyRequests.reduce((acc, r) => acc + (r.amount_usd || 0), 0);
-  const totalBS = historyRequests.reduce((acc, r) => acc + (r.amount_bs || 0), 0);
+  const totalBS = historyRequests.reduce((acc, r) => {
+    const bs = r.amount_bs || (r.currency === 'USD' || !r.bcv_rate ? 0 : (r.amount_usd || 0) * (r.bcv_rate || 0));
+    return acc + bs;
+  }, 0);
 
   const formatUSD = (val: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
@@ -132,7 +135,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   {formatUSD(req.amount_usd)}
                 </div>
                 <div className="text-xs font-bold text-indigo-700">
-                  BS {formatBS(req.amount_bs)}
+                  BS {formatBS(req.amount_bs || (req.currency === 'USD' || !req.bcv_rate ? 0 : (req.amount_usd || 0) * (req.bcv_rate || 0)))}
                 </div>
                 <div className="text-[10px] text-slate-400">
                   Tasa: BS {req.bcv_rate}

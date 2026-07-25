@@ -82,6 +82,7 @@ export interface CreatePaymentRequestInput {
   currency?: PaymentCurrency;
   amount_usd: number;
   bcv_rate: number;
+  amount_bs?: number;
   bank_details: BankDetails;
   support_file?: File | null;
   status?: RequestStatus;

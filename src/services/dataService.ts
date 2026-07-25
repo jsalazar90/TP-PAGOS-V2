@@ -42,6 +42,7 @@ function setLocalUsers(users: UserProfile[]) {
 }
 
 export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<PaymentRequest[]> {
+  let list: PaymentRequest[] = [];
   if (isSupabaseConfigured && supabase) {
     const { data, error } = await supabase
       .from('payment_requests')
@@ -52,11 +53,20 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
       console.error('Supabase query error:', error);
       throw new Error(error.message);
     }
-    return data || [];
+    list = data || [];
+  } else {
+    // Local fallback - returns all requests for all users
+    list = getLocalRequests();
   }
 
-  // Local fallback - returns all requests for all users
-  return getLocalRequests();
+  return list.map(req => {
+    const isDirectUsd = req.currency === 'USD' || req.bcv_rate === 0;
+    const computedBs = isDirectUsd ? 0 : Number(((req.amount_usd || 0) * (req.bcv_rate || 0)).toFixed(2));
+    return {
+      ...req,
+      amount_bs: req.amount_bs || computedBs
+    };
+  });
 }
 
 export async function createPaymentRequest(
@@ -73,7 +83,9 @@ export async function createPaymentRequest(
   }
 
   const isDirectUsd = input.currency === 'USD' || input.bcv_rate === 0;
-  const amountBs = isDirectUsd ? 0 : Number((input.amount_usd * input.bcv_rate).toFixed(2));
+  const amountBs = input.amount_bs !== undefined && input.amount_bs > 0
+    ? Number(input.amount_bs.toFixed(2))
+    : (isDirectUsd ? 0 : Number((input.amount_usd * input.bcv_rate).toFixed(2)));
   const effectiveCurrency = input.currency || (isDirectUsd ? 'USD' : 'VES');
   const initialStatus = input.status || (input.is_urgent ? 'urgente' : 'en_proceso');
 
@@ -96,6 +108,7 @@ export async function createPaymentRequest(
       currency: effectiveCurrency,
       amount_usd: input.amount_usd,
       bcv_rate: isDirectUsd ? 0 : input.bcv_rate,
+      amount_bs: amountBs,
       bank_details: input.bank_details,
       status: initialStatus,
       support_file_url: supportUrl,
