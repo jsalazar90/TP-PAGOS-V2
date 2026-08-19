@@ -25,13 +25,21 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   onClose,
   onConfirmStatusChange,
 }) => {
-  if (!isOpen || !request) return null;
-
-  const [selectedStatus, setSelectedStatus] = useState<RequestStatus>(request.status);
+  const [selectedStatus, setSelectedStatus] = useState<RequestStatus>(request?.status || 'en_proceso');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+
+  // Sync selected status when request or modal opens
+  useEffect(() => {
+    if (request) {
+      setSelectedStatus(request.status);
+      setReceiptFile(null);
+      setPreviewUrl(null);
+      setErrorMsg('');
+    }
+  }, [request, isOpen]);
 
   // Update preview URL when receiptFile changes
   useEffect(() => {
@@ -43,6 +51,8 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
       setPreviewUrl(null);
     }
   }, [receiptFile]);
+
+  if (!isOpen || !request) return null;
 
   // Handle Ctrl+V clipboard paste event
   const handlePaste = (e: React.ClipboardEvent) => {

@@ -34,28 +34,29 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, availableU
           u.email.split('@')[0].toLowerCase() === cleanInput
       );
 
-      if (foundUser) {
-        if (!foundUser.is_active) {
-          setErrorMsg('Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.');
-          setLoading(false);
-          return;
-        }
-        onLoginSuccess(foundUser);
-      } else {
-        const isDefaultAdmin = cleanInput.includes('admin');
-        const customUser: UserProfile = {
-          id: `usr-${Date.now()}`,
-          username: cleanInput,
-          email: `${cleanInput}@tppagos.com`,
-          full_name: cleanInput.charAt(0).toUpperCase() + cleanInput.slice(1),
-          role: isDefaultAdmin ? 'admin' : 'solicitante',
-          is_active: true,
-          created_at: new Date().toISOString()
-        };
-        onLoginSuccess(customUser);
+      if (!foundUser) {
+        setErrorMsg('⚠️ Usuario no encontrado. Por favor verifica tu nombre de usuario o solicita tu registro al Administrador.');
+        setLoading(false);
+        return;
       }
+
+      if (!foundUser.is_active) {
+        setErrorMsg('⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.');
+        setLoading(false);
+        return;
+      }
+
+      // Validar Contraseña Estricta
+      const userPassword = foundUser.password || (foundUser.username === 'admin' ? 'admin' : '1234');
+      if (password !== userPassword) {
+        setErrorMsg('⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.');
+        setLoading(false);
+        return;
+      }
+
+      onLoginSuccess(foundUser);
       setLoading(false);
-    }, 400);
+    }, 300);
   };
 
   return (

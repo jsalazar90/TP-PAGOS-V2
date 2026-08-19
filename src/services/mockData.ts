@@ -7,6 +7,7 @@ export const INITIAL_USERS: UserProfile[] = [
     email: 'admin@jtpagos.com',
     full_name: 'Carlos Mendoza (Admin)',
     role: 'admin',
+    password: 'admin',
     is_active: true,
     created_at: new Date().toISOString()
   },
@@ -16,6 +17,7 @@ export const INITIAL_USERS: UserProfile[] = [
     email: 'solicitante@jtpagos.com',
     full_name: 'María Delgado (Operaciones)',
     role: 'solicitante',
+    password: '1234',
     is_active: true,
     created_at: new Date().toISOString()
   },
@@ -25,6 +27,7 @@ export const INITIAL_USERS: UserProfile[] = [
     email: 'reservas@jtpagos.com',
     full_name: 'Alejandro Rivas (Reservas)',
     role: 'solicitante',
+    password: '1234',
     is_active: true,
     created_at: new Date().toISOString()
   }

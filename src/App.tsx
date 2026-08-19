@@ -8,7 +8,8 @@ import {
   updateRequestStatus,
   fetchUsers,
   createNewUser,
-  toggleUserActiveStatus
+  toggleUserActiveStatus,
+  updateUserPassword
 } from './services/dataService';
 import { isSupabaseConfigured } from './services/supabase';
 import { Navbar } from './components/Navbar';
@@ -201,6 +202,18 @@ export function App() {
     }
   };
 
+  // Update user password handler
+  const handleUpdateUserPassword = async (userId: string, newPass: string) => {
+    try {
+      const updated = await updateUserPassword(userId, newPass);
+      setUsersList(prev => prev.map(u => (u.id === userId ? updated : u)));
+      showToast(`Contraseña actualizada con éxito para "${updated.full_name}".`, 'success');
+    } catch (e: any) {
+      showToast(e.message || 'Error al cambiar la contraseña', 'error');
+      throw e;
+    }
+  };
+
   if (!currentUser) {
     return <LoginView onLoginSuccess={handleLoginSuccess} availableUsers={usersList} />;
   }
@@ -272,6 +285,7 @@ export function App() {
                 currentUser={currentUser}
                 onCreateUser={handleCreateUser}
                 onToggleUserActive={handleToggleUserActive}
+                onUpdatePassword={handleUpdateUserPassword}
               />
             )}
           </>

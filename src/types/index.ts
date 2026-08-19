@@ -12,9 +12,22 @@ export interface UserProfile {
 }
 
 export type RequestStatus = 'px_fondos' | 'en_proceso' | 'urgente' | 'realizado';
-export type PaymentMethodType = 'transferencia_bs' | 'pago_movil' | 'binance' | 'zelle_usd';
+export type PaymentMethodType =
+  | 'transferencia_bs'
+  | 'pago_movil'
+  | 'binance'
+  | 'zelle_usd'
+  | 'efectivo_usd'
+  | 'efectivo_bs';
+
 export type PaymentCurrency = 'VES' | 'USD';
-export type ServiceCategory = 'hospedaje' | 'traslado' | 'gastos_apoyo';
+export type ServiceCategory = 'hospedaje' | 'traslado' | 'vuelos' | 'gastos_apoyo';
+
+export interface GuestItem {
+  name: string;
+  ci: string;
+  phone?: string;
+}
 
 export interface BankDetails {
   payment_method?: PaymentMethodType;
@@ -28,6 +41,8 @@ export interface BankDetails {
   binance_email?: string;
   binance_pay_id?: string;
   zelle_email?: string;
+  zelle_name?: string;
+  cash_receiver?: string;
   notes?: string;
 }
 
@@ -40,6 +55,7 @@ export interface PaymentRequest {
   hotel_name: string;
   guest_name: string;
   guest_ci: string;
+  guest_list?: GuestItem[];
   locator: string;
   location: string;
   room_type: string;
@@ -48,6 +64,8 @@ export interface PaymentRequest {
   nights_dates: string;
   route_from_to?: string;
   expense_concept?: string;
+  airline?: string;
+  flight_route?: string;
   currency?: PaymentCurrency;
   amount_usd: number;
   bcv_rate: number;
@@ -71,6 +89,7 @@ export interface CreatePaymentRequestInput {
   hotel_name: string;
   guest_name: string;
   guest_ci: string;
+  guest_list?: GuestItem[];
   locator: string;
   location: string;
   room_type: string;
@@ -79,6 +98,8 @@ export interface CreatePaymentRequestInput {
   nights_dates: string;
   route_from_to?: string;
   expense_concept?: string;
+  airline?: string;
+  flight_route?: string;
   currency?: PaymentCurrency;
   amount_usd: number;
   bcv_rate: number;
@@ -91,6 +112,20 @@ export interface CreatePaymentRequestInput {
 
 export interface FilterState {
   status?: RequestStatus | 'all';
+  category?: ServiceCategory | 'all';
   searchQuery?: string;
   dateRange?: 'all' | 'today' | 'week' | 'month';
+  client?: string;
+}
+
+export interface FinancialSummary {
+  totalPendingUsd: number;
+  totalPendingBs: number;
+  totalPaidUsd: number;
+  totalPaidBs: number;
+  countPxFondos: number;
+  countEnProceso: number;
+  countUrgente: number;
+  countRealizado: number;
+  countTotal: number;
 }
