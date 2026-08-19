@@ -309,16 +309,35 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     return lines.join('\n');
   };
 
-  const handleAutoParseText = (textToParse: string) => {
-    if (!textToParse.trim()) return;
+  const parseAmount = (valStr: string): number => {
+    if (!valStr) return NaN;
+    let cleaned = valStr.replace(/[^0-9.,]/g, '').trim();
+    if (!cleaned) return NaN;
+
+    if (cleaned.includes('.') && cleaned.includes(',')) {
+      if (cleaned.lastIndexOf(',') > cleaned.lastIndexOf('.')) {
+        cleaned = cleaned.replace(/\./g, '').replace(',', '.');
+      } else {
+        cleaned = cleaned.replace(/,/g, '');
+      }
+    } else if (cleaned.includes(',')) {
+      cleaned = cleaned.replace(',', '.');
+    }
+    const parsed = parseFloat(cleaned);
+    return isNaN(parsed) ? NaN : parsed;
+  };
+
+  const parseMessageData = (textToParse: string, currentForm = formData, currentCat = category, currentMethod = paymentMethod, currentCurr = currency) => {
+    if (!textToParse.trim()) return null;
 
     const lines = textToParse.split('\n').map((l) => l.trim());
     const getValue = (keys: string[]): string => {
       for (const key of keys) {
-        const regex = new RegExp(`(?:${key})\\s*[:=-]\\s*(.+)`, 'i');
+        const escaped = key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+        const regex = new RegExp(`^(?:[\\s•*-]*)(?:${escaped})\\s*[:=-]\\s*(.+)`, 'i');
         for (const line of lines) {
           const match = line.match(regex);
-          if (match && match[1]) {
+          if (match && match[1] && match[1].trim()) {
             return match[1].trim();
           }
         }
@@ -327,12 +346,13 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     };
 
     // Detect Urgency
+    let detectedUrgent = isUrgent;
     if (/urgente|emergencia|prioridad\s*:\s*urgente/i.test(textToParse)) {
-      setIsUrgent(true);
+      detectedUrgent = true;
     }
 
     // Detect Service Category
-    let detectedCategory: ServiceCategory = category;
+    let detectedCategory: ServiceCategory = currentCat;
     if (/servicio\s*:\s*vuelo|vuelo|boleto|aéreo|aereo|aerolínea|aerolinea|pnr|laser|rutaca|conviasa|avior/i.test(textToParse)) {
       detectedCategory = 'vuelos';
     } else if (/servicio\s*:\s*traslado|traslado|transporte|chofer|ruta|vehiculo|vehículo|caracas\s*-\s*valencia/i.test(textToParse)) {
@@ -342,13 +362,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     } else if (/hospedaje|hotel|habitación|habitacion/i.test(textToParse)) {
       detectedCategory = 'hospedaje';
     }
-    setCategory(detectedCategory);
 
     const parsedTitle = getValue(['Asunto', 'Titulo', 'Título', 'Pago']) || (lines[0] && !lines[0].includes(':') ? lines[0] : '');
-    const parsedClient = getValue(['Cliente', 'Empresa']) || formData.client;
+    const parsedClient = getValue(['Cliente', 'Empresa']) || currentForm.client;
 
     const parsedHotel = getValue(['Hotel', 'Nombre del Hotel', 'Hospedaje', 'Empresa Traslado', 'Línea', 'Proveedor', 'Aerolínea', 'Aerolinea']);
-    const parsedLocator = getValue(['LOC', 'Loc', 'Localizador', 'Reserva', 'N° Orden', 'PNR']);
+    const parsedLocator = getValue(['LOC', 'Loc', 'Localizador', 'Reserva', 'N° Orden', 'Nro Orden', 'PNR']);
     const parsedLocation = getValue(['Ubicación', 'Ubicacion', 'Ciudad', 'Destino']);
     const parsedRoomType = getValue(['Habitación', 'Habitacion', 'Tipo', 'Vehículo', 'Vehiculo', 'Clase']);
     const parsedPeople = getValue(['Personas', 'Cant. Personas', 'Huéspedes', 'Pasajeros']);
@@ -358,14 +377,14 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const parsedRoute = getValue(['Ruta', 'Origen - Destino', 'Trayecto']);
     const parsedExpenseConcept = getValue(['Concepto', 'Detalle Gasto', 'Justificación']);
 
-    const rawBs = getValue(['Monto BS', 'Monto Bolivares', 'Monto Bolívares', 'Monto en BS', 'Monto en Bolívares', 'Monto Local', 'BS', 'Bs.']);
-    const numBsParsed = rawBs ? parseFloat(rawBs.replace(/[^0-9.]/g, '')) : NaN;
+    const rawBs = getValue(['Monto BS', 'Monto en BS', 'Monto Bolivares', 'Monto Bolívares', 'Monto en Bolívares', 'Monto Local', 'BS', 'Bs.']);
+    const numBsParsed = rawBs ? parseAmount(rawBs) : NaN;
 
-    const rawUsd = getValue(['Monto USD', 'Monto Divisas', 'Monto', 'USD', '\\$']);
-    let numUsd = rawUsd ? parseFloat(rawUsd.replace(/[^0-9.]/g, '')) : formData.amount_usd;
+    const rawUsd = getValue(['Monto USD', 'Monto en USD', 'Monto Divisas', 'Monto en Divisas', 'Monto ($)', 'Monto', 'USD', '\\$']);
+    let numUsd = rawUsd ? parseAmount(rawUsd) : currentForm.amount_usd;
 
-    const rawBcv = getValue(['Tasa BCV', 'Tasa', 'BCV']);
-    let numBcv = rawBcv ? parseFloat(rawBcv.replace(/[^0-9.]/g, '')) : formData.bcv_rate;
+    const rawBcv = getValue(['Tasa BCV', 'Tasa de Cambio', 'Tasa', 'BCV']);
+    let numBcv = rawBcv ? parseAmount(rawBcv) : currentForm.bcv_rate;
 
     let finalBs = !isNaN(numBsParsed) ? numBsParsed : NaN;
 
@@ -377,10 +396,49 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       numBcv = Number((finalBs / numUsd).toFixed(4));
     }
 
-    const parsedBeneficiary = getValue(['Beneficiario', 'Titular', 'A Nombre de']);
-    const parsedRif = getValue(['RIF', 'Rif', 'Rif Beneficiario']);
-    const parsedBank = getValue(['Banco', 'Entidad']);
-    const parsedAccount = getValue(['Cuenta', 'N° Cuenta', 'Numero de Cuenta']);
+    const parsedBeneficiary = getValue([
+      'Beneficiario / Titular Cuenta',
+      'Beneficiario / Titular de Cuenta',
+      'Beneficiario / Titular',
+      'Beneficiario',
+      'Titular de Cuenta',
+      'Titular Cuenta',
+      'Titular',
+      'A Nombre de',
+      'Nombre Beneficiario'
+    ]);
+
+    let parsedRif = getValue(['RIF / CI', 'RIF/CI', 'RIF Beneficiario', 'RIF', 'Rif', 'Cédula / RIF', 'Cedula / RIF', 'CI Beneficiario']);
+    if (!parsedRif) {
+      const rifMatch = textToParse.match(/\b([VEJPGvejpg]-?\s*\d{7,9}-?\d?)\b/i);
+      if (rifMatch) {
+        parsedRif = rifMatch[1].toUpperCase().replace(/\s+/g, '');
+      }
+    }
+
+    const parsedBank = getValue(['Banco / Entidad', 'Banco', 'Entidad Bancaria', 'Entidad']);
+    
+    let parsedAccount = getValue([
+      'Cuenta Bancaria',
+      'N° Cuenta Bancaria',
+      'N° de Cuenta',
+      'No. Cuenta',
+      'N° Cuenta',
+      'Numero de Cuenta',
+      'Número de Cuenta',
+      'Nro de Cuenta',
+      'Nro. Cuenta',
+      'Cuenta'
+    ]);
+
+    // Fallback: search for 20-digit bank account anywhere in the text
+    if (!parsedAccount || parsedAccount.replace(/[^0-9]/g, '').length < 10) {
+      const accMatch = textToParse.match(/\b(0\d{3}[-\s]?\d{4}[-\s]?\d{2}[-\s]?\d{10}|\d{20})\b/);
+      if (accMatch) {
+        parsedAccount = accMatch[1].replace(/[^0-9]/g, '');
+      }
+    }
+
     const parsedPagoMovilPhone = getValue(['Pago movil', 'Pago móvil', 'Teléfono PM', 'Telefono PM', 'Telefono', 'Teléfono']);
     const parsedPagoMovilCi = getValue(['Cedula PM', 'Cédula PM', 'Cedula Pago Movil', 'Cédula Pago Móvil', 'CI PM']) || getValue(['Cedula', 'Cédula']);
 
@@ -389,11 +447,11 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
 
     const parsedZelleEmail = getValue(['Email Zelle', 'Correo Zelle', 'Zelle Email', 'Zelle']);
     const parsedZelleName = getValue(['Titular Zelle', 'Nombre Zelle', 'Zelle Name']);
-    const parsedCashReceiver = getValue(['Entregar a', 'Receptor Efectivo', 'Persona Efectivo']);
+    const parsedCashReceiver = getValue(['Entregar a', 'Receptor Efectivo', 'Persona Efectivo', 'Persona que recibe']);
 
     // Detect Payment Method & Currency Automatically
-    let detectedMethod: PaymentMethodType = paymentMethod;
-    let detectedCurrency: PaymentCurrency = currency;
+    let detectedMethod: PaymentMethodType = currentMethod;
+    let detectedCurrency: PaymentCurrency = currentCurr;
 
     if (parsedBinanceEmail || parsedBinancePayId || /binance/i.test(textToParse)) {
       detectedMethod = 'binance';
@@ -408,7 +466,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       if (!parsedAccount) {
         detectedMethod = 'pago_movil';
       }
-    } else if (parsedAccount) {
+    } else if (parsedAccount && parsedAccount.replace(/[^0-9]/g, '').length >= 10) {
       detectedMethod = 'transferencia_bs';
     }
 
@@ -418,16 +476,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       detectedCurrency = 'VES';
     }
 
-    setPaymentMethod(detectedMethod);
-    setCurrency(detectedCurrency);
-
     // Multi-line Guest / Passenger Parsing
     const parsedGuests: GuestItem[] = [];
-
-    const guestHeaderIdx = lines.findIndex(l => /^Huésped|^Huesped|^Pasajeros|^Pasajero|^Nombres|^Beneficiario/i.test(l));
+    const guestHeaderIdx = lines.findIndex(l => /^Huésped|^Huesped|^Pasajeros|^Pasajero|^Huéspedes|^Huespedes|^Nombres\s*:/i.test(l));
     if (guestHeaderIdx !== -1) {
       const headerLine = lines[guestHeaderIdx];
-      const inlineVal = headerLine.replace(/^Huésped(?:es)?|^Huesped(?:es)?|^Pasajero(?:s)?|^Nombres|^Beneficiario(?:s)?/i, '').replace(/^[:=-]\s*/, '').trim();
+      const inlineVal = headerLine.replace(/^Huésped(?:es)?|^Huesped(?:es)?|^Pasajero(?:s)?|^Nombres/i, '').replace(/^[:=-]\s*/, '').trim();
 
       const candidateRaw: string[] = [];
       if (inlineVal) candidateRaw.push(inlineVal);
@@ -441,7 +495,6 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         candidateRaw.push(l);
       }
 
-      // Process raw lines (split by commas or newlines if multiple in one line)
       const allLines: string[] = [];
       for (const raw of candidateRaw) {
         if (raw.includes(',') && !/\bC\.?A\.?\b/i.test(raw)) {
@@ -454,11 +507,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       }
 
       for (const lineStr of allLines) {
-        // Strip leading numbering or bullets: '1. ', '1) ', '- ', '* ', '• '
         const cleaned = lineStr.replace(/^[\d]+[\.\)\-]\s*|^[\-\*•]\s*/, '').trim();
         if (!cleaned) continue;
 
-        // Match Name + CI format: "Carlos Mendoza V-17.654.321" or "Carlos Mendoza 17654321" or "Carlos Mendoza (V-17.654.321)"
         const match = cleaned.match(/^(.+?)(?:\s+|-|\/|\()([VEJPGvejjpg]-?\s*[\d.]{5,12}|\b\d{7,10}\b)\)?$/i);
         if (match) {
           parsedGuests.push({
@@ -471,40 +522,59 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       }
     }
 
-    if (parsedGuests.length > 0) {
-      setGuestList(parsedGuests);
-    }
+    const updatedFormData = {
+      ...currentForm,
+      title: parsedTitle || currentForm.title,
+      client: parsedClient || currentForm.client,
+      hotel_name: parsedHotel || currentForm.hotel_name,
+      locator: parsedLocator || currentForm.locator,
+      location: parsedLocation || currentForm.location,
+      room_type: parsedRoomType || currentForm.room_type,
+      people_count: parsedPeople ? parseInt(parsedPeople) || currentForm.people_count : (parsedGuests.length > 0 ? parsedGuests.length : currentForm.people_count),
+      nights_dates: parsedNightsDates || currentForm.nights_dates,
+      additionals: parsedAdditionals || currentForm.additionals,
+      route_from_to: parsedRoute || currentForm.route_from_to,
+      flight_route: parsedRoute || currentForm.flight_route,
+      airline: parsedHotel || currentForm.airline,
+      expense_concept: parsedExpenseConcept || currentForm.expense_concept,
+      amount_usd: isNaN(numUsd) ? currentForm.amount_usd : numUsd,
+      bcv_rate: isNaN(numBcv) ? currentForm.bcv_rate : numBcv,
+      amount_bs: !isNaN(finalBs) ? finalBs : (!isNaN(numUsd) && !isNaN(numBcv) ? Number((numUsd * numBcv).toFixed(2)) : currentForm.amount_bs),
+      bank_beneficiary: parsedBeneficiary || currentForm.bank_beneficiary,
+      bank_rif: parsedRif || currentForm.bank_rif,
+      bank_name: parsedBank ? parsedBank.toUpperCase() : currentForm.bank_name,
+      bank_account: parsedAccount ? parsedAccount.replace(/[^0-9-]/g, '') : currentForm.bank_account,
+      pago_movil_phone: parsedPagoMovilPhone ? parsedPagoMovilPhone.replace(/[^0-9]/g, '') : currentForm.pago_movil_phone,
+      pago_movil_ci: parsedPagoMovilCi || currentForm.pago_movil_ci,
+      binance_email: parsedBinanceEmail || currentForm.binance_email,
+      binance_pay_id: parsedBinancePayId || currentForm.binance_pay_id,
+      zelle_email: parsedZelleEmail || currentForm.zelle_email,
+      zelle_name: parsedZelleName || currentForm.zelle_name,
+      cash_receiver: parsedCashReceiver || currentForm.cash_receiver,
+    };
 
-    setFormData((prev) => ({
-      ...prev,
-      title: parsedTitle || prev.title,
-      client: parsedClient || prev.client,
-      hotel_name: parsedHotel || prev.hotel_name,
-      locator: parsedLocator || prev.locator,
-      location: parsedLocation || prev.location,
-      room_type: parsedRoomType || prev.room_type,
-      people_count: parsedPeople ? parseInt(parsedPeople) || prev.people_count : (parsedGuests.length > 0 ? parsedGuests.length : prev.people_count),
-      nights_dates: parsedNightsDates || prev.nights_dates,
-      additionals: parsedAdditionals || prev.additionals,
-      route_from_to: parsedRoute || prev.route_from_to,
-      flight_route: parsedRoute || prev.flight_route,
-      airline: parsedHotel || prev.airline,
-      expense_concept: parsedExpenseConcept || prev.expense_concept,
-      amount_usd: isNaN(numUsd) ? prev.amount_usd : numUsd,
-      bcv_rate: isNaN(numBcv) ? prev.bcv_rate : numBcv,
-      amount_bs: !isNaN(finalBs) ? finalBs : (!isNaN(numUsd) && !isNaN(numBcv) ? Number((numUsd * numBcv).toFixed(2)) : prev.amount_bs),
-      bank_beneficiary: parsedBeneficiary || prev.bank_beneficiary,
-      bank_rif: parsedRif || prev.bank_rif,
-      bank_name: parsedBank ? parsedBank.toUpperCase() : prev.bank_name,
-      bank_account: parsedAccount ? parsedAccount.replace(/[^0-9-]/g, '') : prev.bank_account,
-      pago_movil_phone: parsedPagoMovilPhone ? parsedPagoMovilPhone.replace(/[^0-9]/g, '') : prev.pago_movil_phone,
-      pago_movil_ci: parsedPagoMovilCi || prev.pago_movil_ci,
-      binance_email: parsedBinanceEmail || prev.binance_email,
-      binance_pay_id: parsedBinancePayId || prev.binance_pay_id,
-      zelle_email: parsedZelleEmail || prev.zelle_email,
-      zelle_name: parsedZelleName || prev.zelle_name,
-      cash_receiver: parsedCashReceiver || prev.cash_receiver,
-    }));
+    return {
+      updatedFormData,
+      detectedCategory,
+      detectedMethod,
+      detectedCurrency,
+      detectedUrgent,
+      parsedGuests
+    };
+  };
+
+  const handleAutoParseText = (textToParse: string) => {
+    const result = parseMessageData(textToParse);
+    if (!result) return;
+
+    if (result.detectedUrgent) setIsUrgent(true);
+    setCategory(result.detectedCategory);
+    setPaymentMethod(result.detectedMethod);
+    setCurrency(result.detectedCurrency);
+    if (result.parsedGuests.length > 0) {
+      setGuestList(result.parsedGuests);
+    }
+    setFormData(result.updatedFormData);
   };
 
   const handleApplyTemplate = (newCat: ServiceCategory, newMethod: PaymentMethodType) => {
@@ -522,54 +592,21 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
 
   const handleGoToPreview = () => {
     setErrorMsg('');
-    handleAutoParseText(rawText);
-
-    const numUsd = Number(formData.amount_usd) || 0;
-    const numBs = Number(formData.amount_bs) || 0;
-
-    if (!formData.client || !formData.client.trim()) {
-      setErrorMsg('⚠️ Falta el Cliente / Empresa: Por favor indica el cliente en el mensaje o en el campo inferior.');
+    if (!rawText.trim()) {
+      setErrorMsg('⚠️ Por favor pega el texto de la reserva o pago (WhatsApp o Correo) para continuar.');
       return;
     }
 
-    if (currency === 'USD' && numUsd <= 0) {
-      setErrorMsg('⚠️ Falta el Monto a pagar: Ingresa el monto en divisas (USD / USDT) en el panel inferior.');
-      return;
-    }
-
-    if (currency === 'VES' && numBs <= 0 && numUsd <= 0) {
-      setErrorMsg('⚠️ Falta el Monto a pagar: Ingresa el monto en Bolívares o USD con su tasa en el panel inferior.');
-      return;
-    }
-
-    if (!formData.bank_beneficiary || !formData.bank_beneficiary.trim()) {
-      setErrorMsg('⚠️ Falta el Beneficiario: Indica el titular o beneficiario en el mensaje antes de continuar.');
-      return;
-    }
-
-    if (paymentMethod === 'transferencia_bs' && (!formData.bank_account || !formData.bank_account.trim())) {
-      setErrorMsg('⚠️ Falta la Cuenta de Destino: Indica el N° de Cuenta Bancaria (20 dígitos) en el mensaje.');
-      return;
-    }
-
-    if (paymentMethod === 'pago_movil' && (!formData.pago_movil_phone?.trim() || !formData.pago_movil_ci?.trim())) {
-      setErrorMsg('⚠️ Faltan datos de Pago Móvil: Indica el Teléfono y Cédula/RIF de destino en el mensaje.');
-      return;
-    }
-
-    if (paymentMethod === 'binance' && (!formData.binance_email?.trim() && !formData.binance_pay_id?.trim())) {
-      setErrorMsg('⚠️ Faltan datos de Binance: Indica el Pay ID o Correo de Binance en el mensaje.');
-      return;
-    }
-
-    if (paymentMethod === 'zelle_usd' && (!formData.zelle_email?.trim() && !formData.bank_account?.trim())) {
-      setErrorMsg('⚠️ Faltan datos de Zelle: Indica el Correo de Zelle en el mensaje.');
-      return;
-    }
-
-    if ((paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs') && !formData.cash_receiver?.trim()) {
-      setErrorMsg('⚠️ Falta indicar el responsable que recibirá el efectivo en el mensaje.');
-      return;
+    const parsed = parseMessageData(rawText, formData, category, paymentMethod, currency);
+    if (parsed) {
+      if (parsed.detectedUrgent) setIsUrgent(true);
+      setCategory(parsed.detectedCategory);
+      setPaymentMethod(parsed.detectedMethod);
+      setCurrency(parsed.detectedCurrency);
+      if (parsed.parsedGuests.length > 0) {
+        setGuestList(parsed.parsedGuests);
+      }
+      setFormData(parsed.updatedFormData);
     }
 
     setStep('preview');
@@ -867,168 +904,53 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                 </div>
               </div>
 
-              {/* 2. PANEL DINÁMICO DE MONTO Y SELECCIÓN DE MONEDA (SEPARADO DEL MENSAJE) */}
-              <div className="bg-white p-4 rounded-2xl border-2 border-teal-300 shadow-xs space-y-3">
-                {/* Campos Cliente y Beneficiario */}
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                    <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider block">
-                      Cliente / Solicitante *:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej. PETRO MONAGAS, G1, etc."
-                      value={formData.client}
-                      onChange={(e) => setFormData({ ...formData, client: e.target.value })}
-                      className="w-full bg-white border border-slate-300 rounded-lg px-2.5 py-1 text-slate-900 font-bold text-xs focus:outline-none focus:border-[#00b4a2]"
-                    />
-                  </div>
-
-                  <div className="p-2.5 bg-slate-50 rounded-xl border border-slate-200 space-y-1">
-                    <label className="text-[11px] font-black text-teal-800 uppercase tracking-wider block">
-                      Beneficiario / Titular de Cuenta *:
-                    </label>
-                    <input
-                      type="text"
-                      placeholder="Ej. HOTEL KARIÑA C.A., MARÍA DELGADO..."
-                      value={formData.bank_beneficiary}
-                      onChange={(e) => setFormData({ ...formData, bank_beneficiary: e.target.value })}
-                      className="w-full bg-white border border-teal-300 rounded-lg px-2.5 py-1 text-teal-950 font-bold text-xs focus:outline-none focus:border-[#00b4a2]"
-                    />
-                  </div>
-                </div>
-
-                <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-                  <div>
-                    <span className="text-xs font-black text-slate-900 flex items-center gap-1.5 uppercase tracking-wide">
-                      <span className="w-2 h-2 rounded-full bg-[#00b4a2] animate-pulse" />
-                      <span>Monto y Moneda de Pago:</span>
+              {/* Live Detection Summary Pill (Solo si hay texto pegado) */}
+              {rawText.trim() && (
+                <div className="bg-white p-3 rounded-2xl border border-teal-200 shadow-2xs space-y-2 animate-fade-in">
+                  <div className="flex items-center justify-between text-[11px] text-teal-800 font-bold border-b border-teal-100 pb-1.5">
+                    <span className="flex items-center gap-1.5">
+                      <Sparkles className="w-3.5 h-3.5 text-[#00b4a2]" />
+                      <span>Información detectada del mensaje:</span>
                     </span>
-                    <span className="text-[11px] text-slate-500 font-medium">
-                      El monto se separó automáticamente. Selecciona cómo se pagará:
+                    <span className="text-[10px] text-slate-400 font-normal">
+                      Podrás revisar y editar cada detalle en el siguiente paso
                     </span>
                   </div>
 
-                  {/* Selector de Moneda Dinámico */}
-                  <div className="flex items-center gap-1 bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrency('VES');
-                      }}
-                      className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 ${
-                        currency === 'VES'
-                          ? 'bg-[#00b4a2] text-white shadow-2xs'
-                          : 'text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      <span>🇻🇪 En Bolívares (VES)</span>
-                    </button>
-
-                    <button
-                      type="button"
-                      onClick={() => {
-                        setCurrency('USD');
-                      }}
-                      className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1 ${
-                        currency === 'USD'
-                          ? 'bg-slate-900 text-white shadow-2xs'
-                          : 'text-slate-700 hover:bg-slate-200'
-                      }`}
-                    >
-                      <span>💵 En Divisas (USD / USDT)</span>
-                    </button>
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    {formData.client && (
+                      <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-bold">
+                        🏢 {formData.client}
+                      </span>
+                    )}
+                    {formData.bank_beneficiary && (
+                      <span className="bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-xl text-teal-900 font-bold">
+                        👤 {formData.bank_beneficiary}
+                      </span>
+                    )}
+                    {formData.bank_name && (
+                      <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-bold">
+                        🏦 {formData.bank_name}
+                      </span>
+                    )}
+                    {formData.bank_account && (
+                      <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-mono font-bold">
+                        💳 ••••{formData.bank_account.slice(-4)}
+                      </span>
+                    )}
+                    {currency === 'VES' && (formData.amount_bs > 0 || formData.amount_usd > 0) && (
+                      <span className="bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-xl text-emerald-800 font-black">
+                        🇻🇪 {formData.amount_bs > 0 ? `${formatBS(formData.amount_bs)} Bs.` : `$${formData.amount_usd}`}
+                      </span>
+                    )}
+                    {currency === 'USD' && formData.amount_usd > 0 && (
+                      <span className="bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-xl text-emerald-800 font-black">
+                        💵 ${formData.amount_usd} USD
+                      </span>
+                    )}
                   </div>
                 </div>
-
-                {/* Campos Dinámicos de Monto en Vivo */}
-                {currency === 'USD' ? (
-                  <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div>
-                      <span className="font-extrabold text-emerald-950 text-xs block">
-                        Monto a Pagar en Divisas (USD / USDT)
-                      </span>
-                      <span className="text-[11px] text-slate-500 font-medium">
-                        Pago directo en Binance Pay, Zelle o Efectivo (Sin conversión a Bs.)
-                      </span>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <span className="text-xl font-black text-emerald-600">$</span>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={formData.amount_usd === 0 ? '' : formData.amount_usd}
-                        onChange={(e) => setFormData({ ...formData, amount_usd: parseFloat(e.target.value) || 0 })}
-                        className="w-36 bg-white border-2 border-emerald-400 rounded-xl px-3 py-1.5 text-emerald-700 font-black text-lg focus:outline-none focus:border-emerald-600 text-right shadow-2xs"
-                      />
-                      <span className="text-xs font-bold text-emerald-800 bg-emerald-100 px-2 py-1 rounded-lg">
-                        USD/USDT
-                      </span>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 p-3 bg-teal-50/60 rounded-xl border border-teal-200">
-                    <div>
-                      <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
-                        Monto Base Ref. ($)
-                      </label>
-                      <div className="relative">
-                        <span className="absolute left-2.5 top-1/2 -translate-y-1/2 font-bold text-slate-400">$</span>
-                        <input
-                          type="number"
-                          step="0.01"
-                          placeholder="0.00"
-                          value={formData.amount_usd === 0 ? '' : formData.amount_usd}
-                          onChange={(e) => {
-                            const usd = parseFloat(e.target.value) || 0;
-                            const bs = formData.bcv_rate > 0 ? Number((usd * formData.bcv_rate).toFixed(2)) : formData.amount_bs;
-                            setFormData({ ...formData, amount_usd: usd, amount_bs: bs });
-                          }}
-                          className="w-full bg-white border border-slate-300 rounded-xl pl-7 pr-2.5 py-1.5 text-slate-900 font-bold focus:outline-none focus:border-[#00b4a2] text-xs"
-                        />
-                      </div>
-                    </div>
-
-                    <div>
-                      <label className="block text-slate-700 font-bold mb-0.5 text-[11px]">
-                        Tasa de Cambio (Bs/$)
-                      </label>
-                      <input
-                        type="number"
-                        step="0.0001"
-                        placeholder="0.00"
-                        value={formData.bcv_rate === 0 ? '' : formData.bcv_rate}
-                        onChange={(e) => {
-                          const rate = parseFloat(e.target.value) || 0;
-                          const bs = rate > 0 && formData.amount_usd > 0 ? Number((formData.amount_usd * rate).toFixed(2)) : formData.amount_bs;
-                          setFormData({ ...formData, bcv_rate: rate, amount_bs: bs });
-                        }}
-                        className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-slate-900 font-bold font-mono focus:outline-none focus:border-[#00b4a2] text-xs"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="block text-[#009b8b] font-black mb-0.5 text-[11px]">
-                        Total en Bolívares (Bs.) *
-                      </label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="0.00"
-                        value={formData.amount_bs === 0 ? '' : formData.amount_bs}
-                        onChange={(e) => {
-                          const bs = parseFloat(e.target.value) || 0;
-                          const usd = formData.bcv_rate > 0 ? Number((bs / formData.bcv_rate).toFixed(2)) : formData.amount_usd;
-                          setFormData({ ...formData, amount_bs: bs, amount_usd: usd });
-                        }}
-                        className="w-full bg-white border-2 border-teal-400 rounded-xl px-2.5 py-1.5 text-[#009b8b] font-black focus:outline-none focus:border-[#00b4a2] text-xs shadow-2xs"
-                      />
-                    </div>
-                  </div>
-                )}
-              </div>
+              )}
 
               {/* Botón Principal: Ver Solicitud */}
               <div className="pt-2 flex items-center justify-end gap-3">
