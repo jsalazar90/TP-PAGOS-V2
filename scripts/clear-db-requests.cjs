@@ -1,8 +1,12 @@
+const fs = require('fs');
 const { createClient } = require('@supabase/supabase-js');
-require('dotenv').config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const envContent = fs.readFileSync('.env', 'utf8');
+const supabaseUrlMatch = envContent.match(/VITE_SUPABASE_URL\s*=\s*(.+)/);
+const supabaseKeyMatch = envContent.match(/VITE_SUPABASE_ANON_KEY\s*=\s*(.+)/);
+
+const supabaseUrl = supabaseUrlMatch ? supabaseUrlMatch[1].trim() : '';
+const supabaseKey = supabaseKeyMatch ? supabaseKeyMatch[1].trim() : '';
 
 if (!supabaseUrl || !supabaseKey) {
   console.error('Error: Las variables VITE_SUPABASE_URL y VITE_SUPABASE_ANON_KEY no están configuradas en .env');

@@ -134,6 +134,10 @@ CREATE POLICY "Todos los usuarios pueden actualizar solicitudes"
   ON public.payment_requests FOR UPDATE
   USING (true);
 
+CREATE POLICY "Todos los usuarios pueden eliminar solicitudes"
+  ON public.payment_requests FOR DELETE
+  USING (true);
+
 -- 7. CONFIGURACIÓN DE BUCKET DE ALMACENAMIENTO (SUPABASE STORAGE)
 INSERT INTO storage.buckets (id, name, public) 
 VALUES ('payment-supports', 'payment-supports', true)

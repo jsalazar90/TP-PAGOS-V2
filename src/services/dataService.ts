@@ -11,33 +11,60 @@ import { isSupabaseConfigured, supabase } from './supabase';
 
 const REQUESTS_STORAGE_KEY = 'jt_pagos_requests_v1';
 const USERS_STORAGE_KEY = 'jt_pagos_users_v1';
+const DELETED_REQUESTS_KEY = 'jt_pagos_deleted_requests_v1';
+
+function getDeletedRequestIds(): Set<string> {
+  try {
+    const stored = localStorage.getItem(DELETED_REQUESTS_KEY);
+    return stored ? new Set(JSON.parse(stored)) : new Set();
+  } catch (e) {
+    return new Set();
+  }
+}
+
+function addDeletedRequestId(id: string) {
+  try {
+    const set = getDeletedRequestIds();
+    set.add(id);
+    localStorage.setItem(DELETED_REQUESTS_KEY, JSON.stringify(Array.from(set)));
+  } catch (e) {
+    // ignore
+  }
+}
 
 // Initial local storage setup
 function getLocalRequests(): PaymentRequest[] {
   const users = getLocalUsers();
   const userMap = new Map(users.map(u => [u.id, u.full_name || u.username]));
+  const deletedIds = getDeletedRequestIds();
   const stored = localStorage.getItem(REQUESTS_STORAGE_KEY);
   if (!stored) {
-    const initialized = INITIAL_REQUESTS.map(req => ({
-      ...req,
-      creator_name: req.creator_name || userMap.get(req.created_by) || 'Usuario'
-    }));
+    const initialized = INITIAL_REQUESTS
+      .filter(req => !deletedIds.has(req.id))
+      .map(req => ({
+        ...req,
+        creator_name: req.creator_name || userMap.get(req.created_by) || 'Usuario'
+      }));
     localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(initialized));
     return initialized;
   }
   try {
     const parsed: PaymentRequest[] = JSON.parse(stored);
-    return parsed.map(req => ({
-      ...req,
-      creator_name: req.creator_name || userMap.get(req.created_by) || 'Usuario'
-    }));
+    return parsed
+      .filter(req => !deletedIds.has(req.id))
+      .map(req => ({
+        ...req,
+        creator_name: req.creator_name || userMap.get(req.created_by) || 'Usuario'
+      }));
   } catch (e) {
-    return INITIAL_REQUESTS;
+    return INITIAL_REQUESTS.filter(req => !deletedIds.has(req.id));
   }
 }
 
 function setLocalRequests(requests: PaymentRequest[]) {
-  localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(requests));
+  const deletedIds = getDeletedRequestIds();
+  const filtered = requests.filter(r => !deletedIds.has(r.id));
+  localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(filtered));
 }
 
 // Initial local storage setup
@@ -79,6 +106,7 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
   let list: PaymentRequest[] = [];
   const users = await fetchUsers();
   const userMap = new Map(users.map(u => [u.id, u.full_name || u.username]));
+  const deletedIds = getDeletedRequestIds();
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -109,6 +137,9 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
     // Local fallback - returns all requests for all users
     list = getLocalRequests();
   }
+
+  // Filter out any permanently deleted requests
+  list = list.filter(item => !deletedIds.has(item.id));
 
   return list
     .map(req => {
@@ -701,17 +732,24 @@ export async function deletePaymentRequest(
     throw new Error('No se pueden eliminar solicitudes que ya están en estado Realizado.');
   }
 
+  // 1. Mark as permanently deleted in local blacklist
+  addDeletedRequestId(requestId);
+
+  // 2. Remove from local storage array
+  const filtered = requests.filter(r => r.id !== requestId);
+  setLocalRequests(filtered);
+
+  // 3. Delete from Supabase if configured
   if (isSupabaseConfigured && supabase) {
     try {
       const { error } = await supabase.from('payment_requests').delete().eq('id', requestId);
-      if (!error) return;
+      if (error) {
+        console.warn('Supabase deletePaymentRequest warning:', error.message);
+      }
     } catch (e) {
       console.warn('Supabase deletePaymentRequest fallback to local:', e);
     }
   }
-
-  const filtered = requests.filter(r => r.id !== requestId);
-  setLocalRequests(filtered);
 }
 
 // Analytics and Metrics Helper
