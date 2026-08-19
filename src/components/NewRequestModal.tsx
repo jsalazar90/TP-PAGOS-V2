@@ -116,7 +116,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     amount_bs: 0,
     bank_beneficiary: '',
     bank_rif: '',
-    bank_name: 'BANESCO',
+    bank_name: '',
     bank_account: '',
     pago_movil_phone: '',
     pago_movil_ci: '',
@@ -162,7 +162,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       amount_bs: 0,
       bank_beneficiary: '',
       bank_rif: '',
-      bank_name: 'BANESCO',
+      bank_name: '',
       bank_account: '',
       pago_movil_phone: '',
       pago_movil_ci: '',
@@ -281,9 +281,14 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     if (method === 'binance' || method === 'zelle_usd' || method === 'efectivo_usd' || method === 'efectivo_bs') {
       lines.push('Monto USD: ');
       lines.push(`Metodo: ${method === 'binance' ? 'Binance' : method === 'zelle_usd' ? 'Zelle' : 'Efectivo'}`);
+    } else if (method === 'pago_movil') {
+      lines.push('Monto USD: ');
+      lines.push('Tasa BCV: ');
+      lines.push('Metodo: Pago Movil');
     } else {
       lines.push('Monto USD: ');
       lines.push('Tasa BCV: ');
+      lines.push('Metodo: Transferencia');
     }
 
     // Datos Bancarios del Beneficiario / Titular de la cuenta
@@ -442,38 +447,125 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const parsedPagoMovilPhone = getValue(['Pago movil', 'Pago móvil', 'Teléfono PM', 'Telefono PM', 'Telefono', 'Teléfono']);
     const parsedPagoMovilCi = getValue(['Cedula PM', 'Cédula PM', 'Cedula Pago Movil', 'Cédula Pago Móvil', 'CI PM']) || getValue(['Cedula', 'Cédula']);
 
-    const parsedBinanceEmail = getValue(['Binance Email', 'Correo Binance', 'Email Binance', 'Binance ID Email']);
-    const parsedBinancePayId = getValue(['Pay ID', 'Binance Pay ID', 'PayID', 'Binance ID']);
+    let parsedBinanceEmail = getValue([
+      'Binance Email',
+      'Correo Binance',
+      'Email Binance',
+      'Binance ID Email',
+      'Correo de Binance',
+      'Email de Binance',
+      'Binance User',
+      'Usuario Binance'
+    ]);
 
-    const parsedZelleEmail = getValue(['Email Zelle', 'Correo Zelle', 'Zelle Email', 'Zelle']);
-    const parsedZelleName = getValue(['Titular Zelle', 'Nombre Zelle', 'Zelle Name']);
-    const parsedCashReceiver = getValue(['Entregar a', 'Receptor Efectivo', 'Persona Efectivo', 'Persona que recibe']);
+    let parsedBinancePayId = getValue([
+      'Binance Pay ID',
+      'Pay ID Binance',
+      'Pay ID',
+      'PayID',
+      'Binance ID',
+      'Pay ID / Binance',
+      'ID Binance',
+      'Pay ID / ID'
+    ]);
+
+    let parsedZelleEmail = getValue([
+      'Email Zelle',
+      'Correo Zelle',
+      'Zelle Email',
+      'Correo de Zelle',
+      'Email de Zelle',
+      'Zelle'
+    ]);
+
+    const parsedZelleName = getValue([
+      'Titular Zelle',
+      'Nombre Zelle',
+      'Zelle Name',
+      'Titular de Zelle',
+      'Beneficiario Zelle'
+    ]);
+
+    const parsedCashReceiver = getValue([
+      'Persona que recibe efectivo',
+      'Persona que recibe el efectivo',
+      'Responsable Efectivo',
+      'Persona que recibe',
+      'Entregar a',
+      'Receptor Efectivo',
+      'Persona Efectivo',
+      'Receptor de Efectivo'
+    ]);
 
     // Detect Payment Method & Currency Automatically
+    const explicitMethod = getValue(['Metodo de Pago', 'Método de Pago', 'Metodo', 'Método', 'Forma de Pago']);
     let detectedMethod: PaymentMethodType = currentMethod;
     let detectedCurrency: PaymentCurrency = currentCurr;
 
-    if (parsedBinanceEmail || parsedBinancePayId || /binance/i.test(textToParse)) {
-      detectedMethod = 'binance';
-      detectedCurrency = 'USD';
-    } else if (parsedZelleEmail || /zelle/i.test(textToParse)) {
-      detectedMethod = 'zelle_usd';
-      detectedCurrency = 'USD';
-    } else if (/efectivo/i.test(textToParse)) {
-      detectedMethod = 'efectivo_usd';
-      detectedCurrency = 'USD';
-    } else if (parsedPagoMovilPhone || /pago\s*móvil|pago\s*movil|\bpm\b/i.test(textToParse)) {
-      if (!parsedAccount) {
+    if (explicitMethod) {
+      if (/binance/i.test(explicitMethod)) {
+        detectedMethod = 'binance';
+        detectedCurrency = 'USD';
+      } else if (/zelle/i.test(explicitMethod)) {
+        detectedMethod = 'zelle_usd';
+        detectedCurrency = 'USD';
+      } else if (/efectivo/i.test(explicitMethod)) {
+        detectedMethod = 'efectivo_usd';
+        detectedCurrency = 'USD';
+      } else if (/pago\s*m[oó]vil|pm/i.test(explicitMethod)) {
         detectedMethod = 'pago_movil';
+        detectedCurrency = 'VES';
+      } else if (/transferencia|banco|cuenta|bs/i.test(explicitMethod)) {
+        detectedMethod = 'transferencia_bs';
+        detectedCurrency = 'VES';
       }
-    } else if (parsedAccount && parsedAccount.replace(/[^0-9]/g, '').length >= 10) {
-      detectedMethod = 'transferencia_bs';
+    } else {
+      if (parsedBinanceEmail || parsedBinancePayId || /\bbinance\b/i.test(textToParse)) {
+        detectedMethod = 'binance';
+        detectedCurrency = 'USD';
+      } else if (parsedZelleEmail || /\bzelle\b/i.test(textToParse)) {
+        detectedMethod = 'zelle_usd';
+        detectedCurrency = 'USD';
+      } else if (parsedCashReceiver || /\befectivo\b/i.test(textToParse)) {
+        detectedMethod = 'efectivo_usd';
+        detectedCurrency = 'USD';
+      } else if (parsedPagoMovilPhone || /pago\s*móvil|pago\s*movil|\bpm\b/i.test(textToParse)) {
+        if (!parsedAccount) {
+          detectedMethod = 'pago_movil';
+          detectedCurrency = 'VES';
+        }
+      } else if (parsedAccount && parsedAccount.replace(/[^0-9]/g, '').length >= 10) {
+        detectedMethod = 'transferencia_bs';
+        detectedCurrency = 'VES';
+      }
     }
 
     if (/divisa|solo\s*usd|usdt|binance|zelle/i.test(textToParse) && (!rawBcv || numBcv === 0)) {
       detectedCurrency = 'USD';
     } else if (rawBcv && numBcv > 0) {
       detectedCurrency = 'VES';
+    }
+
+    // Fallbacks for Binance / Zelle
+    if (!parsedBinancePayId && (detectedMethod === 'binance' || /binance/i.test(textToParse))) {
+      const payIdMatch = textToParse.match(/(?:pay\s*id|binance\s*id|payid)\s*[:=-]?\s*(\d{5,12})/i);
+      if (payIdMatch) {
+        parsedBinancePayId = payIdMatch[1];
+      }
+    }
+
+    if (!parsedBinanceEmail && (detectedMethod === 'binance' || /binance/i.test(textToParse))) {
+      const emailMatch = textToParse.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
+      if (emailMatch && !/tppagos|travelpoint/i.test(emailMatch[1])) {
+        parsedBinanceEmail = emailMatch[1];
+      }
+    }
+
+    if (!parsedZelleEmail && (detectedMethod === 'zelle_usd' || /zelle/i.test(textToParse))) {
+      const emailMatch = textToParse.match(/\b([a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,})\b/);
+      if (emailMatch && !/tppagos|travelpoint/i.test(emailMatch[1])) {
+        parsedZelleEmail = emailMatch[1];
+      }
     }
 
     // Multi-line Guest / Passenger Parsing
@@ -563,8 +655,8 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     };
   };
 
-  const handleAutoParseText = (textToParse: string) => {
-    const result = parseMessageData(textToParse);
+  const handleAutoParseText = (textToParse: string, targetCat = category, targetMethod = paymentMethod, targetCurr = currency) => {
+    const result = parseMessageData(textToParse, formData, targetCat, targetMethod, targetCurr);
     if (!result) return;
 
     if (result.detectedUrgent) setIsUrgent(true);
@@ -581,12 +673,17 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     setCategory(newCat);
     setPaymentMethod(newMethod);
     const isDirect = newMethod === 'binance' || newMethod === 'zelle_usd' || newMethod === 'efectivo_usd';
-    setCurrency(isDirect ? 'USD' : 'VES');
+    const newCurr = isDirect ? 'USD' : 'VES';
+    setCurrency(newCurr);
     const text = generateStructureTemplate(newCat, newMethod);
-    navigator.clipboard.writeText(text);
+    try {
+      navigator.clipboard?.writeText(text);
+    } catch (e) {
+      // Ignore clipboard focus errors
+    }
     setCopiedTemplate(true);
     setRawText(text);
-    handleAutoParseText(text);
+    handleAutoParseText(text, newCat, newMethod, newCurr);
     setTimeout(() => setCopiedTemplate(false), 2500);
   };
 
@@ -918,26 +1015,88 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   </div>
 
                   <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    {/* Badge Método de Pago */}
+                    <span className="bg-slate-900 text-white px-2.5 py-1 rounded-xl font-bold flex items-center gap-1">
+                      {paymentMethod === 'binance' ? '💰 Binance USDT' :
+                       paymentMethod === 'zelle_usd' ? '💵 Zelle USD' :
+                       paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs' ? '💵 Efectivo' :
+                       paymentMethod === 'pago_movil' ? '📱 Pago Móvil' :
+                       '🏦 Transferencia Bs.'}
+                    </span>
+
                     {formData.client && (
                       <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-bold">
                         🏢 {formData.client}
                       </span>
                     )}
+
                     {formData.bank_beneficiary && (
                       <span className="bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-xl text-teal-900 font-bold">
                         👤 {formData.bank_beneficiary}
                       </span>
                     )}
-                    {formData.bank_name && (
+
+                    {/* Transferencia Bancaria */}
+                    {paymentMethod === 'transferencia_bs' && formData.bank_name && (
                       <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-bold">
                         🏦 {formData.bank_name}
                       </span>
                     )}
-                    {formData.bank_account && (
+                    {paymentMethod === 'transferencia_bs' && formData.bank_account && (
                       <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-mono font-bold">
                         💳 ••••{formData.bank_account.slice(-4)}
                       </span>
                     )}
+
+                    {/* Pago Móvil */}
+                    {paymentMethod === 'pago_movil' && formData.bank_name && (
+                      <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-bold">
+                        🏦 {formData.bank_name}
+                      </span>
+                    )}
+                    {paymentMethod === 'pago_movil' && formData.pago_movil_phone && (
+                      <span className="bg-teal-50 border border-teal-200 px-2.5 py-1 rounded-xl text-teal-900 font-bold">
+                        📱 PM: {formData.pago_movil_phone}
+                      </span>
+                    )}
+                    {paymentMethod === 'pago_movil' && formData.pago_movil_ci && (
+                      <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-bold">
+                        🪪 {formData.pago_movil_ci}
+                      </span>
+                    )}
+
+                    {/* Binance */}
+                    {paymentMethod === 'binance' && formData.binance_pay_id && (
+                      <span className="bg-amber-50 border border-amber-300 px-2.5 py-1 rounded-xl text-amber-900 font-mono font-bold">
+                        🆔 Pay ID: {formData.binance_pay_id}
+                      </span>
+                    )}
+                    {paymentMethod === 'binance' && formData.binance_email && (
+                      <span className="bg-amber-50 border border-amber-300 px-2.5 py-1 rounded-xl text-amber-900 font-bold">
+                        📧 {formData.binance_email}
+                      </span>
+                    )}
+
+                    {/* Zelle */}
+                    {paymentMethod === 'zelle_usd' && formData.zelle_email && (
+                      <span className="bg-purple-50 border border-purple-300 px-2.5 py-1 rounded-xl text-purple-900 font-bold">
+                        📧 Zelle: {formData.zelle_email}
+                      </span>
+                    )}
+                    {paymentMethod === 'zelle_usd' && formData.zelle_name && (
+                      <span className="bg-purple-50 border border-purple-200 px-2.5 py-1 rounded-xl text-purple-900 font-bold">
+                        👤 Titular: {formData.zelle_name}
+                      </span>
+                    )}
+
+                    {/* Efectivo */}
+                    {(paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs') && formData.cash_receiver && (
+                      <span className="bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-xl text-emerald-900 font-bold">
+                        💵 Entrega: {formData.cash_receiver}
+                      </span>
+                    )}
+
+                    {/* Montos */}
                     {currency === 'VES' && (formData.amount_bs > 0 || formData.amount_usd > 0) && (
                       <span className="bg-emerald-50 border border-emerald-300 px-2.5 py-1 rounded-xl text-emerald-800 font-black">
                         🇻🇪 {formData.amount_bs > 0 ? `${formatBS(formData.amount_bs)} Bs.` : `$${formData.amount_usd}`}
