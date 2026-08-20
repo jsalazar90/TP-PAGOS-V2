@@ -13,6 +13,7 @@ import {
   Plane,
   Receipt,
   Hotel,
+  Briefcase,
   CheckCircle2
 } from 'lucide-react';
 
@@ -233,6 +234,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-1">
                         <Receipt className="w-3 h-3 text-purple-600" /> Gastos
                       </span>
+                    ) : category === 'viaticos' ? (
+                      <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1">
+                        <Briefcase className="w-3 h-3 text-amber-700" /> Viáticos
+                      </span>
                     ) : (
                       <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 flex items-center gap-1">
                         <Hotel className="w-3 h-3 text-indigo-600" /> Hospedaje
@@ -245,27 +250,38 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   </div>
 
                   <h3 className="font-bold text-slate-900 text-sm leading-snug">{req.title}</h3>
-                  <p className="text-xs text-slate-600 font-medium">
-                    Huésped / Pasajero:{' '}
-                    <strong className="text-slate-800">{req.guest_name}</strong>{' '}
-                    {req.guest_ci ? `(${req.guest_ci})` : ''} •{' '}
-                    {req.hotel_name || req.route_from_to || req.airline}
-                  </p>
+                  {category === 'gastos_apoyo' ? (
+                    <p className="text-xs text-slate-600 font-medium">
+                      Concepto: <strong className="text-slate-800">{req.expense_concept || req.hotel_name || req.title}</strong>
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-600 font-medium">
+                      {category === 'viaticos' ? 'Usuario Responsable: ' : 'Huésped / Pasajero: '}
+                      <strong className="text-slate-800">{req.guest_name}</strong>{' '}
+                      {req.guest_ci ? `(${req.guest_ci})` : ''} •{' '}
+                      {category === 'vuelos' ? (req.airline || req.hotel_name) : category === 'traslado' ? (req.hotel_name || req.route_from_to) : req.hotel_name}
+                    </p>
+                  )}
 
-                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-400 pt-0.5">
+                  <div className="flex flex-wrap items-center gap-3 text-[11px] text-slate-500 pt-0.5">
                     {req.nights_dates && (
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 text-slate-400">
                         <Calendar className="w-3 h-3 text-slate-400" /> {req.nights_dates}
                       </span>
                     )}
+                    {req.origin_bank && (
+                      <span className="font-semibold text-emerald-800 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-200">
+                        Origen: {req.origin_bank}
+                      </span>
+                    )}
                     {req.bank_details.bank && (
-                      <span className="font-medium text-slate-500">
-                        Banco: {req.bank_details.bank}
+                      <span className="font-medium text-slate-600 bg-slate-100 px-1.5 py-0.5 rounded border border-slate-200">
+                        Destino: {req.bank_details.bank}
                       </span>
                     )}
                     <span className="text-emerald-700 font-bold flex items-center gap-1">
                       <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Liquidado el{' '}
-                      {new Date(req.updated_at || req.created_at).toLocaleDateString()}
+                      {new Date(req.updated_at || req.created_at).toLocaleDateString()} {new Date(req.updated_at || req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                   </div>
                 </div>

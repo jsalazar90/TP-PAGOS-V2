@@ -9,15 +9,33 @@ import {
   FileCheck,
   ShieldAlert,
   Clipboard,
-  Trash2
+  Trash2,
+  Landmark
 } from 'lucide-react';
 
 interface StatusChangeModalProps {
   request: PaymentRequest | null;
   isOpen: boolean;
   onClose: () => void;
-  onConfirmStatusChange: (requestId: string, newStatus: RequestStatus, receiptFile?: File | null) => Promise<void>;
+  onConfirmStatusChange: (
+    requestId: string,
+    newStatus: RequestStatus,
+    receiptFile?: File | null,
+    originBank?: string
+  ) => Promise<void>;
 }
+
+const COMMON_ORIGIN_BANKS = [
+  'BANESCO',
+  'BANCO DE VENEZUELA',
+  'MERCANTIL',
+  'BANCO PROVINCIAL',
+  'BANCAMIGA',
+  'BNC',
+  'BANPLUS',
+  'BINANCE',
+  'ZELLE'
+];
 
 export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   request,
@@ -27,14 +45,16 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
 }) => {
   const [selectedStatus, setSelectedStatus] = useState<RequestStatus>(request?.status || 'en_proceso');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [originBank, setOriginBank] = useState<string>(request?.origin_bank || '');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
 
-  // Sync selected status when request or modal opens
+  // Sync selected status and origin bank when request or modal opens
   useEffect(() => {
     if (request) {
       setSelectedStatus(request.status);
+      setOriginBank(request.origin_bank || '');
       setReceiptFile(null);
       setPreviewUrl(null);
       setErrorMsg('');
@@ -101,14 +121,25 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
   const handleSave = async () => {
     setErrorMsg('');
 
-    if (selectedStatus === 'realizado' && !receiptFile && !request.receipt_file_url) {
-      setErrorMsg('⚠️ ES OBLIGATORIO adjuntar o pegar el comprobante de pago para marcar la solicitud como "Realizado".');
-      return;
+    if (selectedStatus === 'realizado') {
+      if (!receiptFile && !request.receipt_file_url) {
+        setErrorMsg('⚠️ ES OBLIGATORIO adjuntar o pegar el comprobante de pago para marcar la solicitud como "Realizado".');
+        return;
+      }
+      if (!originBank.trim()) {
+        setErrorMsg('⚠️ ES OBLIGATORIO indicar el Banco de Origen desde el cual se emitió el pago.');
+        return;
+      }
     }
 
     try {
       setLoading(true);
-      await onConfirmStatusChange(request.id, selectedStatus, receiptFile);
+      await onConfirmStatusChange(
+        request.id,
+        selectedStatus,
+        receiptFile,
+        selectedStatus === 'realizado' ? originBank.trim().toUpperCase() : request.origin_bank
+      );
       onClose();
     } catch (err: any) {
       setErrorMsg(err.message || 'Error al actualizar el estado de la solicitud');
@@ -202,11 +233,46 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
 
         {/* File Upload & Paste Section for Realizado */}
         {selectedStatus === 'realizado' && (
-          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 space-y-2 text-xs">
+          <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-200 space-y-3 text-xs">
+            {/* Banco de Origen Input */}
+            <div className="space-y-1.5 bg-white p-2.5 rounded-lg border border-emerald-300">
+              <div className="flex items-center justify-between">
+                <label className="text-[11px] font-bold text-emerald-950 flex items-center gap-1">
+                  <Landmark className="w-3.5 h-3.5 text-emerald-600" />
+                  <span>Banco de Origen (Cuenta Emisora) <span className="text-rose-500">*</span></span>
+                </label>
+                <span className="text-[10px] text-emerald-700 font-semibold">Obligatorio</span>
+              </div>
+              <input
+                type="text"
+                value={originBank}
+                onChange={(e) => setOriginBank(e.target.value.toUpperCase())}
+                placeholder="Ej: BANESCO, BANCO DE VENEZUELA, MERCANTIL, BINANCE..."
+                className="w-full bg-slate-50 border border-slate-300 rounded-lg px-2.5 py-1.5 text-xs text-slate-800 font-bold focus:outline-none focus:border-emerald-600 focus:bg-white transition-colors"
+              />
+              {/* Quick Bank Chips */}
+              <div className="flex flex-wrap items-center gap-1 pt-1">
+                {COMMON_ORIGIN_BANKS.map((b) => (
+                  <button
+                    key={b}
+                    type="button"
+                    onClick={() => setOriginBank(b)}
+                    className={`text-[10px] font-bold px-2 py-0.5 rounded-md border transition-all ${
+                      originBank === b
+                        ? 'bg-emerald-600 text-white border-emerald-700 shadow-2xs'
+                        : 'bg-slate-50 text-slate-700 hover:bg-slate-100 border-slate-200'
+                    }`}
+                  >
+                    {b}
+                  </button>
+                ))}
+              </div>
+            </div>
+
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-1 font-bold text-emerald-800">
                 <ShieldAlert className="w-4 h-4 text-emerald-600" />
-                <span>Adjunto u Opción de Pegar Imagen</span>
+                <span>Adjunto u Opción de Pegar Imagen <span className="text-rose-500">*</span></span>
               </div>
               <span className="text-[10px] bg-emerald-200 text-emerald-900 px-1.5 py-0.2 rounded font-bold">
                 Ctrl + V Activo

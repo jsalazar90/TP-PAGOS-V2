@@ -1,7 +1,19 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { UserProfile } from '../types';
 import { TPLogo } from './TPLogo';
-import { History, Users, LogOut, ShieldCheck, UserCheck, Plus, LayoutDashboard } from 'lucide-react';
+import {
+  History,
+  Users,
+  LogOut,
+  ShieldCheck,
+  UserCheck,
+  Plus,
+  LayoutDashboard,
+  Bell,
+  BellRing,
+  BellOff
+} from 'lucide-react';
+import { notificationService } from '../services/notificationService';
 
 interface NavbarProps {
   currentUser: UserProfile;
@@ -18,12 +30,46 @@ export const Navbar: React.FC<NavbarProps> = ({
   onOpenNewRequest,
   onLogout,
 }) => {
+  const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => {
+    return notificationService.getPermission();
+  });
+
+  useEffect(() => {
+    if (notificationService.isSupported()) {
+      setNotifPermission(notificationService.getPermission());
+    }
+  }, []);
+
+  const handleToggleNotifications = async () => {
+    if (!notificationService.isSupported()) {
+      alert('Tu navegador o dispositivo no soporta notificaciones web.');
+      return;
+    }
+
+    if (notifPermission !== 'granted') {
+      const res = await notificationService.requestPermission();
+      setNotifPermission(res);
+      if (res === 'granted') {
+        notificationService.sendNotification('🔔 Notificaciones Activadas', {
+          body: 'Recibirás alertas en tiempo real al crearse nuevas solicitudes.',
+          soundType: 'new_request'
+        });
+      }
+    } else {
+      // Test audio chime and notification
+      notificationService.sendNotification('🔔 Notificaciones Activas', {
+        body: 'Sistema de alertas funcionando correctamente en este teléfono.',
+        soundType: 'new_request'
+      });
+    }
+  };
+
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6">
-        <div className="flex items-center justify-between h-14 sm:h-16">
+      <div className="max-w-7xl mx-auto px-3 sm:px-6">
+        <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
           {/* Brand Logo */}
-          <div className="cursor-pointer py-1" onClick={() => setActiveTab('dashboard')}>
+          <div className="cursor-pointer py-1 shrink-0" onClick={() => setActiveTab('dashboard')}>
             <TPLogo size="md" showSubtitle={true} />
           </div>
 
@@ -69,19 +115,46 @@ export const Navbar: React.FC<NavbarProps> = ({
           </nav>
 
           {/* Right Action Tools & Profile */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2">
+            {/* Notification Alert Bell Button */}
+            <button
+              onClick={handleToggleNotifications}
+              title={
+                notifPermission === 'granted'
+                  ? 'Notificaciones en vivo activas (toca para probar sonido)'
+                  : 'Activar alertas en vivo en este teléfono'
+              }
+              className={`active-press p-2 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all ${
+                notifPermission === 'granted'
+                  ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
+                  : notifPermission === 'denied'
+                  ? 'bg-slate-100 text-slate-400 border-slate-200'
+                  : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 animate-pulse-subtle'
+              }`}
+            >
+              {notifPermission === 'granted' ? (
+                <BellRing className="w-4 h-4 text-[#00b4a2]" />
+              ) : notifPermission === 'denied' ? (
+                <BellOff className="w-4 h-4 text-slate-400" />
+              ) : (
+                <>
+                  <Bell className="w-4 h-4 text-amber-600 animate-bounce" />
+                  <span className="hidden sm:inline">Activar Alertas</span>
+                </>
+              )}
+            </button>
+
             {/* New Request Button */}
             <button
               onClick={onOpenNewRequest}
-              className="active-press flex items-center gap-1.5 bg-[#00b4a2] hover:bg-[#009b8b] text-white px-3 py-1.5 sm:px-3.5 sm:py-2 rounded-xl font-bold text-xs shadow-2xs transition-all"
+              className="active-press flex items-center gap-1.5 bg-[#00b4a2] hover:bg-[#009b8b] text-white px-2.5 py-2 sm:px-3.5 sm:py-2 rounded-xl font-bold text-xs shadow-2xs transition-all shrink-0"
+              title="Crear Nueva Solicitud de Pago"
             >
               <Plus className="w-4 h-4 stroke-[2.5]" />
-              <span>Nueva Solicitud</span>
+              <span className="hidden sm:inline">Nueva Solicitud</span>
             </button>
 
-
-
-            {/* User Profile info */}
+            {/* User Profile info (Desktop) */}
             <div className="hidden lg:flex items-center gap-2 bg-slate-100/80 px-3 py-1 rounded-xl border border-slate-200">
               {currentUser.role === 'admin' ? (
                 <ShieldCheck className="w-4 h-4 text-teal-600" />
@@ -96,24 +169,26 @@ export const Navbar: React.FC<NavbarProps> = ({
               </div>
             </div>
 
-            {/* Logout button */}
+            {/* Logout button (Header) */}
             <button
               onClick={onLogout}
-              title="Cerrar Sesión"
-              className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-slate-100 rounded-lg transition-colors active-press"
+              title="Cerrar Sesión (Salir)"
+              aria-label="Cerrar Sesión"
+              className="p-2 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl border border-slate-200/80 transition-colors active-press shrink-0 flex items-center gap-1"
             >
               <LogOut className="w-4 h-4" />
+              <span className="hidden sm:inline text-xs font-semibold">Salir</span>
             </button>
           </div>
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation Bar */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 px-4 py-1.5 flex items-center justify-around shadow-lg">
+      {/* Mobile Bottom Navigation Bar (Ultra Accessible on Phones) */}
+      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200 px-2 py-1.5 flex items-center justify-around shadow-2xl safe-area-bottom">
         <button
           onClick={() => setActiveTab('dashboard')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[11px] font-medium transition-colors ${
-            activeTab === 'dashboard' ? 'text-[#00b4a2] font-bold' : 'text-slate-500 hover:text-slate-800'
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold transition-colors ${
+            activeTab === 'dashboard' ? 'text-[#00b4a2] bg-teal-50/80' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           <LayoutDashboard className="w-4 h-4" />
@@ -122,8 +197,8 @@ export const Navbar: React.FC<NavbarProps> = ({
 
         <button
           onClick={() => setActiveTab('history')}
-          className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[11px] font-medium transition-colors ${
-            activeTab === 'history' ? 'text-[#00b4a2] font-bold' : 'text-slate-500 hover:text-slate-800'
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold transition-colors ${
+            activeTab === 'history' ? 'text-[#00b4a2] bg-teal-50/80' : 'text-slate-500 hover:text-slate-800'
           }`}
         >
           <History className="w-4 h-4" />
@@ -133,14 +208,42 @@ export const Navbar: React.FC<NavbarProps> = ({
         {currentUser.role === 'admin' && (
           <button
             onClick={() => setActiveTab('users')}
-            className={`flex flex-col items-center gap-0.5 py-1 px-3 rounded-lg text-[11px] font-medium transition-colors ${
-              activeTab === 'users' ? 'text-[#00b4a2] font-bold' : 'text-slate-500 hover:text-slate-800'
+            className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold transition-colors ${
+              activeTab === 'users' ? 'text-[#00b4a2] bg-teal-50/80' : 'text-slate-500 hover:text-slate-800'
             }`}
           >
             <Users className="w-4 h-4" />
             <span>Usuarios</span>
           </button>
         )}
+
+        {/* Mobile Notifications Button in Bottom Bar */}
+        <button
+          onClick={handleToggleNotifications}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold transition-colors ${
+            notifPermission === 'granted'
+              ? 'text-teal-700 hover:bg-teal-50'
+              : 'text-amber-700 bg-amber-50 animate-pulse'
+          }`}
+          title="Activar o probar alertas"
+        >
+          {notifPermission === 'granted' ? (
+            <BellRing className="w-4 h-4 text-[#00b4a2]" />
+          ) : (
+            <Bell className="w-4 h-4 text-amber-600" />
+          )}
+          <span>{notifPermission === 'granted' ? 'Alertas ON' : 'Activar'}</span>
+        </button>
+
+        {/* Mobile Logout Button in Bottom Bar */}
+        <button
+          onClick={onLogout}
+          className="flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold text-rose-600 hover:bg-rose-50 transition-colors"
+          title="Cerrar Sesión"
+        >
+          <LogOut className="w-4 h-4" />
+          <span>Salir</span>
+        </button>
       </div>
     </header>
   );

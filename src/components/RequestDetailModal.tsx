@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { PaymentRequest } from '../types';
+import { PaymentRequest, UserProfile } from '../types';
 import { StatusBadge } from './StatusBadge';
 import {
   X,
@@ -17,19 +17,32 @@ import {
   Receipt,
   Hotel,
   Plane,
-  Users
+  Briefcase,
+  Users,
+  AlertTriangle,
+  Pencil,
+  Edit3,
+  Clock
 } from 'lucide-react';
 
 interface RequestDetailModalProps {
   request: PaymentRequest | null;
+  currentUser?: UserProfile;
   isOpen: boolean;
   onClose: () => void;
+  onEditRequest?: (request: PaymentRequest) => void;
+  onRequestModification?: (request: PaymentRequest) => void;
+  onCancelModification?: (request: PaymentRequest) => void;
 }
 
 export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
   request,
+  currentUser,
   isOpen,
   onClose,
+  onEditRequest,
+  onRequestModification,
+  onCancelModification,
 }) => {
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedLoc, setCopiedLoc] = useState(false);
@@ -131,7 +144,11 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                 </span>
               ) : category === 'gastos_apoyo' ? (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-1">
-                  <Receipt className="w-3 h-3 text-purple-600" /> Gastos / Apoyo
+                  <Receipt className="w-3 h-3 text-purple-600" /> Gastos
+                </span>
+              ) : category === 'viaticos' ? (
+                <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1">
+                  <Briefcase className="w-3 h-3 text-amber-700" /> Viáticos
                 </span>
               ) : (
                 <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 flex items-center gap-1">
@@ -154,6 +171,57 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
           </button>
         </div>
 
+        {/* Modification Request Alert Banner */}
+        {request.modification_requested && (
+          <div className="p-3 bg-amber-50 rounded-2xl border border-amber-300 space-y-2 animate-pulse-subtle">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+                <span>
+                  ⚠️ Modificación Solicitada
+                  {request.modification_requested_by ? ` por ${request.modification_requested_by}` : ''}
+                </span>
+              </span>
+              {request.modification_requested_at && (
+                <span className="text-[11px] text-amber-900 font-bold flex items-center gap-1 bg-amber-200/70 px-2 py-0.5 rounded-lg border border-amber-300">
+                  <Clock className="w-3 h-3 text-amber-800" />
+                  <span>
+                    {new Date(request.modification_requested_at).toLocaleDateString()} • {new Date(request.modification_requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </span>
+              )}
+            </div>
+            <div className="bg-white/90 p-2.5 rounded-xl border border-amber-200 text-xs text-amber-950 font-medium">
+              <strong className="text-amber-800 font-bold block text-[10px] uppercase">
+                Observación / Cambios Solicitados:
+              </strong>
+              {request.modification_reason || 'Sin observación especificada.'}
+            </div>
+            {currentUser?.role === 'admin' && onEditRequest && (
+              <div className="flex items-center gap-2 pt-1">
+                <button
+                  onClick={() => {
+                    onClose();
+                    onEditRequest(request);
+                  }}
+                  className="active-press flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                  <span>Aprobar y Modificar Solicitud</span>
+                </button>
+                {onCancelModification && (
+                  <button
+                    onClick={() => onCancelModification(request)}
+                    className="py-2 px-3 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold text-xs transition-colors"
+                  >
+                    Descartar
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Modal Body */}
         <div className="overflow-y-auto space-y-3 text-xs text-slate-600 pr-1">
           {/* General Client & Service */}
@@ -165,24 +233,42 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             <div className="flex items-center justify-between">
               <span className="text-slate-500 font-medium">
                 {category === 'traslado'
-                  ? 'Proveedor Traslado:'
+                  ? 'Empresa Traslado:'
                   : category === 'vuelos'
-                  ? 'Aerolínea / Proveedor:'
+                  ? 'Aerolínea:'
                   : category === 'gastos_apoyo'
-                  ? 'Concepto / Destino:'
+                  ? 'Concepto:'
+                  : category === 'viaticos'
+                  ? 'Servicio:'
                   : 'Hotel / Hospedaje:'}
               </span>
               <span className="font-bold text-[#009b8b] flex items-center gap-1">
                 {category === 'traslado' ? (
-                  <Car className="w-3.5 h-3.5 text-emerald-600" />
+                  <>
+                    <Car className="w-3.5 h-3.5 text-emerald-600" />
+                    {request.hotel_name || 'Sin especificar'}
+                  </>
                 ) : category === 'vuelos' ? (
-                  <Plane className="w-3.5 h-3.5 text-sky-600" />
+                  <>
+                    <Plane className="w-3.5 h-3.5 text-sky-600" />
+                    {request.airline || request.hotel_name || 'Sin especificar'}
+                  </>
                 ) : category === 'gastos_apoyo' ? (
-                  <Receipt className="w-3.5 h-3.5 text-purple-600" />
+                  <>
+                    <Receipt className="w-3.5 h-3.5 text-purple-600" />
+                    {request.expense_concept || request.hotel_name || 'Sin especificar'}
+                  </>
+                ) : category === 'viaticos' ? (
+                  <>
+                    <Briefcase className="w-3.5 h-3.5 text-amber-600" />
+                    Viáticos
+                  </>
                 ) : (
-                  <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                  <>
+                    <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                    {request.hotel_name}
+                  </>
                 )}
-                {request.hotel_name || request.airline || request.route_from_to || 'Servicio'}
               </span>
             </div>
             <div className="flex items-center justify-between pt-1 border-t border-slate-200/60">
@@ -192,6 +278,15 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                 {request.creator_name || 'Usuario'}
               </span>
             </div>
+            {request.created_at && (
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                <span className="text-slate-500 font-medium">Fecha y Hora de Creación:</span>
+                <span className="font-semibold text-slate-700 flex items-center gap-1">
+                  <Clock className="w-3 h-3 text-slate-400" />
+                  {new Date(request.created_at).toLocaleDateString()} {new Date(request.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
           </div>
 
           {/* Details, Routes & Passengers */}
@@ -204,85 +299,95 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                   : category === 'vuelos'
                   ? 'Datos del Vuelo y Pasajeros'
                   : category === 'gastos_apoyo'
-                  ? 'Datos del Beneficiario y Concepto'
+                  ? 'Datos del Apoyo para Gastos'
+                  : category === 'viaticos'
+                  ? 'Datos de la Solicitud de Viáticos'
                   : 'Datos del Hospedaje y Huéspedes'}
               </span>
             </h4>
 
-            {request.route_from_to && (
-              <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-semibold text-emerald-900">
-                📍 Ruta Terrestre: {request.route_from_to}
+            {category === 'traslado' && request.route_from_to && (
+              <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-semibold text-emerald-900 flex items-center gap-1.5">
+                <Car className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                <span>Ruta Traslado: {request.route_from_to}</span>
               </div>
             )}
 
-            {request.flight_route && (
-              <div className="p-2 bg-sky-50 rounded-xl border border-sky-200 text-xs font-semibold text-sky-900">
-                ✈️ Ruta Aérea: {request.airline ? `${request.airline} • ` : ''}
-                {request.flight_route}
+            {category === 'vuelos' && (request.flight_route || request.route_from_to) && (
+              <div className="p-2 bg-sky-50 rounded-xl border border-sky-200 text-xs font-semibold text-sky-900 flex items-center gap-1.5">
+                <Plane className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                <span>Ruta Aérea: {request.airline ? `${request.airline} • ` : ''} {request.flight_route || request.route_from_to}</span>
               </div>
             )}
 
-            {request.expense_concept && (
-              <div className="p-2 bg-purple-50 rounded-xl border border-purple-200 text-xs font-semibold text-purple-900">
-                📝 Concepto del Gasto: {request.expense_concept}
+            {category === 'gastos_apoyo' && request.expense_concept && (
+              <div className="p-2 bg-purple-50 rounded-xl border border-purple-200 text-xs font-semibold text-purple-900 flex items-center gap-1.5">
+                <Receipt className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                <span>Concepto: {request.expense_concept}</span>
               </div>
             )}
 
-            <div className="grid grid-cols-2 gap-2 pt-1">
-              <div>
-                <span className="text-slate-400 block text-[10px] font-semibold">
-                  Huésped / Pasajero Principal
-                </span>
-                <span className="font-bold text-slate-900">{request.guest_name}</span>
-              </div>
-              <div>
-                <span className="text-slate-400 block text-[10px] font-semibold">
-                  Cédula / RIF / Pasaporte
-                </span>
-                <span className="font-bold text-slate-900">{request.guest_ci || 'N/A'}</span>
-              </div>
-              {request.location && (
-                <div>
-                  <span className="text-slate-400 block text-[10px] font-semibold">Ubicación</span>
-                  <span className="font-medium text-slate-800 flex items-center gap-0.5">
-                    <MapPin className="w-3 h-3 text-slate-400" /> {request.location}
-                  </span>
-                </div>
-              )}
-              {request.nights_dates && (
+            {category !== 'gastos_apoyo' && (
+              <div className="grid grid-cols-2 gap-2 pt-1">
                 <div>
                   <span className="text-slate-400 block text-[10px] font-semibold">
-                    Fechas / Noches
+                    {category === 'viaticos'
+                      ? 'Usuario Responsable'
+                      : category === 'traslado' || category === 'vuelos'
+                      ? 'Pasajero Principal'
+                      : 'Huésped Principal'}
                   </span>
-                  <span className="font-medium text-slate-800 flex items-center gap-0.5">
-                    <Calendar className="w-3 h-3 text-slate-400" /> {request.nights_dates}
-                  </span>
+                  <span className="font-bold text-slate-900">{request.guest_name || 'Sin especificar'}</span>
                 </div>
-              )}
-              {request.room_type && (
                 <div>
                   <span className="text-slate-400 block text-[10px] font-semibold">
-                    {category === 'traslado'
-                      ? 'Tipo Vehículo'
-                      : category === 'vuelos'
-                      ? 'Clase'
-                      : 'Tipo Habitación'}
+                    Cédula / RIF / Pasaporte
                   </span>
-                  <span className="font-medium text-slate-800">{request.room_type}</span>
+                  <span className="font-bold text-slate-900">{request.guest_ci || 'N/A'}</span>
                 </div>
-              )}
-              <div>
-                <span className="text-slate-400 block text-[10px] font-semibold">
-                  Cant. Personas
-                </span>
-                <span className="font-medium text-slate-800">
-                  {request.people_count} persona(s)
-                </span>
+                {request.location && (
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-semibold">Ubicación</span>
+                    <span className="font-medium text-slate-800 flex items-center gap-0.5">
+                      <MapPin className="w-3 h-3 text-slate-400" /> {request.location}
+                    </span>
+                  </div>
+                )}
+                {request.nights_dates && (
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-semibold">
+                      Fechas / Noches
+                    </span>
+                    <span className="font-medium text-slate-800 flex items-center gap-0.5">
+                      <Calendar className="w-3 h-3 text-slate-400" /> {request.nights_dates}
+                    </span>
+                  </div>
+                )}
+                {request.room_type && (
+                  <div>
+                    <span className="text-slate-400 block text-[10px] font-semibold">
+                      {category === 'traslado'
+                        ? 'Tipo Vehículo'
+                        : category === 'vuelos'
+                        ? 'Clase'
+                        : 'Tipo Habitación'}
+                    </span>
+                    <span className="font-medium text-slate-800">{request.room_type}</span>
+                  </div>
+                )}
+                <div>
+                  <span className="text-slate-400 block text-[10px] font-semibold">
+                    Cant. Personas
+                  </span>
+                  <span className="font-medium text-slate-800">
+                    {request.people_count} persona(s)
+                  </span>
+                </div>
               </div>
-            </div>
+            )}
 
             {/* Multiple Guest List breakdown if present */}
-            {request.guest_list && request.guest_list.length > 1 && (
+            {category !== 'gastos_apoyo' && request.guest_list && request.guest_list.length > 1 && (
               <div className="pt-2 border-t border-slate-200">
                 <span className="text-[11px] font-bold text-slate-700 block mb-1">
                   Lista Completa de Acompañantes ({request.guest_list.length}):
@@ -371,6 +476,13 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             </div>
 
             <div className="text-xs space-y-1">
+              {request.origin_bank && (
+                <p className="bg-emerald-50 text-emerald-950 px-2 py-1 rounded-md border border-emerald-200 font-semibold mb-1">
+                  <strong className="text-emerald-800 font-bold">Banco de Origen (Emisor):</strong>{' '}
+                  <span className="font-bold uppercase text-emerald-900">{request.origin_bank}</span>
+                </p>
+              )}
+
               <p>
                 <strong className="text-slate-500 font-normal">Beneficiario:</strong>{' '}
                 <span className="font-bold text-slate-900 font-mono">
@@ -531,6 +643,49 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
               </a>
             )}
           </div>
+        </div>
+
+        {/* Modal Footer Actions */}
+        <div className="pt-3 border-t border-slate-100 flex items-center justify-end gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl text-slate-600 hover:bg-slate-100 font-bold text-xs transition-colors"
+          >
+            Cerrar
+          </button>
+
+          {currentUser?.role === 'admin' && request.status !== 'realizado' && onEditRequest && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onEditRequest(request);
+              }}
+              className="active-press px-4 py-2 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+            >
+              <Pencil className="w-3.5 h-3.5" />
+              <span>Modificar Solicitud</span>
+            </button>
+          )}
+
+          {currentUser?.role === 'solicitante' && request.status !== 'realizado' && onRequestModification && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onRequestModification(request);
+              }}
+              className={`active-press px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 border shadow-2xs transition-colors ${
+                request.modification_requested
+                  ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                  : 'bg-indigo-600 hover:bg-indigo-700 text-white border-transparent'
+              }`}
+            >
+              <Edit3 className="w-3.5 h-3.5" />
+              <span>{request.modification_requested ? 'Ver Modificación Pedida' : 'Pedir Modificación al Administrador'}</span>
+            </button>
+          )}
         </div>
       </div>
     </div>

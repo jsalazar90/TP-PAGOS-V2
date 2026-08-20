@@ -121,6 +121,7 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
       } else {
         list = (data || []).map((item: any) => ({
           ...item,
+          origin_bank: item.origin_bank || '',
           creator_name:
             item.creator_name ||
             item.profiles?.full_name ||
@@ -128,6 +129,8 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
             userMap.get(item.created_by) ||
             (_currentUser?.id === item.created_by ? _currentUser?.full_name : 'Usuario')
         }));
+        // Keep local cache synced with remote active items
+        setLocalRequests(list);
       }
     } catch (e) {
       console.warn('Supabase fetch failed, fallback to local storage:', e);
@@ -266,6 +269,7 @@ export async function createPaymentRequest(
         hotel_name: input.hotel_name,
         guest_name: input.guest_name,
         guest_ci: input.guest_ci,
+        guest_list: input.guest_list || null,
         locator: input.locator,
         location: input.location,
         room_type: input.room_type,
@@ -356,20 +360,26 @@ export async function createPaymentRequest(
 export async function updateRequestStatus(
   requestId: string,
   newStatus: RequestStatus,
-  receiptFile?: File | null
+  receiptFile?: File | null,
+  originBank?: string
 ): Promise<PaymentRequest> {
   let receiptUrl: string | undefined;
   let receiptFileName: string | undefined;
 
   if (newStatus === 'realizado') {
     if (!receiptFile) {
-      throw new Error(
-        'Es obligatorio adjuntar el comprobante o soporte de pago al cambiar el estado a "Realizado".'
-      );
+      // Check if existing record already has receipt
+      const existing = getLocalRequests().find(r => r.id === requestId);
+      if (!existing?.receipt_file_url) {
+        throw new Error(
+          'Es obligatorio adjuntar el comprobante o soporte de pago al cambiar el estado a "Realizado".'
+        );
+      }
+    } else {
+      const uploadRes = await uploadAttachment(receiptFile);
+      receiptUrl = uploadRes.url;
+      receiptFileName = uploadRes.fileName;
     }
-    const uploadRes = await uploadAttachment(receiptFile);
-    receiptUrl = uploadRes.url;
-    receiptFileName = uploadRes.fileName;
   }
 
   if (isSupabaseConfigured && supabase) {
@@ -382,6 +392,9 @@ export async function updateRequestStatus(
         updateData.receipt_file_url = receiptUrl;
         updateData.receipt_file_name = receiptFileName;
       }
+      if (originBank !== undefined) {
+        updateData.origin_bank = originBank;
+      }
 
       const { data, error } = await supabase
         .from('payment_requests')
@@ -393,9 +406,30 @@ export async function updateRequestStatus(
       if (!error && data) {
         return {
           ...data,
+          origin_bank: data.origin_bank || originBank || '',
           creator_name:
             data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
         };
+      }
+
+      // If missing column error for origin_bank, retry without it
+      if (error && error.message?.includes('origin_bank')) {
+        const fallbackData = { ...updateData };
+        delete fallbackData.origin_bank;
+        const { data: retryData } = await supabase
+          .from('payment_requests')
+          .update(fallbackData)
+          .eq('id', requestId)
+          .select('*, profiles:created_by(full_name, username)')
+          .single();
+        if (retryData) {
+          return {
+            ...retryData,
+            origin_bank: originBank || '',
+            creator_name:
+              retryData.creator_name || retryData.profiles?.full_name || retryData.profiles?.username || 'Usuario'
+          };
+        }
       }
     } catch (e) {
       console.warn('Supabase updateRequestStatus failed, fallback to local:', e);
@@ -411,7 +445,8 @@ export async function updateRequestStatus(
     ...requests[index],
     status: newStatus,
     updated_at: new Date().toISOString(),
-    ...(receiptUrl ? { receipt_file_url: receiptUrl, receipt_file_name: receiptFileName } : {})
+    ...(receiptUrl ? { receipt_file_url: receiptUrl, receipt_file_name: receiptFileName } : {}),
+    ...(originBank !== undefined ? { origin_bank: originBank } : {})
   };
 
   requests[index] = updatedReq;
@@ -638,6 +673,7 @@ export async function updatePaymentRequest(
         hotel_name: input.hotel_name,
         guest_name: input.guest_name,
         guest_ci: input.guest_ci,
+        guest_list: input.guest_list || null,
         locator: input.locator,
         location: input.location,
         room_type: input.room_type,
@@ -656,6 +692,10 @@ export async function updatePaymentRequest(
         status: updatedStatus,
         support_file_url: supportUrl,
         support_file_name: supportFileName,
+        modification_requested: input.modification_requested ?? false,
+        modification_reason: input.modification_reason ?? null,
+        modification_requested_at: input.modification_requested_at ?? null,
+        modification_requested_by: input.modification_requested_by ?? null,
         updated_at: new Date().toISOString()
       };
 
@@ -713,6 +753,108 @@ export async function updatePaymentRequest(
     status: updatedStatus,
     support_file_url: supportUrl,
     support_file_name: supportFileName,
+    modification_requested: input.modification_requested ?? false,
+    modification_reason: input.modification_reason ?? '',
+    modification_requested_at: input.modification_requested_at,
+    modification_requested_by: input.modification_requested_by,
+    updated_at: new Date().toISOString()
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
+export async function requestModification(
+  requestId: string,
+  reason: string,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  const updatePayload = {
+    modification_requested: true,
+    modification_reason: reason,
+    modification_requested_at: new Date().toISOString(),
+    modification_requested_by: currentUser.full_name || currentUser.username,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('payment_requests')
+        .update(updatePayload)
+        .eq('id', requestId)
+        .select('*, profiles:created_by(full_name, username)')
+        .single();
+
+      if (!error && data) {
+        return {
+          ...data,
+          creator_name: data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase requestModification failed, fallback to local:', e);
+    }
+  }
+
+  // Local fallback
+  const requests = getLocalRequests();
+  const index = requests.findIndex(r => r.id === requestId);
+  if (index === -1) throw new Error('Solicitud no encontrada');
+
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    ...updatePayload
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
+export async function cancelModificationRequest(
+  requestId: string
+): Promise<PaymentRequest> {
+  const updatePayload = {
+    modification_requested: false,
+    modification_reason: '',
+    modification_requested_at: null,
+    modification_requested_by: null,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('payment_requests')
+        .update(updatePayload)
+        .eq('id', requestId)
+        .select('*, profiles:created_by(full_name, username)')
+        .single();
+
+      if (!error && data) {
+        return {
+          ...data,
+          creator_name: data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase cancelModificationRequest failed, fallback to local:', e);
+    }
+  }
+
+  // Local fallback
+  const requests = getLocalRequests();
+  const index = requests.findIndex(r => r.id === requestId);
+  if (index === -1) throw new Error('Solicitud no encontrada');
+
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    modification_requested: false,
+    modification_reason: '',
+    modification_requested_at: undefined,
+    modification_requested_by: undefined,
     updated_at: new Date().toISOString()
   };
 
@@ -794,8 +936,23 @@ export function calculateFinancialSummary(requests: PaymentRequest[]): Financial
   };
 }
 
+// Helper to format currency numbers for CSV/Excel: thousands '.' and decimals ','
+export function formatCurrencyForCSV(val: number | undefined | null, decimals = 2): string {
+  if (val === undefined || val === null || isNaN(Number(val))) {
+    return `0,${'0'.repeat(decimals)}`;
+  }
+  const num = Number(val);
+  const fixed = num.toFixed(decimals);
+  const [intPart, decPart] = fixed.split('.');
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt;
+}
+
 // CSV / Excel Exporter
 export function exportRequestsToCSV(requests: PaymentRequest[], filenamePrefix = 'TP_PAGOS_REPORTE') {
+  const deletedIds = getDeletedRequestIds();
+  const validRequests = requests.filter(r => !deletedIds.has(r.id));
+
   const headers = [
     'N° Solicitud',
     'Localizador',
@@ -813,14 +970,15 @@ export function exportRequestsToCSV(requests: PaymentRequest[], filenamePrefix =
     'Monto Bs',
     'Método Pago',
     'Beneficiario',
-    'Banco',
+    'Banco de Origen',
+    'Banco de Destino',
     'Cuenta / Pago Móvil / Zelle',
     'Creado Por',
     'Fecha Creación',
     'Fecha Actualización'
   ];
 
-  const rows = requests.map(r => {
+  const rows = validRequests.map(r => {
     const b = r.bank_details || {};
     const bankAccount =
       b.account_number ||
@@ -842,16 +1000,17 @@ export function exportRequestsToCSV(requests: PaymentRequest[], filenamePrefix =
       `"${(r.room_type || '').replace(/"/g, '""')}"`,
       `"${(r.nights_dates || '').replace(/"/g, '""')}"`,
       r.currency || 'VES',
-      r.amount_usd || 0,
-      r.bcv_rate || 0,
-      r.amount_bs || 0,
+      `"${formatCurrencyForCSV(r.amount_usd || 0, 2)}"`,
+      `"${formatCurrencyForCSV(r.bcv_rate || 0, 4)}"`,
+      `"${formatCurrencyForCSV(r.amount_bs || 0, 2)}"`,
       `"${(b.payment_method || 'transferencia_bs').replace(/_/g, ' ').toUpperCase()}"`,
       `"${(b.beneficiary || '').replace(/"/g, '""')}"`,
+      `"${(r.origin_bank || '').replace(/"/g, '""')}"`,
       `"${(b.bank || '').replace(/"/g, '""')}"`,
       `"${bankAccount.replace(/"/g, '""')}"`,
       `"${(r.creator_name || '').replace(/"/g, '""')}"`,
-      `"${new Date(r.created_at).toLocaleString()}"`,
-      `"${new Date(r.updated_at).toLocaleString()}"`
+      `"${new Date(r.created_at).toLocaleString('es-VE')}"`,
+      `"${new Date(r.updated_at).toLocaleString('es-VE')}"`
     ];
   });
 

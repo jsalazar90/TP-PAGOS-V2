@@ -6,12 +6,14 @@ import {
   updatePaymentRequest,
   deletePaymentRequest,
   updateRequestStatus,
+  requestModification,
+  cancelModificationRequest,
   fetchUsers,
   createNewUser,
   toggleUserActiveStatus,
   updateUserPassword
 } from './services/dataService';
-import { isSupabaseConfigured } from './services/supabase';
+import { isSupabaseConfigured, supabase } from './services/supabase';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { HistoryView } from './components/HistoryView';
@@ -20,7 +22,9 @@ import { LoginView } from './components/LoginView';
 import { NewRequestModal } from './components/NewRequestModal';
 import { StatusChangeModal } from './components/StatusChangeModal';
 import { RequestDetailModal } from './components/RequestDetailModal';
+import { ModificationRequestModal } from './components/ModificationRequestModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
+import { notificationService } from './services/notificationService';
 import { CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
 
 const SESSION_STORAGE_KEY = 'jt_pagos_current_user_v1';
@@ -47,6 +51,7 @@ export function App() {
   const [editingRequest, setEditingRequest] = useState<PaymentRequest | null>(null);
   const [selectedRequestForStatus, setSelectedRequestForStatus] = useState<PaymentRequest | null>(null);
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<PaymentRequest | null>(null);
+  const [modificationModalRequest, setModificationModalRequest] = useState<PaymentRequest | null>(null);
 
   // Toast notifications
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -94,6 +99,110 @@ export function App() {
     };
     loadInitialData();
   }, []);
+
+  // Realtime Supabase Subscription & Visibility Sync
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let channel: any = null;
+
+    if (isSupabaseConfigured && supabase) {
+      channel = supabase
+        .channel('realtime_payment_requests_channel')
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'payment_requests' },
+          (payload: any) => {
+            if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old?.id;
+              if (deletedId) {
+                setRequests(prev => prev.filter(r => r.id !== deletedId));
+              }
+            } else if (payload.eventType === 'INSERT') {
+              const newReq = payload.new;
+              if (currentUser.role === 'admin') {
+                const isUrgent = newReq?.status === 'urgente';
+                const notifTitle = isUrgent
+                  ? `🔥 NUEVA SOLICITUD URGENTE #${newReq?.locator || ''}`
+                  : `🔔 Nueva Solicitud de Pago #${newReq?.locator || ''}`;
+                const notifBody = `${newReq?.title || 'Servicio'} • Cliente: ${newReq?.client || 'N/A'} • Monto: $${newReq?.amount_usd || 0} USD`;
+
+                notificationService.sendNotification(notifTitle, {
+                  body: notifBody,
+                  soundType: isUrgent ? 'urgent' : 'new_request',
+                  tag: `new-req-${newReq?.id}`
+                });
+
+                showToast(notifTitle, isUrgent ? 'error' : 'success');
+              }
+              fetchPaymentRequests(currentUser).then(data => {
+                setRequests(data);
+              });
+            } else if (payload.eventType === 'UPDATE') {
+              const updatedReq = payload.new;
+              const prevReq = payload.old;
+
+              // Si se solicitó una nueva modificación y el usuario es admin
+              if (
+                updatedReq?.modification_requested &&
+                !prevReq?.modification_requested &&
+                currentUser.role === 'admin'
+              ) {
+                const modTitle = `⚠️ Modificación Solicitada #${updatedReq?.locator || ''}`;
+                const modBody = `${updatedReq?.modification_requested_by || 'Solicitante'}: ${updatedReq?.modification_reason || 'Revisar detalles requeridos'}`;
+
+                notificationService.sendNotification(modTitle, {
+                  body: modBody,
+                  soundType: 'modification',
+                  tag: `mod-req-${updatedReq?.id}`
+                });
+
+                showToast(modTitle, 'error');
+              }
+
+              fetchPaymentRequests(currentUser).then(data => {
+                setRequests(data);
+              });
+            } else {
+              fetchPaymentRequests(currentUser).then(data => {
+                setRequests(data);
+              });
+            }
+          }
+        )
+        .subscribe();
+    }
+
+    // Auto sync on tab focus or screen unlock
+    const handleSync = () => {
+      if (document.visibilityState === 'visible' && currentUser) {
+        fetchPaymentRequests(currentUser).then(data => {
+          setRequests(data);
+        });
+      }
+    };
+
+    window.addEventListener('focus', handleSync);
+    document.addEventListener('visibilitychange', handleSync);
+
+    // Heartbeat poll every 20 seconds as fallback
+    const interval = setInterval(() => {
+      if (document.visibilityState === 'visible' && currentUser) {
+        fetchPaymentRequests(currentUser).then(data => {
+          setRequests(data);
+        });
+      }
+    }, 20000);
+
+    return () => {
+      if (channel && supabase) {
+        supabase.removeChannel(channel);
+      }
+      window.removeEventListener('focus', handleSync);
+      document.removeEventListener('visibilitychange', handleSync);
+      clearInterval(interval);
+    };
+  }, [currentUser]);
 
   // Fetch payment requests when currentUser changes
   const loadRequests = async (user: UserProfile) => {
@@ -159,10 +268,11 @@ export function App() {
   const handleConfirmStatusChange = async (
     requestId: string,
     newStatus: RequestStatus,
-    receiptFile?: File | null
+    receiptFile?: File | null,
+    originBank?: string
   ) => {
     try {
-      const updatedReq = await updateRequestStatus(requestId, newStatus, receiptFile);
+      const updatedReq = await updateRequestStatus(requestId, newStatus, receiptFile, originBank);
       setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
       
       const statusLabels: Record<RequestStatus, string> = {
@@ -211,6 +321,40 @@ export function App() {
     } catch (e: any) {
       showToast(e.message || 'Error al cambiar la contraseña', 'error');
       throw e;
+    }
+  };
+
+  // Request Modification handler
+  const handleRequestModification = (request: PaymentRequest) => {
+    setModificationModalRequest(request);
+  };
+
+  const handleConfirmModification = async (requestId: string, reason: string) => {
+    if (!currentUser) return;
+    try {
+      const updated = await requestModification(requestId, reason, currentUser);
+      setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
+      if (selectedRequestForDetail?.id === requestId) {
+        setSelectedRequestForDetail(updated);
+      }
+      showToast(`Solicitud de modificación enviada al administrador`, 'success');
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
+  const handleCancelModification = async (request: PaymentRequest) => {
+    if (!currentUser) return;
+    try {
+      const updated = await cancelModificationRequest(request.id);
+      setRequests(prev => prev.map(r => r.id === request.id ? updated : r));
+      if (selectedRequestForDetail?.id === request.id) {
+        setSelectedRequestForDetail(updated);
+      }
+      showToast(`Solicitud de modificación cancelada / descartada`, 'success');
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, 'error');
     }
   };
 
@@ -268,6 +412,8 @@ export function App() {
                 onOpenNewRequest={handleOpenNewRequest}
                 onEditRequest={handleOpenEditRequest}
                 onDeleteRequest={handleDeleteRequest}
+                onRequestModification={handleRequestModification}
+                onCancelModification={handleCancelModification}
                 onRefresh={() => loadRequests(currentUser)}
               />
             )}
@@ -332,8 +478,19 @@ export function App() {
 
       <RequestDetailModal
         request={selectedRequestForDetail}
+        currentUser={currentUser}
         isOpen={Boolean(selectedRequestForDetail)}
         onClose={() => setSelectedRequestForDetail(null)}
+        onEditRequest={handleOpenEditRequest}
+        onRequestModification={handleRequestModification}
+        onCancelModification={handleCancelModification}
+      />
+
+      <ModificationRequestModal
+        request={modificationModalRequest}
+        isOpen={Boolean(modificationModalRequest)}
+        onClose={() => setModificationModalRequest(null)}
+        onConfirm={handleConfirmModification}
       />
     </div>
   );

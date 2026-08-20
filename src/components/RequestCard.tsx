@@ -23,11 +23,14 @@ import {
   Receipt,
   Hotel,
   Plane,
+  Briefcase,
   Wallet,
   AlertTriangle,
   Pencil,
   Trash2,
-  Banknote
+  Banknote,
+  Edit3,
+  Clock
 } from 'lucide-react';
 
 interface RequestCardProps {
@@ -37,6 +40,8 @@ interface RequestCardProps {
   onOpenStatusModal: (request: PaymentRequest) => void;
   onEditRequest?: (request: PaymentRequest) => void;
   onDeleteRequest?: (request: PaymentRequest) => void;
+  onRequestModification?: (request: PaymentRequest) => void;
+  onCancelModification?: (request: PaymentRequest) => void;
 }
 
 export const RequestCard: React.FC<RequestCardProps> = ({
@@ -46,6 +51,8 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   onOpenStatusModal,
   onEditRequest,
   onDeleteRequest,
+  onRequestModification,
+  onCancelModification,
 }) => {
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [copiedBank, setCopiedBank] = useState(false);
@@ -129,7 +136,67 @@ export const RequestCard: React.FC<RequestCardProps> = ({
           : 'border-slate-200 hover:border-slate-300'
       }`}
     >
-      {/* Main Horizontal Row Layout */}
+      {/* Modification Request Alert Banner */}
+      {request.modification_requested && (
+        <div className="p-3 bg-amber-50/90 rounded-2xl border border-amber-300 text-xs space-y-1.5 shadow-2xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-amber-950 flex items-center gap-1.5 text-xs">
+              <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0" />
+              <span>
+                ⚠️ Modificación Solicitada
+                {request.modification_requested_by ? ` por ${request.modification_requested_by}` : ''}
+              </span>
+            </span>
+            {request.modification_requested_at && (
+              <span className="text-[11px] text-amber-900 font-bold flex items-center gap-1 bg-amber-200/70 px-2 py-0.5 rounded-lg border border-amber-300">
+                <Clock className="w-3 h-3 text-amber-800" />
+                <span>
+                  {new Date(request.modification_requested_at).toLocaleDateString()} • {new Date(request.modification_requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="bg-white/95 p-2.5 rounded-xl border border-amber-200 text-xs text-amber-950 font-medium">
+            <strong className="text-amber-800 font-bold block text-[10px] uppercase">
+              Observación / Cambios a Realizar:
+            </strong>
+            {request.modification_reason || 'Sin observación especificada.'}
+          </div>
+          {currentUser.role === 'admin' && onEditRequest && (
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onEditRequest(request)}
+                className="active-press flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+              >
+                <Pencil className="w-3.5 h-3.5" />
+                <span>Aprobar y Modificar Solicitud</span>
+              </button>
+              {onCancelModification && (
+                <button
+                  onClick={() => onCancelModification(request)}
+                  title="Descartar solicitud de modificación"
+                  className="py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-600 font-semibold text-xs border border-amber-200 transition-colors"
+                >
+                  Descartar
+                </button>
+              )}
+            </div>
+          )}
+          {currentUser.role === 'solicitante' && onCancelModification && (
+            <div className="flex items-center justify-between text-[11px] text-amber-800 pt-0.5">
+              <span>El administrador fue notificado para realizar los cambios.</span>
+              <button
+                onClick={() => onCancelModification(request)}
+                className="text-rose-600 hover:text-rose-800 font-bold hover:underline"
+              >
+                Cancelar Petición
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Main Grid Content */}
       <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
         {/* Left Column: LOC, Category, Status, Payment Method Badge, Title, Hotel/Provider, Guest */}
         <div className="space-y-1.5 md:max-w-[50%]">
@@ -159,7 +226,11 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               </span>
             ) : category === 'gastos_apoyo' ? (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-1">
-                <Receipt className="w-3 h-3 text-purple-600" /> Gastos / Apoyo
+                <Receipt className="w-3 h-3 text-purple-600" /> Gastos
+              </span>
+            ) : category === 'viaticos' ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1">
+                <Briefcase className="w-3 h-3 text-amber-700" /> Viáticos
               </span>
             ) : (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 flex items-center gap-1">
@@ -208,20 +279,30 @@ export const RequestCard: React.FC<RequestCardProps> = ({
                 <Plane className="w-3.5 h-3.5 text-sky-600 shrink-0" />
               ) : category === 'gastos_apoyo' ? (
                 <Receipt className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+              ) : category === 'viaticos' ? (
+                <Briefcase className="w-3.5 h-3.5 text-amber-600 shrink-0" />
               ) : (
                 <Building2 className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
               )}
-              {request.hotel_name || request.route_from_to || request.airline || 'Servicio'}
+              {category === 'viaticos'
+                ? 'Viáticos'
+                : category === 'gastos_apoyo'
+                ? request.expense_concept || request.hotel_name || 'Gastos'
+                : category === 'vuelos'
+                ? request.airline || request.hotel_name || 'Vuelo'
+                : request.hotel_name || 'Servicio'}
             </span>
-            <span className="flex items-center gap-1 font-medium">
-              <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              {request.guest_name} {request.guest_ci ? `(${request.guest_ci})` : ''}
-              {request.people_count > 1 && (
-                <span className="text-[10px] bg-slate-100 text-slate-600 px-1 rounded font-bold">
-                  +{request.people_count - 1} más
-                </span>
-              )}
-            </span>
+            {category !== 'gastos_apoyo' && request.guest_name && (
+              <span className="flex items-center gap-1 font-medium">
+                <User className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+                {request.guest_name} {request.guest_ci ? `(${request.guest_ci})` : ''}
+                {request.people_count > 1 && (
+                  <span className="text-[10px] bg-slate-100 text-slate-600 px-1 rounded font-bold">
+                    +{request.people_count - 1} más
+                  </span>
+                )}
+              </span>
+            )}
           </div>
 
           {/* Specific category detail line */}
@@ -243,6 +324,12 @@ export const RequestCard: React.FC<RequestCardProps> = ({
             </p>
           )}
 
+          {category === 'viaticos' && request.additionals && (
+            <p className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2 py-0.5 rounded border border-amber-200 inline-block">
+              Observación: {request.additionals}
+            </p>
+          )}
+
           <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-slate-500 pt-0.5">
             {request.location && (
               <span className="flex items-center gap-1 font-medium text-slate-600">
@@ -256,26 +343,27 @@ export const RequestCard: React.FC<RequestCardProps> = ({
                 {request.nights_dates}
               </span>
             )}
-            {category === 'hospedaje' && request.room_type && <span>({request.room_type})</span>}
-            <span className="flex items-center gap-1 font-bold text-[#009b8b] bg-teal-50 px-1.5 py-0.5 rounded border border-teal-100 text-[10px]">
-              <User className="w-3 h-3 text-[#00b4a2] shrink-0" />
-              Por: {request.creator_name || 'Usuario'}
-            </span>
+            {request.created_at && (
+              <span className="flex items-center gap-1 font-semibold text-slate-500 bg-slate-100 px-2 py-0.5 rounded-md border border-slate-200" title="Fecha y hora de creación">
+                <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+                <span>
+                  {new Date(request.created_at).toLocaleDateString()} {new Date(request.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </span>
+            )}
           </div>
         </div>
 
-        {/* Middle Column: Amounts (USD & BS) */}
-        <div className="bg-slate-50 p-2.5 rounded-2xl border border-slate-200/80 flex items-center justify-between md:justify-end gap-4 shrink-0 md:min-w-[210px]">
+        {/* Middle Column: Amounts */}
+        <div className="grid grid-cols-2 gap-2 bg-slate-50 p-2.5 sm:p-3 rounded-2xl border border-slate-200 text-right md:min-w-[200px] shrink-0">
           <div>
-            <span className="text-[10px] uppercase font-bold text-slate-400 block">
-              Monto Divisas
-            </span>
-            <span className="text-base sm:text-lg font-black text-emerald-600 leading-tight">
+            <span className="text-[10px] uppercase font-bold text-slate-400 block">Monto en USD</span>
+            <span className="text-base sm:text-lg font-black text-slate-900 leading-tight">
               {formatUSD(request.amount_usd)}
             </span>
           </div>
 
-          <div className="text-right border-l border-slate-200 pl-3">
+          <div className="border-l border-slate-200 pl-2">
             <span className="text-[10px] uppercase font-bold text-slate-400 block">
               {isDirectUsd ? 'Moneda' : 'Monto en Bolívares'}
             </span>
@@ -310,7 +398,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               <span>Ver Ficha</span>
             </button>
 
-            {canEditOrDelete && onEditRequest && (
+            {currentUser.role === 'admin' && onEditRequest && (
               <button
                 onClick={() => onEditRequest(request)}
                 title="Editar solicitud"
@@ -318,6 +406,21 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               >
                 <Pencil className="w-3.5 h-3.5 text-amber-600" />
                 <span>Editar</span>
+              </button>
+            )}
+
+            {currentUser.role === 'solicitante' && request.status !== 'realizado' && (
+              <button
+                onClick={() => onRequestModification && onRequestModification(request)}
+                title="Pedir modificación al administrador"
+                className={`active-press px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors ${
+                  request.modification_requested
+                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200'
+                }`}
+              >
+                <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                <span>{request.modification_requested ? 'Modificación Solicitada' : 'Pedir Modificación'}</span>
               </button>
             )}
 
@@ -402,6 +505,13 @@ export const RequestCard: React.FC<RequestCardProps> = ({
           </div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-2 text-xs">
+            {request.origin_bank && (
+              <p className="bg-emerald-100/60 p-1.5 rounded-lg border border-emerald-300 sm:col-span-2 md:col-span-4">
+                <strong className="text-emerald-800 font-bold">Banco de Origen (Emisor):</strong>{' '}
+                <span className="font-bold text-emerald-950 uppercase">{request.origin_bank}</span>
+              </p>
+            )}
+
             <p>
               <strong className="text-slate-500 font-normal">Beneficiario:</strong>{' '}
               <span className="font-bold text-slate-900 font-mono">

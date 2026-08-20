@@ -25,6 +25,8 @@ interface DashboardProps {
   onRefresh: () => void;
   onEditRequest?: (request: PaymentRequest) => void;
   onDeleteRequest?: (request: PaymentRequest) => void;
+  onRequestModification?: (request: PaymentRequest) => void;
+  onCancelModification?: (request: PaymentRequest) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -36,6 +38,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onRefresh,
   onEditRequest,
   onDeleteRequest,
+  onRequestModification,
+  onCancelModification,
 }) => {
   const [activeFilter, setActiveFilter] = useState<'all' | 'px_fondos' | 'en_proceso' | 'urgente'>('all');
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | 'all'>('all');
@@ -284,6 +288,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <option value="traslado">🚗 Traslados</option>
               <option value="vuelos">✈️ Vuelos</option>
               <option value="gastos_apoyo">🧾 Gastos de Apoyo</option>
+              <option value="viaticos">💼 Viáticos</option>
             </select>
 
             {/* Orden Dropdown */}
@@ -401,6 +406,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onOpenStatusModal={onOpenStatusModal}
               onEditRequest={onEditRequest}
               onDeleteRequest={onDeleteRequest}
+              onRequestModification={onRequestModification}
+              onCancelModification={onCancelModification}
             />
           ))}
         </div>

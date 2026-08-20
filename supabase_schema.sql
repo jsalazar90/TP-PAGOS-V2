@@ -33,7 +33,7 @@ ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_id_fkey;
 CREATE TABLE IF NOT EXISTS public.payment_requests (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
   request_number SERIAL,
-  category TEXT NOT NULL DEFAULT 'hospedaje', -- 'hospedaje', 'traslado', 'gastos_apoyo'
+  category TEXT NOT NULL DEFAULT 'hospedaje', -- 'hospedaje', 'traslado', 'vuelos', 'gastos_apoyo', 'viaticos'
   title TEXT NOT NULL,
   client TEXT NOT NULL,
   hotel_name TEXT NOT NULL,
@@ -57,6 +57,10 @@ CREATE TABLE IF NOT EXISTS public.payment_requests (
   support_file_name TEXT,
   receipt_file_url TEXT,
   receipt_file_name TEXT,
+  origin_bank TEXT,
+  airline TEXT,
+  flight_route TEXT,
+  guest_list JSONB,
   created_by UUID NOT NULL REFERENCES public.profiles(id) ON DELETE RESTRICT,
   created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
   updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()

@@ -18,6 +18,7 @@ import {
   Receipt,
   Hotel,
   Plane,
+  Briefcase,
   Flame,
   Eye,
   SlidersHorizontal,
@@ -29,7 +30,11 @@ import {
   ArrowLeft,
   FileText,
   ShieldAlert,
-  CheckCircle2
+  CheckCircle2,
+  Smartphone,
+  QrCode,
+  DollarSign,
+  Banknote
 } from 'lucide-react';
 
 interface NewRequestModalProps {
@@ -235,7 +240,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Generador dinámico de plantillas limpias según Rubro y Método de Pago
+  // Generador dinámico de plantillas limpias según los 5 Rubros y Método de Pago
   const generateStructureTemplate = (cat: ServiceCategory, method: PaymentMethodType): string => {
     const lines: string[] = [];
 
@@ -249,6 +254,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       lines.push('Ubicación: ');
       lines.push('Habitación: ');
       lines.push('Fechas: ');
+      lines.push('Observacion: ');
     } else if (cat === 'traslado') {
       lines.push('Asunto: PAGO TRASLADO EJECUTIVO');
       lines.push('Servicio: Traslado');
@@ -258,6 +264,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       lines.push('LOC: ');
       lines.push('Ruta: ');
       lines.push('Fechas: ');
+      lines.push('Observacion: ');
     } else if (cat === 'vuelos') {
       lines.push('Asunto: EMISION BOLETO AEREO');
       lines.push('Servicio: Vuelos');
@@ -267,14 +274,20 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       lines.push('Pasajero: ');
       lines.push('LOC: ');
       lines.push('Fechas: ');
+      lines.push('Observacion: ');
     } else if (cat === 'gastos_apoyo') {
-      lines.push('Asunto: APOYO PARA GASTOS (REEMBOLSABLE)');
+      lines.push('Asunto: APOYO PARA GASTOS');
       lines.push('Servicio: Gastos');
-      lines.push('Prioridad: URGENTE');
-      lines.push('Cliente: ');
       lines.push('Concepto: ');
-      lines.push('LOC: ');
+      lines.push('Observacion: ');
+    } else if (cat === 'viaticos') {
+      lines.push('Asunto: SOLICITUD DE VIATICOS');
+      lines.push('Servicio: VIATICOS');
+      lines.push('Cliente: ');
+      lines.push('Usuario: ');
+      lines.push('Cantidad de personas: ');
       lines.push('Fechas: ');
+      lines.push('Observacion: ');
     }
 
     // Montos
@@ -358,11 +371,13 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
 
     // Detect Service Category
     let detectedCategory: ServiceCategory = currentCat;
-    if (/servicio\s*:\s*vuelo|vuelo|boleto|aéreo|aereo|aerolínea|aerolinea|pnr|laser|rutaca|conviasa|avior/i.test(textToParse)) {
+    if (/servicio\s*:\s*viatico|servicio\s*:\s*viáticos|viatico|viático/i.test(textToParse)) {
+      detectedCategory = 'viaticos';
+    } else if (/servicio\s*:\s*vuelo|vuelo|boleto|aéreo|aereo|aerolínea|aerolinea|pnr|laser|rutaca|conviasa|avior/i.test(textToParse)) {
       detectedCategory = 'vuelos';
     } else if (/servicio\s*:\s*traslado|traslado|transporte|chofer|ruta|vehiculo|vehículo|caracas\s*-\s*valencia/i.test(textToParse)) {
       detectedCategory = 'traslado';
-    } else if (/servicio\s*:\s*gasto|gasto|apoyo|viático|viatico|reembolso|caja\s*chica|alimentación/i.test(textToParse)) {
+    } else if (/servicio\s*:\s*gasto|gasto|apoyo|reembolso|caja\s*chica|alimentación/i.test(textToParse)) {
       detectedCategory = 'gastos_apoyo';
     } else if (/hospedaje|hotel|habitación|habitacion/i.test(textToParse)) {
       detectedCategory = 'hospedaje';
@@ -371,13 +386,13 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const parsedTitle = getValue(['Asunto', 'Titulo', 'Título', 'Pago']) || (lines[0] && !lines[0].includes(':') ? lines[0] : '');
     const parsedClient = getValue(['Cliente', 'Empresa']) || currentForm.client;
 
-    const parsedHotel = getValue(['Hotel', 'Nombre del Hotel', 'Hospedaje', 'Empresa Traslado', 'Línea', 'Proveedor', 'Aerolínea', 'Aerolinea']);
+    const parsedHotel = getValue(['Hotel', 'Nombre del Hotel', 'Hospedaje', 'Empresa Traslado', 'Empresa de Traslado', 'Línea', 'Proveedor', 'Aerolínea', 'Aerolinea']);
     const parsedLocator = getValue(['LOC', 'Loc', 'Localizador', 'Reserva', 'N° Orden', 'Nro Orden', 'PNR']);
     const parsedLocation = getValue(['Ubicación', 'Ubicacion', 'Ciudad', 'Destino']);
     const parsedRoomType = getValue(['Habitación', 'Habitacion', 'Tipo', 'Vehículo', 'Vehiculo', 'Clase']);
-    const parsedPeople = getValue(['Personas', 'Cant. Personas', 'Huéspedes', 'Pasajeros']);
+    const parsedPeople = getValue(['Cantidad de personas', 'Cant. Personas', 'Cant Personas', 'Personas', 'Huéspedes', 'Pasajeros']);
     const parsedNightsDates = getValue(['Fechas', 'Noches', 'Periodo', 'Check-in', 'Fecha Traslado', 'Fecha']);
-    const parsedAdditionals = getValue(['Adicionales', 'Adicional', 'Servicios', 'Detalles']);
+    const parsedAdditionals = getValue(['Observacion', 'Observación', 'Observaciones', 'Adicionales', 'Adicional', 'Servicios', 'Detalles']);
 
     const parsedRoute = getValue(['Ruta', 'Origen - Destino', 'Trayecto']);
     const parsedExpenseConcept = getValue(['Concepto', 'Detalle Gasto', 'Justificación']);
@@ -568,12 +583,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       }
     }
 
-    // Multi-line Guest / Passenger Parsing
+    // Multi-line Guest / Passenger / Usuario Parsing
     const parsedGuests: GuestItem[] = [];
-    const guestHeaderIdx = lines.findIndex(l => /^Huésped|^Huesped|^Pasajeros|^Pasajero|^Huéspedes|^Huespedes|^Nombres\s*:/i.test(l));
+    const guestHeaderIdx = lines.findIndex(l => /^Huésped|^Huesped|^Pasajeros|^Pasajero|^Huéspedes|^Huespedes|^Nombres\s*:|^Usuario\s*:/i.test(l));
     if (guestHeaderIdx !== -1) {
       const headerLine = lines[guestHeaderIdx];
-      const inlineVal = headerLine.replace(/^Huésped(?:es)?|^Huesped(?:es)?|^Pasajero(?:s)?|^Nombres/i, '').replace(/^[:=-]\s*/, '').trim();
+      const inlineVal = headerLine.replace(/^Huésped(?:es)?|^Huesped(?:es)?|^Pasajero(?:s)?|^Nombres|^Usuario/i, '').replace(/^[:=-]\s*/, '').trim();
 
       const candidateRaw: string[] = [];
       if (inlineVal) candidateRaw.push(inlineVal);
@@ -581,7 +596,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       for (let i = guestHeaderIdx + 1; i < lines.length; i++) {
         const l = lines[i];
         if (!l) continue;
-        if (/^(LOC|PNR|Ubicación|Ubicacion|Habitación|Habitacion|Personas|Fechas|Adicionales|Monto|Tasa|Beneficiario|RIF|Banco|Cuenta|Pago movil|Pago móvil|Cedula PM|Cédula PM|Binance|Zelle|Pay ID|Ruta|Concepto)/i.test(l)) {
+        if (/^(LOC|PNR|Ubicación|Ubicacion|Habitación|Habitacion|Personas|Cantidad|Fechas|Observacion|Observación|Observaciones|Adicionales|Monto|Tasa|Beneficiario|RIF|Banco|Cuenta|Pago movil|Pago móvil|Cedula PM|Cédula PM|Binance|Zelle|Pay ID|Ruta|Concepto)/i.test(l)) {
           break;
         }
         candidateRaw.push(l);
@@ -602,33 +617,78 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         const cleaned = lineStr.replace(/^[\d]+[\.\)\-]\s*|^[\-\*•]\s*/, '').trim();
         if (!cleaned) continue;
 
-        const match = cleaned.match(/^(.+?)(?:\s+|-|\/|\()([VEJPGvejjpg]-?\s*[\d.]{5,12}|\b\d{7,10}\b)\)?$/i);
-        if (match) {
+        // Match format: JENFRI CHIRINOS C.I: 13.480.283 or Name V-123456
+        const ciPattern = /(?:C\.?I\.?|CI|Cédula|Cedula|V-?)\s*[:=-]?\s*([VEJPGvejpg\d.-]+)/i;
+        const ciMatch = cleaned.match(ciPattern);
+
+        if (ciMatch) {
+          const namePart = cleaned.replace(ciPattern, '').replace(/[\(\[\{]/g, '').trim();
+          const ciPart = ciMatch[1].replace(/[\)\]\}]/g, '').trim();
           parsedGuests.push({
-            name: match[1].replace(/[\(\[\{]/g, '').trim(),
-            ci: match[2].replace(/[\)\]\}]/g, '').trim()
+            name: namePart.replace(/^[:=-]\s*/, '').trim(),
+            ci: ciPart
           });
         } else {
-          parsedGuests.push({ name: cleaned, ci: '' });
+          const match = cleaned.match(/^(.+?)(?:\s+|-|\/|\()([VEJPGvejjpg]-?\s*[\d.]{5,12}|\b\d{7,10}\b)\)?$/i);
+          if (match) {
+            parsedGuests.push({
+              name: match[1].replace(/[\(\[\{]/g, '').trim(),
+              ci: match[2].replace(/[\)\]\}]/g, '').trim()
+            });
+          } else {
+            parsedGuests.push({ name: cleaned, ci: '' });
+          }
         }
       }
     }
 
+    // Direct Usuario fallback if not found in guest list
+    const rawUsuario = getValue(['Usuario', 'Usuario Solicitante', 'Responsable']);
+    if (rawUsuario && parsedGuests.length === 0) {
+      const ciMatch = rawUsuario.match(/(?:C\.?I\.?|CI|Cédula|Cedula|V-?)\s*[:=-]?\s*([VEJPGvejpg\d.-]+)/i);
+      let nameOnly = rawUsuario;
+      let ciOnly = '';
+      if (ciMatch) {
+        ciOnly = ciMatch[1].replace(/[^0-9VEJPGvejpg]/gi, '').trim();
+        nameOnly = rawUsuario.replace(/(?:C\.?I\.?|CI|Cédula|Cedula|V-?)\s*[:=-]?\s*[VEJPGvejpg\d.-]+/i, '').trim();
+      }
+      parsedGuests.push({
+        name: nameOnly.replace(/^[:=-]\s*/, '').trim(),
+        ci: ciOnly.trim()
+      });
+    }
+
+    const defaultTitle =
+      detectedCategory === 'viaticos'
+        ? (parsedClient ? `SOLICITUD DE VIATICOS - ${parsedClient}` : 'SOLICITUD DE VIATICOS')
+        : detectedCategory === 'gastos_apoyo'
+        ? (parsedExpenseConcept ? `APOYO PARA GASTOS - ${parsedExpenseConcept}` : 'APOYO PARA GASTOS')
+        : detectedCategory === 'traslado'
+        ? (parsedHotel ? `PAGO TRASLADO EJECUTIVO - ${parsedHotel}` : 'PAGO TRASLADO EJECUTIVO')
+        : detectedCategory === 'vuelos'
+        ? (parsedHotel ? `EMISION BOLETO AEREO - ${parsedHotel}` : 'EMISION BOLETO AEREO')
+        : (parsedHotel ? `PAGO HOSPEDAJE - ${parsedHotel}` : 'PAGO HOSPEDAJE');
+
+    const isTraslado = detectedCategory === 'traslado';
+    const isVuelos = detectedCategory === 'vuelos';
+    const isGastos = detectedCategory === 'gastos_apoyo';
+    const isViaticos = detectedCategory === 'viaticos';
+
     const updatedFormData = {
       ...currentForm,
-      title: parsedTitle || currentForm.title,
+      title: parsedTitle || defaultTitle,
       client: parsedClient || currentForm.client,
-      hotel_name: parsedHotel || currentForm.hotel_name,
+      hotel_name: isViaticos ? 'VIATICOS' : isGastos ? (parsedExpenseConcept || 'GASTOS') : (parsedHotel || currentForm.hotel_name),
       locator: parsedLocator || currentForm.locator,
       location: parsedLocation || currentForm.location,
       room_type: parsedRoomType || currentForm.room_type,
       people_count: parsedPeople ? parseInt(parsedPeople) || currentForm.people_count : (parsedGuests.length > 0 ? parsedGuests.length : currentForm.people_count),
       nights_dates: parsedNightsDates || currentForm.nights_dates,
       additionals: parsedAdditionals || currentForm.additionals,
-      route_from_to: parsedRoute || currentForm.route_from_to,
-      flight_route: parsedRoute || currentForm.flight_route,
-      airline: parsedHotel || currentForm.airline,
-      expense_concept: parsedExpenseConcept || currentForm.expense_concept,
+      route_from_to: isTraslado ? (parsedRoute || currentForm.route_from_to) : '',
+      flight_route: isVuelos ? (parsedRoute || currentForm.flight_route) : '',
+      airline: isVuelos ? (parsedHotel || currentForm.airline) : '',
+      expense_concept: isGastos ? (parsedExpenseConcept || currentForm.expense_concept) : '',
       amount_usd: isNaN(numUsd) ? currentForm.amount_usd : numUsd,
       bcv_rate: isNaN(numBcv) ? currentForm.bcv_rate : numBcv,
       amount_bs: !isNaN(finalBs) ? finalBs : (!isNaN(numUsd) && !isNaN(numBcv) ? Number((numUsd * numBcv).toFixed(2)) : currentForm.amount_bs),
@@ -713,22 +773,30 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     e.preventDefault();
     setErrorMsg('');
 
+    const isGastos = category === 'gastos_apoyo';
     const firstGuest = guestList[0];
     const mainTitle = formData.title || (
       category === 'traslado' ? `TRASLADO ${formData.hotel_name || 'EJECUTIVO'}` :
       category === 'vuelos' ? `BOLETO AEREO ${formData.hotel_name || 'VUELO'}` :
       category === 'gastos_apoyo' ? `APOYO ${formData.expense_concept || 'GASTOS'}` :
+      category === 'viaticos' ? `SOLICITUD DE VIATICOS ${formData.client ? `- ${formData.client}` : ''}` :
       `HOSPEDAJE ${formData.hotel_name || 'HOTEL'}`
     );
 
-    if (!mainTitle || !firstGuest?.name?.trim() || !formData.nights_dates) {
-      setErrorMsg('⚠️ Por favor completa los campos requeridos (*), incluyendo al menos Nombre del Huésped / Pasajero y Fecha');
+    if (!mainTitle || (!isGastos && (!firstGuest?.name?.trim() || !formData.nights_dates))) {
+      setErrorMsg(
+        category === 'viaticos'
+          ? '⚠️ Por favor completa los campos requeridos (*), incluyendo Usuario (Nombre y C.I.) y Fechas.'
+          : '⚠️ Por favor completa los campos requeridos (*), incluyendo al menos Nombre del Huésped / Pasajero y Fecha.'
+      );
       return;
     }
 
     if (!formData.client || !formData.client.trim()) {
-      setErrorMsg('⚠️ Falta el Cliente / Empresa: Por favor indica el cliente de la solicitud.');
-      return;
+      if (!isGastos) {
+        setErrorMsg('⚠️ Falta el Cliente / Empresa: Por favor indica el cliente de la solicitud.');
+        return;
+      }
     }
 
     // Validar Montos en Bolívares o Divisas
@@ -787,32 +855,35 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     setShowConfirmDialog(false);
     setErrorMsg('');
 
+    const isGastos = category === 'gastos_apoyo';
     const mainTitle = formData.title || (
       category === 'traslado' ? `TRASLADO ${formData.hotel_name || 'EJECUTIVO'}` :
       category === 'vuelos' ? `BOLETO AEREO ${formData.hotel_name || 'VUELO'}` :
       category === 'gastos_apoyo' ? `APOYO ${formData.expense_concept || 'GASTOS'}` :
+      category === 'viaticos' ? `SOLICITUD DE VIATICOS ${formData.client ? `- ${formData.client}` : ''}` :
       `HOSPEDAJE ${formData.hotel_name || 'HOTEL'}`
     );
 
-    const fullGuestNames = guestList.map(g => g.name.trim()).filter(Boolean).join(', ');
-    const fullGuestCis = guestList.map(g => g.ci.trim()).filter(Boolean).join(' / ');
+    const fullGuestNames = isGastos ? '' : guestList.map(g => g.name.trim()).filter(Boolean).join(', ');
+    const fullGuestCis = isGastos ? '' : guestList.map(g => g.ci.trim()).filter(Boolean).join(' / ');
+    const effectiveGuestList = isGastos ? [] : guestList;
 
     try {
       setLoading(true);
       await onSubmit({
         category,
         title: mainTitle.toUpperCase(),
-        client: formData.client.toUpperCase(),
-        hotel_name: (formData.hotel_name || (category === 'traslado' ? 'SERVICIO TRASLADO' : category === 'vuelos' ? 'AEROLINEA' : category === 'gastos_apoyo' ? 'CAJA CHICA / APOYO' : 'HOTEL')).toUpperCase(),
+        client: (formData.client || (isGastos ? 'INTERNO' : 'SIN ESPECIFICAR')).toUpperCase(),
+        hotel_name: (formData.hotel_name || (category === 'traslado' ? 'SERVICIO TRASLADO' : category === 'vuelos' ? 'AEROLINEA' : category === 'gastos_apoyo' ? (formData.expense_concept || 'GASTOS') : category === 'viaticos' ? 'VIATICOS' : 'HOTEL')).toUpperCase(),
         guest_name: fullGuestNames,
         guest_ci: fullGuestCis,
-        guest_list: guestList,
+        guest_list: effectiveGuestList,
         locator: formData.locator || String(Math.floor(10000000 + Math.random() * 90000000)),
         location: (formData.location || 'VENEZUELA').toUpperCase(),
-        room_type: formData.room_type,
-        people_count: guestList.length > 0 ? guestList.length : Number(formData.people_count),
+        room_type: isGastos ? 'N/A' : formData.room_type,
+        people_count: isGastos ? 1 : (guestList.length > 0 ? guestList.length : Number(formData.people_count)),
         additionals: formData.additionals,
-        nights_dates: formData.nights_dates,
+        nights_dates: formData.nights_dates || (isGastos ? new Date().toLocaleDateString() : 'N/A'),
         route_from_to: formData.route_from_to,
         flight_route: formData.flight_route,
         airline: formData.airline,
@@ -923,6 +994,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       <option value="traslado">🚗 Traslado Ejecutivo</option>
                       <option value="vuelos">✈️ Vuelo / Boleto</option>
                       <option value="gastos_apoyo">🧾 Gastos de Apoyo</option>
+                      <option value="viaticos">💼 Solicitud de Viáticos</option>
                     </select>
 
                     {/* Selector 2: Método de Pago */}
@@ -1159,6 +1231,10 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-purple-50 text-purple-800 border border-purple-200 flex items-center gap-1">
                         <Receipt className="w-3 h-3 text-purple-600" /> Gastos
                       </span>
+                    ) : category === 'viaticos' ? (
+                      <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1">
+                        <Briefcase className="w-3 h-3 text-amber-700" /> Viáticos
+                      </span>
                     ) : (
                       <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-indigo-50 text-indigo-800 border border-indigo-200 flex items-center gap-1">
                         <Hotel className="w-3 h-3 text-indigo-600" /> Hospedaje
@@ -1197,34 +1273,52 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-1.5">
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">Cliente / Cuenta:</span>
-                    <span className="font-extrabold text-slate-900">{formData.client}</span>
+                    <span className="font-extrabold text-slate-900">{formData.client || 'Sin especificar'}</span>
                   </div>
                   <div className="flex items-center justify-between">
                     <span className="text-slate-500 font-medium">
                       {category === 'traslado'
-                        ? 'Proveedor Traslado:'
+                        ? 'Empresa Traslado:'
                         : category === 'vuelos'
                         ? 'Aerolínea:'
                         : category === 'gastos_apoyo'
-                        ? 'Concepto / Destino:'
+                        ? 'Concepto:'
+                        : category === 'viaticos'
+                        ? 'Servicio:'
                         : 'Hotel / Hospedaje:'}
                     </span>
                     <span className="font-extrabold text-[#009b8b] flex items-center gap-1">
                       {category === 'traslado' ? (
-                        <Car className="w-3.5 h-3.5 text-emerald-600" />
+                        <>
+                          <Car className="w-3.5 h-3.5 text-emerald-600" />
+                          {formData.hotel_name || 'Sin especificar'}
+                        </>
                       ) : category === 'vuelos' ? (
-                        <Plane className="w-3.5 h-3.5 text-sky-600" />
+                        <>
+                          <Plane className="w-3.5 h-3.5 text-sky-600" />
+                          {formData.airline || formData.hotel_name || 'Sin especificar'}
+                        </>
                       ) : category === 'gastos_apoyo' ? (
-                        <Receipt className="w-3.5 h-3.5 text-purple-600" />
+                        <>
+                          <Receipt className="w-3.5 h-3.5 text-purple-600" />
+                          {formData.expense_concept || formData.hotel_name || 'Sin especificar'}
+                        </>
+                      ) : category === 'viaticos' ? (
+                        <>
+                          <Briefcase className="w-3.5 h-3.5 text-amber-600" />
+                          VIÁTICOS
+                        </>
                       ) : (
-                        <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                        <>
+                          <Building2 className="w-3.5 h-3.5 text-indigo-600" />
+                          {formData.hotel_name || 'Sin especificar'}
+                        </>
                       )}
-                      {formData.hotel_name || formData.airline || formData.route_from_to || 'Sin especificar'}
                     </span>
                   </div>
                 </div>
 
-                {/* Datos del Hospedaje / Pasajeros */}
+                {/* Datos del Servicio / Pasajeros / Usuario */}
                 <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2">
                   <h4 className="font-bold text-slate-900 flex items-center gap-1.5 border-b border-slate-200 pb-1.5 text-xs">
                     <Users className="w-3.5 h-3.5 text-[#00b4a2]" />
@@ -1234,78 +1328,89 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                         : category === 'vuelos'
                         ? 'Datos del Vuelo y Pasajeros'
                         : category === 'gastos_apoyo'
-                        ? 'Datos del Beneficiario y Concepto'
+                        ? 'Datos del Apoyo para Gastos'
+                        : category === 'viaticos'
+                        ? 'Datos de la Solicitud de Viáticos'
                         : 'Datos del Hospedaje y Huéspedes'}
                     </span>
                   </h4>
 
-                  {formData.route_from_to && (
-                    <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-900">
-                      📍 Ruta Terrestre: {formData.route_from_to}
+                  {category === 'traslado' && formData.route_from_to && (
+                    <div className="p-2 bg-emerald-50 rounded-xl border border-emerald-200 text-xs font-bold text-emerald-900 flex items-center gap-1.5">
+                      <Car className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
+                      <span>Ruta Traslado: {formData.route_from_to}</span>
                     </div>
                   )}
 
-                  {formData.flight_route && (
-                    <div className="p-2 bg-sky-50 rounded-xl border border-sky-200 text-xs font-bold text-sky-900">
-                      ✈️ Ruta Aérea: {formData.airline ? `${formData.airline} • ` : ''} {formData.flight_route}
+                  {category === 'vuelos' && (formData.flight_route || formData.route_from_to) && (
+                    <div className="p-2 bg-sky-50 rounded-xl border border-sky-200 text-xs font-bold text-sky-900 flex items-center gap-1.5">
+                      <Plane className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                      <span>Ruta Aérea: {formData.airline ? `${formData.airline} • ` : ''} {formData.flight_route || formData.route_from_to}</span>
                     </div>
                   )}
 
-                  {formData.expense_concept && (
-                    <div className="p-2 bg-purple-50 rounded-xl border border-purple-200 text-xs font-bold text-purple-900">
-                      📝 Concepto: {formData.expense_concept}
+                  {category === 'gastos_apoyo' && formData.expense_concept && (
+                    <div className="p-2 bg-purple-50 rounded-xl border border-purple-200 text-xs font-bold text-purple-900 flex items-center gap-1.5">
+                      <Receipt className="w-3.5 h-3.5 text-purple-600 shrink-0" />
+                      <span>Concepto: {formData.expense_concept}</span>
                     </div>
                   )}
 
-                  {/* Lista Completa de Huéspedes / Pasajeros */}
-                  <div className="space-y-1.5 pt-1">
-                    <span className="text-slate-500 block text-[11px] font-bold">
-                      {guestList.length > 1
-                        ? `Lista de Pasajeros / Huéspedes (${guestList.length}):`
-                        : 'Huésped / Pasajero:'}
-                    </span>
+                  {/* Lista de Personas / Huéspedes / Pasajeros / Usuario (Oculto para Apoyo para Gastos) */}
+                  {category !== 'gastos_apoyo' && (
+                    <div className="space-y-1.5 pt-1">
+                      <span className="text-slate-500 block text-[11px] font-bold">
+                        {category === 'viaticos'
+                          ? 'Usuario(s) Solicitante(s):'
+                          : guestList.length > 1
+                          ? `Lista de Pasajeros / Huéspedes (${guestList.length}):`
+                          : 'Huésped / Pasajero:'}
+                      </span>
 
-                    <div className="space-y-1 bg-white p-2.5 rounded-xl border border-slate-200">
-                      {guestList.map((g, i) => (
-                        <div key={i} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 text-xs">
-                          <div className="flex items-center gap-2">
-                            <span className="w-5 h-5 rounded-full bg-teal-50 text-[#009b8b] font-bold text-[10px] flex items-center justify-center border border-teal-200 shrink-0">
-                              {i + 1}
-                            </span>
-                            <span className="font-extrabold text-slate-900">
-                              {g.name || 'Sin nombre'}
+                      <div className="space-y-1 bg-white p-2.5 rounded-xl border border-slate-200">
+                        {guestList.map((g, i) => (
+                          <div key={i} className="flex items-center justify-between py-1 border-b border-slate-100 last:border-0 text-xs">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-full bg-teal-50 text-[#009b8b] font-bold text-[10px] flex items-center justify-center border border-teal-200 shrink-0">
+                                {i + 1}
+                              </span>
+                              <span className="font-extrabold text-slate-900">
+                                {g.name || 'Sin nombre'}
+                              </span>
+                            </div>
+                            <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
+                              {g.ci ? `C.I. ${g.ci}` : 'S/C'}
                             </span>
                           </div>
-                          <span className="font-mono font-bold text-slate-700 bg-slate-100 px-2 py-0.5 rounded text-[11px]">
-                            {g.ci ? `C.I. ${g.ci}` : 'S/C'}
-                          </span>
-                        </div>
-                      ))}
+                        ))}
+                      </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/80">
-                    <div>
-                      <span className="text-slate-400 block text-[10px] font-semibold">Ubicación</span>
-                      <span className="font-semibold text-slate-800 flex items-center gap-1 text-xs">
-                        <MapPin className="w-3 h-3 text-slate-400" /> {formData.location || 'Venezuela'}
-                      </span>
+                  {category !== 'gastos_apoyo' && (
+                    <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 pt-2 border-t border-slate-200/80">
+                      <div>
+                        <span className="text-slate-400 block text-[10px] font-semibold">Ubicación</span>
+                        <span className="font-semibold text-slate-800 flex items-center gap-1 text-xs">
+                          <MapPin className="w-3 h-3 text-slate-400" /> {formData.location || 'Venezuela'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] font-semibold">Fechas / Noches</span>
+                        <span className="font-semibold text-slate-800 flex items-center gap-1 text-xs">
+                          <Calendar className="w-3 h-3 text-slate-400" /> {formData.nights_dates || 'Pendiente'}
+                        </span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] font-semibold">Habitación / Vehículo</span>
+                        <span className="font-semibold text-slate-800 text-xs">{formData.room_type}</span>
+                      </div>
+                      <div>
+                        <span className="text-slate-400 block text-[10px] font-semibold">Total Personas</span>
+                        <span className="font-extrabold text-[#009b8b] text-xs">{guestList.length} persona(s)</span>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px] font-semibold">Fechas / Noches</span>
-                      <span className="font-semibold text-slate-800 flex items-center gap-1 text-xs">
-                        <Calendar className="w-3 h-3 text-slate-400" /> {formData.nights_dates || 'Pendiente'}
-                      </span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px] font-semibold">Habitación / Vehículo</span>
-                      <span className="font-semibold text-slate-800 text-xs">{formData.room_type}</span>
-                    </div>
-                    <div>
-                      <span className="text-slate-400 block text-[10px] font-semibold">Total Personas</span>
-                      <span className="font-extrabold text-[#009b8b] text-xs">{guestList.length} persona(s)</span>
-                    </div>
-                  </div>
+                  )}
 
                   {formData.additionals && (
                     <div className="pt-2 border-t border-slate-200 text-[11px]">
@@ -1371,9 +1476,35 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       <Landmark className="w-3.5 h-3.5 text-[#00b4a2]" />
                       <span>Datos Destino de Pago</span>
                     </span>
-                    <span className="text-[10px] font-bold text-teal-800 bg-teal-50 px-2 py-0.5 rounded border border-teal-200 uppercase">
-                      {paymentMethod.replace(/_/g, ' ')}
-                    </span>
+                    <div className="flex items-center gap-1.5">
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => {
+                          const newMethod = e.target.value as PaymentMethodType;
+                          setPaymentMethod(newMethod);
+                          if (newMethod === 'binance' || newMethod === 'zelle_usd') {
+                            setCurrency('USD');
+                          } else if (newMethod === 'transferencia_bs' || newMethod === 'pago_movil') {
+                            setCurrency('VES');
+                          }
+                        }}
+                        className="text-[11px] font-bold text-teal-950 bg-teal-50 border border-teal-300 rounded-lg px-2 py-0.5 shadow-2xs cursor-pointer focus:outline-none focus:ring-1 focus:ring-[#00b4a2]"
+                        title="Cambiar Método de Pago"
+                      >
+                        <option value="transferencia_bs">🏦 Transferencia (Bs)</option>
+                        <option value="pago_movil">📱 Pago Móvil (Bs)</option>
+                        <option value="binance">💰 Binance Pay (USDT)</option>
+                        <option value="zelle_usd">💵 Zelle (USD)</option>
+                        <option value="efectivo_usd">💵 Efectivo ($ / Bs)</option>
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setStep('manual')}
+                        className="text-[10px] font-bold text-[#00b4a2] hover:text-[#009b8b] underline ml-1"
+                      >
+                        Editar Datos
+                      </button>
+                    </div>
                   </div>
 
                   <div className="text-xs space-y-1 pt-0.5">
@@ -1543,17 +1674,17 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
               </div>
 
               {/* Categoría */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {(['hospedaje', 'traslado', 'vuelos', 'gastos_apoyo'] as const).map((cat) => (
+              <div className="grid grid-cols-2 sm:grid-cols-5 gap-2">
+                {(['hospedaje', 'traslado', 'vuelos', 'gastos_apoyo', 'viaticos'] as const).map((cat) => (
                   <button
                     key={cat}
                     type="button"
                     onClick={() => setCategory(cat)}
-                    className={`py-2 px-3 rounded-xl font-bold text-xs capitalize border ${
-                      category === cat ? 'bg-[#00b4a2] text-white border-[#00b4a2]' : 'bg-slate-50 text-slate-700 border-slate-200'
+                    className={`py-2 px-3 rounded-xl font-bold text-xs capitalize border transition-all ${
+                      category === cat ? 'bg-[#00b4a2] text-white border-[#00b4a2] shadow-2xs' : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
                     }`}
                   >
-                    {cat.replace(/_/g, ' ')}
+                    {cat === 'gastos_apoyo' ? '🧾 Gastos' : cat === 'viaticos' ? '💼 Viáticos' : cat === 'traslado' ? '🚗 Traslado' : cat === 'vuelos' ? '✈️ Vuelos' : '🏨 Hospedaje'}
                   </button>
                 ))}
               </div>
@@ -1582,16 +1713,58 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Hotel / Proveedor *</label>
+                  <label className="block text-slate-700 font-bold mb-1">
+                    {category === 'traslado'
+                      ? 'Empresa de Traslado *'
+                      : category === 'vuelos'
+                      ? 'Aerolínea *'
+                      : category === 'gastos_apoyo'
+                      ? 'Concepto / Destino *'
+                      : category === 'viaticos'
+                      ? 'Concepto / Servicio'
+                      : 'Hotel / Proveedor *'}
+                  </label>
                   <input
                     type="text"
-                    value={formData.hotel_name}
-                    onChange={(e) => setFormData({ ...formData, hotel_name: e.target.value })}
+                    value={category === 'gastos_apoyo' ? (formData.expense_concept || formData.hotel_name) : formData.hotel_name}
+                    onChange={(e) => {
+                      if (category === 'gastos_apoyo') {
+                        setFormData({ ...formData, expense_concept: e.target.value, hotel_name: e.target.value });
+                      } else {
+                        setFormData({ ...formData, hotel_name: e.target.value });
+                      }
+                    }}
                     className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
-                    required
+                    required={category !== 'viaticos'}
                   />
                 </div>
               </div>
+
+              {category === 'traslado' && (
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Ruta del Traslado</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: CCS - VALENCIA"
+                    value={formData.route_from_to}
+                    onChange={(e) => setFormData({ ...formData, route_from_to: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  />
+                </div>
+              )}
+
+              {category === 'vuelos' && (
+                <div>
+                  <label className="block text-slate-700 font-bold mb-1">Ruta de Vuelo</label>
+                  <input
+                    type="text"
+                    placeholder="Ej: CCS - PMV - CCS"
+                    value={formData.flight_route}
+                    onChange={(e) => setFormData({ ...formData, flight_route: e.target.value })}
+                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                  />
+                </div>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div>
@@ -1604,16 +1777,28 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   />
                 </div>
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Ubicación</label>
-                  <input
-                    type="text"
-                    value={formData.location}
-                    onChange={(e) => setFormData({ ...formData, location: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
-                  />
+                  <label className="block text-slate-700 font-bold mb-1">
+                    {category === 'viaticos' ? 'Cantidad de Personas' : 'Ubicación'}
+                  </label>
+                  {category === 'viaticos' ? (
+                    <input
+                      type="number"
+                      min="1"
+                      value={formData.people_count}
+                      onChange={(e) => setFormData({ ...formData, people_count: parseInt(e.target.value) || 1 })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                    />
+                  ) : (
+                    <input
+                      type="text"
+                      value={formData.location}
+                      onChange={(e) => setFormData({ ...formData, location: e.target.value })}
+                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900"
+                    />
+                  )}
                 </div>
                 <div>
-                  <label className="block text-slate-700 font-bold mb-1">Fechas / Noches *</label>
+                  <label className="block text-slate-700 font-bold mb-1">Fechas / Período *</label>
                   <input
                     type="text"
                     value={formData.nights_dates}
@@ -1624,47 +1809,63 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                 </div>
               </div>
 
-              {/* Lista Pasajeros */}
-              <div className="space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="font-bold text-slate-900 text-xs">Pasajeros / Huéspedes ({guestList.length})</span>
-                  <button
-                    type="button"
-                    onClick={handleAddGuestRow}
-                    className="text-xs font-bold text-[#00b4a2] hover:text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-lg border border-teal-200"
-                  >
-                    + Agregar
-                  </button>
-                </div>
-                {guestList.map((g, idx) => (
-                  <div key={idx} className="flex items-center gap-2">
-                    <input
-                      type="text"
-                      placeholder="Nombre y Apellido"
-                      value={g.name}
-                      onChange={(e) => handleGuestChange(idx, 'name', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
-                      required={idx === 0}
-                    />
-                    <input
-                      type="text"
-                      placeholder="Cédula / Pasaporte"
-                      value={g.ci}
-                      onChange={(e) => handleGuestChange(idx, 'ci', e.target.value)}
-                      className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
-                      required={idx === 0}
-                    />
-                    {guestList.length > 1 && (
-                      <button
-                        type="button"
-                        onClick={() => handleRemoveGuestRow(idx)}
-                        className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg border border-rose-200"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
+              {/* Lista Pasajeros / Usuario (Oculto para Apoyo para Gastos) */}
+              {category !== 'gastos_apoyo' && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-slate-900 text-xs">
+                      {category === 'viaticos'
+                        ? `Usuario Responsable / Personas (${guestList.length})`
+                        : `Pasajeros / Huéspedes (${guestList.length})`}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={handleAddGuestRow}
+                      className="text-xs font-bold text-[#00b4a2] hover:text-teal-800 bg-teal-50 px-2.5 py-0.5 rounded-lg border border-teal-200"
+                    >
+                      + Agregar
+                    </button>
                   </div>
-                ))}
+                  {guestList.map((g, idx) => (
+                    <div key={idx} className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        placeholder={category === 'viaticos' ? 'Nombre y Apellido del Usuario' : 'Nombre y Apellido'}
+                        value={g.name}
+                        onChange={(e) => handleGuestChange(idx, 'name', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required={idx === 0}
+                      />
+                      <input
+                        type="text"
+                        placeholder="Cédula / C.I."
+                        value={g.ci}
+                        onChange={(e) => handleGuestChange(idx, 'ci', e.target.value)}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                      />
+                      {guestList.length > 1 && (
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveGuestRow(idx)}
+                          className="p-1.5 text-rose-500 hover:bg-rose-50 rounded-lg border border-rose-200"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Observación</label>
+                <textarea
+                  rows={2}
+                  value={formData.additionals}
+                  onChange={(e) => setFormData({ ...formData, additionals: e.target.value })}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs text-slate-900"
+                  placeholder="Detalles u observaciones del servicio"
+                />
               </div>
 
               {/* Montos */}
@@ -1713,42 +1914,324 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                 </div>
               </div>
 
-              {/* Datos Bancarios */}
-              <div className="space-y-2 pt-2 border-t border-slate-100">
-                <label className="block text-slate-700 font-bold">Datos Bancarios</label>
-                <div className="grid grid-cols-2 gap-2">
-                  <input
-                    type="text"
-                    placeholder="Beneficiario"
-                    value={formData.bank_beneficiary}
-                    onChange={(e) => setFormData({ ...formData, bank_beneficiary: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5"
-                    required
-                  />
-                  <input
-                    type="text"
-                    placeholder="RIF / Cédula"
-                    value={formData.bank_rif}
-                    onChange={(e) => setFormData({ ...formData, bank_rif: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5"
-                  />
-                  <select
-                    value={formData.bank_name}
-                    onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-semibold"
-                  >
-                    {POPULAR_BANKS.map((b) => (
-                      <option key={b} value={b}>{b}</option>
-                    ))}
-                  </select>
-                  <input
-                    type="text"
-                    placeholder="N° Cuenta / Pago Móvil / Zelle"
-                    value={formData.bank_account || formData.pago_movil_phone || formData.zelle_email}
-                    onChange={(e) => setFormData({ ...formData, bank_account: e.target.value, pago_movil_phone: e.target.value })}
-                    className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 font-mono"
-                  />
+              {/* Selector de Método de Pago y Moneda */}
+              <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <label className="block text-slate-800 font-black text-xs">
+                    Método de Pago *
+                  </label>
+                  <div className="flex items-center gap-1 text-[11px]">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrency('VES');
+                        if (paymentMethod === 'binance' || paymentMethod === 'zelle_usd') {
+                          setPaymentMethod('transferencia_bs');
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-xl font-bold transition-all ${
+                        currency === 'VES'
+                          ? 'bg-[#00b4a2] text-white shadow-2xs'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      🇻🇪 Bolívares (VES)
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setCurrency('USD');
+                        if (paymentMethod === 'transferencia_bs' || paymentMethod === 'pago_movil') {
+                          setPaymentMethod('binance');
+                        }
+                      }}
+                      className={`px-2.5 py-1 rounded-xl font-bold transition-all ${
+                        currency === 'USD'
+                          ? 'bg-emerald-600 text-white shadow-2xs'
+                          : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-100'
+                      }`}
+                    >
+                      💵 Divisas (USD)
+                    </button>
+                  </div>
                 </div>
+
+                {/* Botones de Métodos de Pago */}
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('transferencia_bs');
+                      setCurrency('VES');
+                    }}
+                    className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 border transition-all ${
+                      paymentMethod === 'transferencia_bs'
+                        ? 'bg-[#00b4a2] text-white border-[#00b4a2] shadow-2xs'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Landmark className="w-4 h-4" />
+                    <span>Transferencia</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('pago_movil');
+                      setCurrency('VES');
+                    }}
+                    className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 border transition-all ${
+                      paymentMethod === 'pago_movil'
+                        ? 'bg-teal-600 text-white border-teal-600 shadow-2xs'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Smartphone className="w-4 h-4" />
+                    <span>Pago Móvil</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('binance');
+                      setCurrency('USD');
+                    }}
+                    className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 border transition-all ${
+                      paymentMethod === 'binance'
+                        ? 'bg-amber-600 text-white border-amber-600 shadow-2xs'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <QrCode className="w-4 h-4" />
+                    <span>Binance</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('zelle_usd');
+                      setCurrency('USD');
+                    }}
+                    className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 border transition-all ${
+                      paymentMethod === 'zelle_usd'
+                        ? 'bg-emerald-600 text-white border-emerald-600 shadow-2xs'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <DollarSign className="w-4 h-4" />
+                    <span>Zelle</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPaymentMethod('efectivo_usd');
+                    }}
+                    className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 border transition-all ${
+                      paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs'
+                        ? 'bg-slate-800 text-white border-slate-800 shadow-2xs'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Banknote className="w-4 h-4" />
+                    <span>Efectivo</span>
+                  </button>
+                </div>
+              </div>
+
+              {/* Campos dinámicos según el método de pago seleccionado */}
+              <div className="space-y-2 pt-1 border-t border-slate-100">
+                <label className="block text-slate-800 font-bold text-xs">
+                  Detalles del Destino de Pago ({paymentMethod === 'binance' ? 'Binance Pay' : paymentMethod === 'zelle_usd' ? 'Zelle USD' : paymentMethod === 'pago_movil' ? 'Pago Móvil' : paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs' ? 'Efectivo' : 'Transferencia Bancaria'})
+                </label>
+
+                {paymentMethod === 'transferencia_bs' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Beneficiario / Titular *</label>
+                      <input
+                        type="text"
+                        placeholder="Nombre o Razón Social"
+                        value={formData.bank_beneficiary}
+                        onChange={(e) => setFormData({ ...formData, bank_beneficiary: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">RIF / Cédula *</label>
+                      <input
+                        type="text"
+                        placeholder="J-12345678-0 o V-12345678"
+                        value={formData.bank_rif}
+                        onChange={(e) => setFormData({ ...formData, bank_rif: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Banco de Destino *</label>
+                      <select
+                        value={formData.bank_name}
+                        onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                      >
+                        {POPULAR_BANKS.map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">N° de Cuenta (20 Dígitos) *</label>
+                      <input
+                        type="text"
+                        placeholder="0134..."
+                        value={formData.bank_account}
+                        onChange={(e) => setFormData({ ...formData, bank_account: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {paymentMethod === 'pago_movil' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Beneficiario / Titular *</label>
+                      <input
+                        type="text"
+                        placeholder="Nombre del Titular"
+                        value={formData.bank_beneficiary}
+                        onChange={(e) => setFormData({ ...formData, bank_beneficiary: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Cédula / RIF *</label>
+                      <input
+                        type="text"
+                        placeholder="V-12345678"
+                        value={formData.pago_movil_ci || formData.bank_rif}
+                        onChange={(e) => setFormData({ ...formData, pago_movil_ci: e.target.value, bank_rif: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Banco *</label>
+                      <select
+                        value={formData.bank_name}
+                        onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                      >
+                        {POPULAR_BANKS.map((b) => (
+                          <option key={b} value={b}>{b}</option>
+                        ))}
+                      </select>
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Teléfono Pago Móvil *</label>
+                      <input
+                        type="text"
+                        placeholder="04141234567"
+                        value={formData.pago_movil_phone}
+                        onChange={(e) => setFormData({ ...formData, pago_movil_phone: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {paymentMethod === 'binance' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Titular / Beneficiario *</label>
+                      <input
+                        type="text"
+                        placeholder="Nombre del Titular de Binance"
+                        value={formData.bank_beneficiary}
+                        onChange={(e) => setFormData({ ...formData, bank_beneficiary: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Binance Pay ID</label>
+                      <input
+                        type="text"
+                        placeholder="ID de 8 o 9 dígitos"
+                        value={formData.binance_pay_id}
+                        onChange={(e) => setFormData({ ...formData, binance_pay_id: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div className="sm:col-span-2">
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Correo Electrónico de Binance</label>
+                      <input
+                        type="email"
+                        placeholder="usuario@email.com"
+                        value={formData.binance_email}
+                        onChange={(e) => setFormData({ ...formData, binance_email: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {paymentMethod === 'zelle_usd' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Titular / Nombre en Zelle *</label>
+                      <input
+                        type="text"
+                        placeholder="Nombre Completo del Titular"
+                        value={formData.zelle_name || formData.bank_beneficiary}
+                        onChange={(e) => setFormData({ ...formData, zelle_name: e.target.value, bank_beneficiary: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Correo / Teléfono Zelle *</label>
+                      <input
+                        type="text"
+                        placeholder="correo@zelle.com o Teléfono"
+                        value={formData.zelle_email}
+                        onChange={(e) => setFormData({ ...formData, zelle_email: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                        required
+                      />
+                    </div>
+                  </div>
+                )}
+
+                {(paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs') && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Persona que Recibe / Responsable *</label>
+                      <input
+                        type="text"
+                        placeholder="Nombre y Apellido"
+                        value={formData.cash_receiver || formData.bank_beneficiary}
+                        onChange={(e) => setFormData({ ...formData, cash_receiver: e.target.value, bank_beneficiary: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Detalle / Ubicación de Entrega</label>
+                      <input
+                        type="text"
+                        placeholder="Oficina, Chofer, etc."
+                        value={formData.notes}
+                        onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Botón para regresar a la vista de ficha */}
@@ -1756,7 +2239,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                 <button
                   type="button"
                   onClick={() => setStep('preview')}
-                  className="px-5 py-2.5 rounded-xl bg-[#00b4a2] text-white font-bold text-xs flex items-center gap-1.5"
+                  className="px-5 py-2.5 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
                 >
                   <Eye className="w-4 h-4" />
                   <span>Ver Ficha Actualizada ➔</span>

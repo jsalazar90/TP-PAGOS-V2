@@ -21,7 +21,7 @@ export type PaymentMethodType =
   | 'efectivo_bs';
 
 export type PaymentCurrency = 'VES' | 'USD';
-export type ServiceCategory = 'hospedaje' | 'traslado' | 'vuelos' | 'gastos_apoyo';
+export type ServiceCategory = 'hospedaje' | 'traslado' | 'vuelos' | 'gastos_apoyo' | 'viaticos';
 
 export interface GuestItem {
   name: string;
@@ -76,6 +76,11 @@ export interface PaymentRequest {
   support_file_name?: string;
   receipt_file_url?: string;
   receipt_file_name?: string;
+  origin_bank?: string;
+  modification_requested?: boolean;
+  modification_reason?: string;
+  modification_requested_at?: string;
+  modification_requested_by?: string;
   created_by: string;
   creator_name?: string;
   created_at: string;
@@ -108,6 +113,10 @@ export interface CreatePaymentRequestInput {
   support_file?: File | null;
   status?: RequestStatus;
   is_urgent?: boolean;
+  modification_requested?: boolean;
+  modification_reason?: string;
+  modification_requested_at?: string;
+  modification_requested_by?: string;
 }
 
 export interface FilterState {
