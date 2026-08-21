@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentRequest } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { exportRequestsToCSV } from '../services/dataService';
@@ -14,7 +14,11 @@ import {
   Receipt,
   Hotel,
   Briefcase,
-  CheckCircle2
+  CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
+  ChevronsLeft,
+  ChevronsRight
 } from 'lucide-react';
 
 interface HistoryViewProps {
@@ -27,7 +31,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   onOpenDetails,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('all');
+  // Predeterminado el filtro de este mes
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month'>('month');
+
+  // Paginación
+  const [currentPage, setCurrentPage] = useState<number>(1);
+  const [pageSize, setPageSize] = useState<number>(10);
 
   const historyRequests = useMemo(() => {
     return requests.filter(r => r.status === 'realizado');
@@ -65,6 +74,20 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
   }, [historyRequests, dateFilter, searchQuery]);
 
+  // Reset page to 1 when filters or search change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [dateFilter, searchQuery, pageSize]);
+
+  // Cálculos de paginación
+  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
+  const startIndex = (currentPage - 1) * pageSize;
+  const endIndex = Math.min(startIndex + pageSize, filteredHistory.length);
+
+  const paginatedRequests = useMemo(() => {
+    return filteredHistory.slice(startIndex, startIndex + pageSize);
+  }, [filteredHistory, startIndex, pageSize]);
+
   const totalUSD = useMemo(() => {
     return filteredHistory.reduce((acc, r) => acc + (r.amount_usd || 0), 0);
   }, [filteredHistory]);
@@ -85,6 +108,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(
       val
     );
+
+  // Generar números de página visibles
+  const getPageNumbers = () => {
+    const pages: number[] = [];
+    const maxVisible = 5;
+    let start = Math.max(1, currentPage - 2);
+    let end = Math.min(totalPages, start + maxVisible - 1);
+
+    if (end - start + 1 < maxVisible) {
+      start = Math.max(1, end - maxVisible + 1);
+    }
+
+    for (let i = start; i <= end; i++) {
+      pages.push(i);
+    }
+    return pages;
+  };
 
   return (
     <div className="space-y-4 pb-20 md:pb-8">
@@ -207,7 +247,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       {/* History List */}
       {filteredHistory.length > 0 ? (
         <div className="space-y-2.5">
-          {filteredHistory.map((req) => {
+          {paginatedRequests.map((req) => {
             const category = req.category || 'hospedaje';
             return (
               <div
@@ -335,6 +375,85 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               </div>
             );
           })}
+
+          {/* Pagination Footer */}
+          <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row items-center justify-between gap-3 text-xs">
+            {/* Info & Page Size Selector */}
+            <div className="flex items-center gap-3 text-slate-600 font-medium flex-wrap justify-center sm:justify-start">
+              <span>
+                Mostrando <strong>{filteredHistory.length > 0 ? startIndex + 1 : 0}</strong> - <strong>{endIndex}</strong> de <strong>{filteredHistory.length}</strong> solicitudes
+              </span>
+              <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
+                <span className="text-slate-400">Mostrar por página:</span>
+                <select
+                  value={pageSize}
+                  onChange={(e) => setPageSize(Number(e.target.value))}
+                  className="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#00b4a2] cursor-pointer"
+                >
+                  <option value={5}>5</option>
+                  <option value={10}>10</option>
+                  <option value={15}>15</option>
+                  <option value={20}>20</option>
+                  <option value={50}>50</option>
+                </select>
+              </div>
+            </div>
+
+            {/* Pagination Buttons */}
+            {totalPages > 1 && (
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={() => setCurrentPage(1)}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                  title="Primera página"
+                >
+                  <ChevronsLeft className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setCurrentPage(prev => Math.max(1, prev - 1))}
+                  disabled={currentPage === 1}
+                  className="p-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                  title="Página anterior"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+
+                <div className="flex items-center gap-1 px-1">
+                  {getPageNumbers().map(pageNum => (
+                    <button
+                      key={pageNum}
+                      onClick={() => setCurrentPage(pageNum)}
+                      className={`min-w-[30px] h-[30px] rounded-xl font-bold text-xs transition-all ${
+                        currentPage === pageNum
+                          ? 'bg-emerald-600 text-white shadow-2xs'
+                          : 'bg-white text-slate-700 hover:bg-slate-100 border border-slate-200'
+                      }`}
+                    >
+                      {pageNum}
+                    </button>
+                  ))}
+                </div>
+
+                <button
+                  onClick={() => setCurrentPage(prev => Math.min(totalPages, prev + 1))}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                  title="Página siguiente"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
+                <button
+                  onClick={() => setCurrentPage(totalPages)}
+                  disabled={currentPage === totalPages}
+                  className="p-1.5 rounded-xl border border-slate-200 text-slate-600 hover:bg-slate-100 disabled:opacity-40 disabled:hover:bg-white transition-colors"
+                  title="Última página"
+                >
+                  <ChevronsRight className="w-4 h-4" />
+                </button>
+              </div>
+            )}
+          </div>
         </div>
       ) : (
         <div className="text-center py-14 px-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-2">
@@ -345,7 +464,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           <p className="text-xs text-slate-500 max-w-sm mx-auto">
             {searchQuery
               ? `No se encontraron pagos completados para "${searchQuery}".`
-              : 'Las solicitudes que marques como "Realizado" con su comprobante de pago se archivarán aquí automáticamente.'}
+              : 'No hay solicitudes liquidadas para el período seleccionado.'}
           </p>
         </div>
       )}
