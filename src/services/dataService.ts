@@ -144,22 +144,47 @@ export function normalizeBeneficiary(b: any): Beneficiary {
   };
 }
 
+const DELETED_BENEFICIARIES_KEY = 'jt_pagos_deleted_beneficiaries_v1';
+
+export function getDeletedBeneficiaryIds(): string[] {
+  try {
+    const stored = localStorage.getItem(DELETED_BENEFICIARIES_KEY);
+    return stored ? JSON.parse(stored) : [];
+  } catch (e) {
+    return [];
+  }
+}
+
+export function addDeletedBeneficiaryId(id: string) {
+  const deleted = getDeletedBeneficiaryIds();
+  if (!deleted.includes(id)) {
+    deleted.push(id);
+    localStorage.setItem(DELETED_BENEFICIARIES_KEY, JSON.stringify(deleted));
+  }
+}
+
+export function removeDeletedBeneficiaryId(id: string) {
+  const deleted = getDeletedBeneficiaryIds();
+  const filtered = deleted.filter(dId => dId !== id);
+  localStorage.setItem(DELETED_BENEFICIARIES_KEY, JSON.stringify(filtered));
+}
+
 // Initial local storage setup for Beneficiaries
 function getLocalBeneficiaries(): Beneficiary[] {
+  const deletedIds = getDeletedBeneficiaryIds();
   const stored = localStorage.getItem(BENEFICIARIES_STORAGE_KEY);
-  if (!stored) {
+  if (stored === null) {
     localStorage.setItem(BENEFICIARIES_STORAGE_KEY, JSON.stringify(INITIAL_BENEFICIARIES));
-    return INITIAL_BENEFICIARIES.map(normalizeBeneficiary);
+    return INITIAL_BENEFICIARIES.map(normalizeBeneficiary).filter(b => !deletedIds.includes(b.id));
   }
   try {
     const parsed = JSON.parse(stored);
-    if (!Array.isArray(parsed) || parsed.length === 0) {
-      localStorage.setItem(BENEFICIARIES_STORAGE_KEY, JSON.stringify(INITIAL_BENEFICIARIES));
-      return INITIAL_BENEFICIARIES.map(normalizeBeneficiary);
+    if (!Array.isArray(parsed)) {
+      return [];
     }
-    return parsed.map(normalizeBeneficiary);
+    return parsed.map(normalizeBeneficiary).filter(b => !deletedIds.includes(b.id));
   } catch (e) {
-    return INITIAL_BENEFICIARIES.map(normalizeBeneficiary);
+    return [];
   }
 }
 
@@ -703,6 +728,7 @@ export async function updateUserPassword(
 // ==========================================
 
 export async function fetchBeneficiaries(): Promise<Beneficiary[]> {
+  const deletedIds = getDeletedBeneficiaryIds();
   const localList = getLocalBeneficiaries();
 
   if (isSupabaseConfigured && supabase) {
@@ -717,8 +743,10 @@ export async function fetchBeneficiaries(): Promise<Beneficiary[]> {
         return localList;
       }
 
-      if (data && data.length > 0) {
-        const enriched: Beneficiary[] = data.map(normalizeBeneficiary);
+      if (data && Array.isArray(data)) {
+        const enriched: Beneficiary[] = data
+          .map(normalizeBeneficiary)
+          .filter(b => !deletedIds.includes(b.id));
         setLocalBeneficiaries(enriched);
         return enriched;
       }
@@ -739,6 +767,8 @@ export async function createBeneficiary(
     typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : `ben-${Date.now()}`;
+
+  removeDeletedBeneficiaryId(generatedId);
 
   const newBeneficiary: Beneficiary = {
     id: generatedId,
@@ -838,6 +868,7 @@ export async function updateBeneficiary(
 }
 
 export async function deleteBeneficiary(id: string): Promise<void> {
+  addDeletedBeneficiaryId(id);
   const local = getLocalBeneficiaries();
   const filtered = local.filter(b => b.id !== id);
   setLocalBeneficiaries(filtered);
