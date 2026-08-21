@@ -1,22 +1,30 @@
 import { useState, useEffect } from 'react';
-import { PaymentRequest, UserProfile, RequestStatus, CreatePaymentRequestInput } from './types';
+import { PaymentRequest, UserProfile, RequestStatus, CreatePaymentRequestInput, Beneficiary } from './types';
 import {
   fetchPaymentRequests,
   createPaymentRequest,
   updatePaymentRequest,
   deletePaymentRequest,
   updateRequestStatus,
+  updateRequestSupportFile,
+  updateRequestReceiptFile,
   requestModification,
   cancelModificationRequest,
   fetchUsers,
   createNewUser,
   toggleUserActiveStatus,
-  updateUserPassword
+  updateUserPassword,
+  fetchBeneficiaries,
+  createBeneficiary,
+  updateBeneficiary,
+  deleteBeneficiary
 } from './services/dataService';
 import { isSupabaseConfigured, supabase } from './services/supabase';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { HistoryView } from './components/HistoryView';
+import { BeneficiariesView } from './components/BeneficiariesView';
+import { BeneficiaryModal } from './components/BeneficiaryModal';
 import { UserManagementView } from './components/UserManagementView';
 import { LoginView } from './components/LoginView';
 import { NewRequestModal } from './components/NewRequestModal';
@@ -42,9 +50,12 @@ export function App() {
     return null;
   });
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
+  const [beneficiariesList, setBeneficiariesList] = useState<Beneficiary[]>([]);
   const [requests, setRequests] = useState<PaymentRequest[]>([]);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'beneficiaries' | 'users'>('dashboard');
+  const [isBeneficiaryModalOpen, setIsBeneficiaryModalOpen] = useState(false);
+  const [editingBeneficiary, setEditingBeneficiary] = useState<Beneficiary | null>(null);
 
   // Modals
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
@@ -170,6 +181,15 @@ export function App() {
             }
           }
         )
+        .on(
+          'postgres_changes',
+          { event: '*', schema: 'public', table: 'beneficiaries' },
+          () => {
+            fetchBeneficiaries().then(bens => {
+              setBeneficiariesList(bens);
+            });
+          }
+        )
         .subscribe();
     }
 
@@ -178,6 +198,9 @@ export function App() {
       if (document.visibilityState === 'visible' && currentUser) {
         fetchPaymentRequests(currentUser).then(data => {
           setRequests(data);
+        });
+        fetchBeneficiaries().then(bens => {
+          setBeneficiariesList(bens);
         });
       }
     };
@@ -190,6 +213,9 @@ export function App() {
       if (document.visibilityState === 'visible' && currentUser) {
         fetchPaymentRequests(currentUser).then(data => {
           setRequests(data);
+        });
+        fetchBeneficiaries().then(bens => {
+          setBeneficiariesList(bens);
         });
       }
     }, 20000);
@@ -204,16 +230,57 @@ export function App() {
     };
   }, [currentUser]);
 
-  // Fetch payment requests when currentUser changes
+  // Fetch payment requests and beneficiaries when currentUser changes
   const loadRequests = async (user: UserProfile) => {
     try {
       setLoading(true);
-      const data = await fetchPaymentRequests(user);
+      const [data, bens] = await Promise.all([
+        fetchPaymentRequests(user),
+        fetchBeneficiaries()
+      ]);
       setRequests(data);
+      setBeneficiariesList(bens);
     } catch (err: any) {
       showToast(`Error al cargar solicitudes: ${err.message}`, 'error');
     } finally {
       setLoading(false);
+    }
+  };
+
+  const handleOpenCreateBeneficiary = () => {
+    setEditingBeneficiary(null);
+    setIsBeneficiaryModalOpen(true);
+  };
+
+  const handleOpenEditBeneficiary = (b: Beneficiary) => {
+    setEditingBeneficiary(b);
+    setIsBeneficiaryModalOpen(true);
+  };
+
+  const handleSaveBeneficiary = async (data: Omit<Beneficiary, 'id' | 'created_at' | 'updated_at'>) => {
+    try {
+      if (editingBeneficiary) {
+        const updated = await updateBeneficiary(editingBeneficiary.id, data);
+        setBeneficiariesList(prev => prev.map(b => b.id === editingBeneficiary.id ? updated : b));
+        showToast(`Beneficiario "${updated.name}" actualizado con éxito`, 'success');
+      } else {
+        const created = await createBeneficiary(data);
+        setBeneficiariesList(prev => [created, ...prev]);
+        showToast(`Beneficiario "${created.name}" registrado con éxito`, 'success');
+      }
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
+  const handleDeleteBeneficiary = async (id: string) => {
+    try {
+      await deleteBeneficiary(id);
+      setBeneficiariesList(prev => prev.filter(b => b.id !== id));
+      showToast('Beneficiario eliminado del directorio', 'success');
+    } catch (err: any) {
+      showToast(`Error al eliminar: ${err.message}`, 'error');
     }
   };
 
@@ -358,6 +425,38 @@ export function App() {
     }
   };
 
+  // Update Support File handler
+  const handleUpdateSupportFile = async (requestId: string, file: File) => {
+    if (!currentUser) return;
+    try {
+      const updated = await updateRequestSupportFile(requestId, file, currentUser);
+      setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
+      if (selectedRequestForDetail?.id === requestId) {
+        setSelectedRequestForDetail(updated);
+      }
+      showToast(`Soporte de pago actualizado con éxito`, 'success');
+    } catch (err: any) {
+      showToast(`Error al actualizar soporte: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
+  // Update Receipt File handler
+  const handleUpdateReceiptFile = async (requestId: string, file: File) => {
+    if (!currentUser) return;
+    try {
+      const updated = await updateRequestReceiptFile(requestId, file, currentUser);
+      setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
+      if (selectedRequestForDetail?.id === requestId) {
+        setSelectedRequestForDetail(updated);
+      }
+      showToast(`Comprobante de pago actualizado con éxito`, 'success');
+    } catch (err: any) {
+      showToast(`Error al actualizar comprobante: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
   if (!currentUser) {
     return <LoginView onLoginSuccess={handleLoginSuccess} availableUsers={usersList} />;
   }
@@ -410,6 +509,7 @@ export function App() {
                 onOpenDetails={(req) => setSelectedRequestForDetail(req)}
                 onOpenStatusModal={(req) => setSelectedRequestForStatus(req)}
                 onOpenNewRequest={handleOpenNewRequest}
+                onOpenBeneficiaries={() => setActiveTab('beneficiaries')}
                 onEditRequest={handleOpenEditRequest}
                 onDeleteRequest={handleDeleteRequest}
                 onRequestModification={handleRequestModification}
@@ -422,6 +522,15 @@ export function App() {
               <HistoryView
                 requests={requests}
                 onOpenDetails={(req) => setSelectedRequestForDetail(req)}
+              />
+            )}
+
+            {activeTab === 'beneficiaries' && (
+              <BeneficiariesView
+                beneficiaries={beneficiariesList}
+                onOpenCreate={handleOpenCreateBeneficiary}
+                onOpenEdit={handleOpenEditBeneficiary}
+                onDelete={handleDeleteBeneficiary}
               />
             )}
 
@@ -462,6 +571,7 @@ export function App() {
       <NewRequestModal
         isOpen={isNewRequestOpen}
         editingRequest={editingRequest}
+        beneficiaries={beneficiariesList}
         onClose={() => {
           setIsNewRequestOpen(false);
           setEditingRequest(null);
@@ -484,6 +594,8 @@ export function App() {
         onEditRequest={handleOpenEditRequest}
         onRequestModification={handleRequestModification}
         onCancelModification={handleCancelModification}
+        onUpdateSupportFile={handleUpdateSupportFile}
+        onUpdateReceiptFile={handleUpdateReceiptFile}
       />
 
       <ModificationRequestModal
@@ -491,6 +603,16 @@ export function App() {
         isOpen={Boolean(modificationModalRequest)}
         onClose={() => setModificationModalRequest(null)}
         onConfirm={handleConfirmModification}
+      />
+
+      <BeneficiaryModal
+        isOpen={isBeneficiaryModalOpen}
+        editingBeneficiary={editingBeneficiary}
+        onClose={() => {
+          setIsBeneficiaryModalOpen(false);
+          setEditingBeneficiary(null);
+        }}
+        onSave={handleSaveBeneficiary}
       />
     </div>
   );

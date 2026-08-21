@@ -1,6 +1,7 @@
-import React, { useState } from 'react';
+import React, { useState, useRef } from 'react';
 import { PaymentRequest, UserProfile } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { FilePreviewModal } from './FilePreviewModal';
 import {
   X,
   Building2,
@@ -10,7 +11,6 @@ import {
   Landmark,
   FileText,
   FileCheck,
-  ArrowUpRight,
   Copy,
   Check,
   Car,
@@ -22,7 +22,9 @@ import {
   AlertTriangle,
   Pencil,
   Edit3,
-  Clock
+  Clock,
+  Upload,
+  Eye
 } from 'lucide-react';
 
 interface RequestDetailModalProps {
@@ -33,6 +35,8 @@ interface RequestDetailModalProps {
   onEditRequest?: (request: PaymentRequest) => void;
   onRequestModification?: (request: PaymentRequest) => void;
   onCancelModification?: (request: PaymentRequest) => void;
+  onUpdateSupportFile?: (requestId: string, file: File) => Promise<void>;
+  onUpdateReceiptFile?: (requestId: string, file: File) => Promise<void>;
 }
 
 export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
@@ -43,11 +47,88 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
   onEditRequest,
   onRequestModification,
   onCancelModification,
+  onUpdateSupportFile,
+  onUpdateReceiptFile,
 }) => {
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedLoc, setCopiedLoc] = useState(false);
+  const [isUpdatingFile, setIsUpdatingFile] = useState(false);
+
+  // Preview Modal State
+  const [previewState, setPreviewState] = useState<{
+    isOpen: boolean;
+    file: File | null;
+    fileUrl: string | null;
+    fileName: string;
+    title: string;
+    subtitle?: string;
+    mode: 'confirm' | 'view';
+    targetType: 'support' | 'receipt';
+  }>({
+    isOpen: false,
+    file: null,
+    fileUrl: null,
+    fileName: '',
+    title: '',
+    mode: 'view',
+    targetType: 'support'
+  });
+
+  const supportInputRef = useRef<HTMLInputElement>(null);
+  const receiptInputRef = useRef<HTMLInputElement>(null);
 
   if (!isOpen || !request) return null;
+
+  const handleSelectNewSupportFile = (file: File | null) => {
+    if (!file) return;
+    setPreviewState({
+      isOpen: true,
+      file,
+      fileUrl: null,
+      fileName: file.name,
+      title: 'Verificar Nuevo Soporte antes de Cargar',
+      subtitle: 'Revisa que la imagen o documento del soporte sea el correcto antes de reemplazar el actual.',
+      mode: 'confirm',
+      targetType: 'support'
+    });
+  };
+
+  const handleSelectNewReceiptFile = (file: File | null) => {
+    if (!file) return;
+    setPreviewState({
+      isOpen: true,
+      file,
+      fileUrl: null,
+      fileName: file.name,
+      title: 'Verificar Nuevo Comprobante antes de Cargar',
+      subtitle: 'Revisa que los datos y referencia de pago sean correctos antes de confirmar.',
+      mode: 'confirm',
+      targetType: 'receipt'
+    });
+  };
+
+  const handleConfirmUpload = async () => {
+    if (!previewState.file || !request) return;
+    try {
+      setIsUpdatingFile(true);
+      if (previewState.targetType === 'support' && onUpdateSupportFile) {
+        await onUpdateSupportFile(request.id, previewState.file);
+      } else if (previewState.targetType === 'receipt' && onUpdateReceiptFile) {
+        await onUpdateReceiptFile(request.id, previewState.file);
+      }
+      setPreviewState(prev => ({ ...prev, isOpen: false, file: null }));
+    } catch (e) {
+      console.error('Error al actualizar archivo:', e);
+    } finally {
+      setIsUpdatingFile(false);
+    }
+  };
+
+  const handleCancelPreview = () => {
+    setPreviewState(prev => ({ ...prev, isOpen: false, file: null }));
+    if (supportInputRef.current) supportInputRef.current.value = '';
+    if (receiptInputRef.current) receiptInputRef.current.value = '';
+  };
 
   const formatUSD = (val: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
@@ -607,40 +688,178 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             </div>
           </div>
 
-          {/* Attachments */}
-          <div className="space-y-1.5 pt-1">
-            {request.support_file_url && (
-              <a
-                href={request.support_file_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 transition-colors"
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <FileText className="w-4 h-4 text-[#00b4a2] shrink-0" />
-                  <span className="truncate font-semibold">
-                    {request.support_file_name || 'Soporte de Reserva'}
-                  </span>
+          {/* Attachments & Files Section */}
+          <div className="space-y-2 pt-1 border-t border-slate-200/80">
+            <h4 className="font-bold text-slate-900 flex items-center justify-between text-xs">
+              <span className="flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5 text-[#00b4a2]" />
+                <span>Documentos y Soportes Adjuntos</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-normal">Haz clic para vista previa</span>
+            </h4>
+
+            {/* Hidden Inputs for File Updating */}
+            <input
+              ref={supportInputRef}
+              type="file"
+              accept=".pdf,image/*"
+              onChange={(e) => {
+                handleSelectNewSupportFile(e.target.files?.[0] || null);
+                e.target.value = '';
+              }}
+              className="hidden"
+            />
+            <input
+              ref={receiptInputRef}
+              type="file"
+              accept=".pdf,image/*"
+              onChange={(e) => {
+                handleSelectNewReceiptFile(e.target.files?.[0] || null);
+                e.target.value = '';
+              }}
+              className="hidden"
+            />
+
+            {/* Support File Card */}
+            {request.support_file_url ? (
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-slate-50 hover:bg-slate-100/90 text-slate-700 border border-slate-200 transition-colors shadow-2xs">
+                <div
+                  className="flex items-center gap-2.5 truncate min-w-0 cursor-pointer flex-1"
+                  onClick={() =>
+                    setPreviewState({
+                      isOpen: true,
+                      file: null,
+                      fileUrl: request.support_file_url || null,
+                      fileName: request.support_file_name || 'Soporte de Reserva',
+                      title: 'Soporte de Pago / Reserva',
+                      mode: 'view',
+                      targetType: 'support'
+                    })
+                  }
+                >
+                  <div className="w-8 h-8 rounded-lg bg-teal-100/80 text-[#009b8b] flex items-center justify-center shrink-0">
+                    <FileCheck className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="truncate font-bold text-xs text-slate-800 block">
+                      {request.support_file_name || 'Soporte de Reserva'}
+                    </span>
+                    <span className="text-[10px] text-slate-400 font-medium">Soporte adjunto a la solicitud</span>
+                  </div>
                 </div>
-                <ArrowUpRight className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-              </a>
+
+                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewState({
+                        isOpen: true,
+                        file: null,
+                        fileUrl: request.support_file_url || null,
+                        fileName: request.support_file_name || 'Soporte de Reserva',
+                        title: 'Soporte de Pago / Reserva',
+                        mode: 'view',
+                        targetType: 'support'
+                      })
+                    }
+                    className="p-1.5 rounded-lg bg-white hover:bg-slate-200 text-slate-700 border border-slate-200 flex items-center gap-1 text-[11px] font-bold active-press shadow-2xs"
+                    title="Ver vista previa completa"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-[#00b4a2]" />
+                    <span className="hidden sm:inline">Ver</span>
+                  </button>
+
+                  {(currentUser?.role === 'admin' || currentUser?.id === request.created_by) && (
+                    <button
+                      type="button"
+                      onClick={() => supportInputRef.current?.click()}
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 text-[11px] font-bold active-press shadow-2xs transition-colors"
+                      title="Cambiar o reemplazar el soporte subido"
+                    >
+                      <Pencil className="w-3 h-3 text-amber-700" />
+                      <span>Modificar Soporte</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            ) : (
+              <div className="p-2.5 rounded-xl bg-slate-50 border border-dashed border-slate-300 flex items-center justify-between text-xs">
+                <span className="text-slate-500 text-[11px]">No se adjuntó soporte al crear la solicitud</span>
+                {(currentUser?.role === 'admin' || currentUser?.id === request.created_by) && (
+                  <button
+                    type="button"
+                    onClick={() => supportInputRef.current?.click()}
+                    className="px-2.5 py-1 bg-white hover:bg-teal-50 text-[#009b8b] rounded-lg font-bold text-[11px] border border-teal-200 flex items-center gap-1 active-press shadow-2xs"
+                  >
+                    <Upload className="w-3 h-3 text-[#00b4a2]" />
+                    <span>Adjuntar Soporte</span>
+                  </button>
+                )}
+              </div>
             )}
 
+            {/* Receipt / Comprobante File Card */}
             {request.receipt_file_url && (
-              <a
-                href={request.receipt_file_url}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="w-full flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 border border-emerald-200 transition-colors"
-              >
-                <div className="flex items-center gap-2 truncate">
-                  <FileCheck className="w-4 h-4 text-emerald-600 shrink-0" />
-                  <span className="truncate font-bold">
-                    {request.receipt_file_name || 'Comprobante de Pago'}
-                  </span>
+              <div className="flex items-center justify-between p-2.5 rounded-xl bg-emerald-50 hover:bg-emerald-100/80 text-emerald-900 border border-emerald-200 transition-colors shadow-2xs">
+                <div
+                  className="flex items-center gap-2.5 truncate min-w-0 cursor-pointer flex-1"
+                  onClick={() =>
+                    setPreviewState({
+                      isOpen: true,
+                      file: null,
+                      fileUrl: request.receipt_file_url || null,
+                      fileName: request.receipt_file_name || 'Comprobante de Pago',
+                      title: 'Comprobante de Pago (Realizado)',
+                      mode: 'view',
+                      targetType: 'receipt'
+                    })
+                  }
+                >
+                  <div className="w-8 h-8 rounded-lg bg-emerald-200 text-emerald-800 flex items-center justify-center shrink-0">
+                    <FileCheck className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <span className="truncate font-bold text-xs text-emerald-950 block">
+                      {request.receipt_file_name || 'Comprobante de Pago'}
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-medium">Comprobante de liquidación bancaria</span>
+                  </div>
                 </div>
-                <ArrowUpRight className="w-3.5 h-3.5 text-emerald-600 shrink-0" />
-              </a>
+
+                <div className="flex items-center gap-1.5 shrink-0 ml-2">
+                  <button
+                    type="button"
+                    onClick={() =>
+                      setPreviewState({
+                        isOpen: true,
+                        file: null,
+                        fileUrl: request.receipt_file_url || null,
+                        fileName: request.receipt_file_name || 'Comprobante de Pago',
+                        title: 'Comprobante de Pago (Realizado)',
+                        mode: 'view',
+                        targetType: 'receipt'
+                      })
+                    }
+                    className="p-1.5 rounded-lg bg-white hover:bg-emerald-100 text-emerald-900 border border-emerald-200 flex items-center gap-1 text-[11px] font-bold active-press shadow-2xs"
+                    title="Ver comprobante"
+                  >
+                    <Eye className="w-3.5 h-3.5 text-emerald-600" />
+                    <span className="hidden sm:inline">Ver</span>
+                  </button>
+
+                  {currentUser?.role === 'admin' && (
+                    <button
+                      type="button"
+                      onClick={() => receiptInputRef.current?.click()}
+                      className="px-2.5 py-1.5 rounded-lg bg-amber-50 hover:bg-amber-100 text-amber-900 border border-amber-300 flex items-center gap-1 text-[11px] font-bold active-press shadow-2xs transition-colors"
+                      title="Cambiar el comprobante de pago"
+                    >
+                      <Pencil className="w-3 h-3 text-amber-700" />
+                      <span>Modificar Comprobante</span>
+                    </button>
+                  )}
+                </div>
+              </div>
             )}
           </div>
         </div>
@@ -687,6 +906,29 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             </button>
           )}
         </div>
+
+        {/* Reusable File Preview Modal */}
+        <FilePreviewModal
+          isOpen={previewState.isOpen}
+          file={previewState.file}
+          fileUrl={previewState.fileUrl}
+          fileName={previewState.fileName}
+          title={previewState.title}
+          subtitle={previewState.subtitle}
+          mode={previewState.mode}
+          confirmText={
+            previewState.targetType === 'support' ? 'Cargar Soporte' : 'Cargar Comprobante'
+          }
+          cancelText={previewState.mode === 'confirm' ? 'Cancelar' : 'Cerrar'}
+          isLoading={isUpdatingFile}
+          onConfirm={handleConfirmUpload}
+          onCancel={handleCancelPreview}
+          onModify={
+            previewState.targetType === 'support'
+              ? () => supportInputRef.current?.click()
+              : () => receiptInputRef.current?.click()
+          }
+        />
       </div>
     </div>
   );

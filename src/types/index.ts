@@ -46,6 +46,16 @@ export interface BankDetails {
   notes?: string;
 }
 
+export interface Beneficiary {
+  id: string;
+  name: string;
+  rif?: string;
+  category?: ServiceCategory;
+  bank_details: BankDetails;
+  created_at?: string;
+  updated_at?: string;
+}
+
 export interface PaymentRequest {
   id: string;
   request_number: number;

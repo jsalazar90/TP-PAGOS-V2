@@ -13,7 +13,8 @@ import {
   Clock,
   Wallet,
   Download,
-  X
+  X,
+  Building2
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -22,6 +23,7 @@ interface DashboardProps {
   onOpenDetails: (request: PaymentRequest) => void;
   onOpenStatusModal: (request: PaymentRequest) => void;
   onOpenNewRequest: () => void;
+  onOpenBeneficiaries?: () => void;
   onRefresh: () => void;
   onEditRequest?: (request: PaymentRequest) => void;
   onDeleteRequest?: (request: PaymentRequest) => void;
@@ -35,6 +37,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onOpenDetails,
   onOpenStatusModal,
   onOpenNewRequest,
+  onOpenBeneficiaries,
   onRefresh,
   onEditRequest,
   onDeleteRequest,
@@ -241,6 +244,16 @@ export const Dashboard: React.FC<DashboardProps> = ({
           >
             <RefreshCw className="w-4 h-4" />
           </button>
+          {onOpenBeneficiaries && (
+            <button
+              onClick={onOpenBeneficiaries}
+              title="Directorio y base de datos de beneficiarios"
+              className="p-2 sm:px-3 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 active-press transition-colors text-xs font-bold flex items-center gap-1.5"
+            >
+              <Building2 className="w-3.5 h-3.5 text-[#00b4a2]" />
+              <span className="hidden sm:inline">Beneficiarios</span>
+            </button>
+          )}
           <button
             onClick={onOpenNewRequest}
             className="active-press flex-1 sm:flex-initial flex items-center justify-center gap-1.5 bg-[#00b4a2] hover:bg-[#009b8b] text-white px-4 py-2 rounded-xl font-bold text-xs shadow-2xs"

@@ -1,6 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { PaymentRequest, RequestStatus } from '../types';
 import { StatusBadge } from './StatusBadge';
+import { FilePreviewModal } from './FilePreviewModal';
 import {
   X,
   Upload,
@@ -10,7 +11,9 @@ import {
   ShieldAlert,
   Clipboard,
   Trash2,
-  Landmark
+  Landmark,
+  Eye,
+  Pencil
 } from 'lucide-react';
 
 interface StatusChangeModalProps {
@@ -45,10 +48,14 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
 }) => {
   const [selectedStatus, setSelectedStatus] = useState<RequestStatus>(request?.status || 'en_proceso');
   const [receiptFile, setReceiptFile] = useState<File | null>(null);
+  const [pendingReceiptFile, setPendingReceiptFile] = useState<File | null>(null);
+  const [isPreviewOpen, setIsPreviewOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'confirm' | 'view'>('confirm');
   const [originBank, setOriginBank] = useState<string>(request?.origin_bank || '');
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   // Sync selected status and origin bank when request or modal opens
   useEffect(() => {
@@ -56,10 +63,44 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
       setSelectedStatus(request.status);
       setOriginBank(request.origin_bank || '');
       setReceiptFile(null);
+      setPendingReceiptFile(null);
+      setIsPreviewOpen(false);
       setPreviewUrl(null);
       setErrorMsg('');
     }
   }, [request, isOpen]);
+
+  const handleReceiptSelected = (file: File | null) => {
+    if (!file) return;
+    setPendingReceiptFile(file);
+    setPreviewMode('confirm');
+    setSelectedStatus('realizado');
+    setErrorMsg('');
+    setIsPreviewOpen(true);
+  };
+
+  const handleConfirmReceipt = () => {
+    if (pendingReceiptFile) {
+      setReceiptFile(pendingReceiptFile);
+      setPendingReceiptFile(null);
+    }
+    setIsPreviewOpen(false);
+  };
+
+  const handleCancelReceipt = () => {
+    setPendingReceiptFile(null);
+    setIsPreviewOpen(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleOpenViewReceipt = () => {
+    setPreviewMode('view');
+    setIsPreviewOpen(true);
+  };
+
+  const handleTriggerModify = () => {
+    fileInputRef.current?.click();
+  };
 
   // Update preview URL when receiptFile changes
   useEffect(() => {
@@ -84,9 +125,7 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
         const blob = items[i].getAsFile();
         if (blob) {
           const file = new File([blob], `comprobante_${Date.now()}.png`, { type: blob.type || 'image/png' });
-          setReceiptFile(file);
-          setSelectedStatus('realizado');
-          setErrorMsg('');
+          handleReceiptSelected(file);
           e.preventDefault();
           break;
         }
@@ -106,9 +145,7 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
         if (imageType) {
           const blob = await item.getType(imageType);
           const file = new File([blob], `comprobante_${Date.now()}.png`, { type: imageType });
-          setReceiptFile(file);
-          setSelectedStatus('realizado');
-          setErrorMsg('');
+          handleReceiptSelected(file);
           return;
         }
       }
@@ -285,16 +322,25 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
 
             {/* Action buttons: Subir Archivo + Pegar Imagen */}
             <div className="flex flex-wrap items-center gap-2 pt-1">
-              <label className="active-press cursor-pointer flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-2xs">
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept=".pdf,image/*"
+                onChange={(e) => {
+                  handleReceiptSelected(e.target.files?.[0] || null);
+                  e.target.value = '';
+                }}
+                className="hidden"
+              />
+
+              <button
+                type="button"
+                onClick={handleTriggerModify}
+                className="active-press flex items-center gap-1.5 px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-bold shadow-2xs transition-colors"
+              >
                 <Upload className="w-3.5 h-3.5" />
-                <span>Adjuntar Archivo</span>
-                <input
-                  type="file"
-                  accept=".pdf,image/*"
-                  onChange={(e) => setReceiptFile(e.target.files?.[0] || null)}
-                  className="hidden"
-                />
-              </label>
+                <span>{receiptFile || request.receipt_file_url ? 'Cambiar Archivo' : 'Adjuntar Archivo'}</span>
+              </button>
 
               <button
                 type="button"
@@ -302,43 +348,92 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
                 className="active-press flex items-center gap-1.5 px-3 py-1.5 bg-white hover:bg-emerald-100 text-emerald-800 border border-emerald-300 rounded-lg text-xs font-bold shadow-2xs transition-colors"
               >
                 <Clipboard className="w-3.5 h-3.5 text-emerald-600" />
-                <span>📋 Pegar Imagen (Portapapeles)</span>
+                <span>📋 Pegar Imagen (Ctrl + V)</span>
               </button>
             </div>
 
             {/* Preview Thumbnail or File Status */}
             {receiptFile ? (
-              <div className="flex items-center justify-between p-2 bg-white rounded-lg border border-emerald-300">
-                <div className="flex items-center gap-2 truncate">
+              <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-emerald-300 shadow-2xs">
+                <div className="flex items-center gap-2 truncate min-w-0">
                   {previewUrl ? (
                     <img
                       src={previewUrl}
                       alt="Vista previa del comprobante"
-                      className="w-10 h-10 object-cover rounded-md border border-slate-200 shrink-0"
+                      className="w-10 h-10 object-cover rounded-lg border border-slate-200 shrink-0 cursor-pointer hover:opacity-80 transition-opacity"
+                      onClick={handleOpenViewReceipt}
                     />
                   ) : (
-                    <FileCheck className="w-5 h-5 text-emerald-600 shrink-0" />
+                    <FileCheck className="w-6 h-6 text-emerald-600 shrink-0" />
                   )}
-                  <div className="truncate">
-                    <span className="font-bold text-slate-800 block text-[11px] truncate">{receiptFile.name}</span>
+                  <div className="truncate min-w-0">
+                    <span className="font-bold text-slate-800 block text-xs truncate">{receiptFile.name}</span>
                     <span className="text-[10px] text-slate-400 font-mono">
-                      {(receiptFile.size / 1024).toFixed(1)} KB
+                      {(receiptFile.size / 1024).toFixed(1)} KB • Listo para guardar
                     </span>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => setReceiptFile(null)}
-                  title="Quitar archivo"
-                  className="p-1 text-rose-500 hover:bg-rose-50 rounded-md transition-colors shrink-0"
-                >
-                  <Trash2 className="w-4 h-4" />
-                </button>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleOpenViewReceipt}
+                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded-lg font-bold text-[11px] border border-emerald-200 flex items-center gap-1 active-press"
+                  >
+                    <Eye className="w-3 h-3 text-emerald-600" />
+                    <span>Ver</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTriggerModify}
+                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg font-bold text-[11px] border border-amber-300 flex items-center gap-1 active-press"
+                  >
+                    <Pencil className="w-3 h-3 text-amber-700" />
+                    <span>Modificar</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => setReceiptFile(null)}
+                    title="Quitar archivo"
+                    className="p-1 text-rose-500 hover:bg-rose-50 rounded-lg transition-colors shrink-0"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
               </div>
             ) : request.receipt_file_url ? (
-              <div className="text-[11px] text-emerald-900 font-medium flex items-center gap-1">
-                <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
-                <span>La solicitud ya posee un comprobante adjunto. Puedes reemplazarlo subiendo o pegando uno nuevo.</span>
+              <div className="flex items-center justify-between p-2.5 bg-white rounded-xl border border-emerald-300 shadow-2xs">
+                <div className="flex items-center gap-2 truncate min-w-0">
+                  <FileCheck className="w-6 h-6 text-emerald-600 shrink-0" />
+                  <div className="truncate min-w-0">
+                    <span className="font-bold text-slate-800 block text-xs truncate">
+                      {request.receipt_file_name || 'Comprobante Registrado'}
+                    </span>
+                    <span className="text-[10px] text-emerald-700 font-semibold">Comprobante guardado previamente</span>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleOpenViewReceipt}
+                    className="px-2 py-1 bg-emerald-50 hover:bg-emerald-100 text-emerald-900 rounded-lg font-bold text-[11px] border border-emerald-200 flex items-center gap-1 active-press"
+                  >
+                    <Eye className="w-3 h-3 text-emerald-600" />
+                    <span>Ver</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={handleTriggerModify}
+                    className="px-2 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg font-bold text-[11px] border border-amber-300 flex items-center gap-1 active-press"
+                  >
+                    <Pencil className="w-3 h-3 text-amber-700" />
+                    <span>Modificar</span>
+                  </button>
+                </div>
               </div>
             ) : null}
           </div>
@@ -362,6 +457,35 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
             {loading ? 'Actualizando...' : 'Guardar Cambios'}
           </button>
         </div>
+
+        {/* File Preview Modal for Receipt */}
+        <FilePreviewModal
+          isOpen={isPreviewOpen}
+          file={pendingReceiptFile || receiptFile}
+          fileUrl={!pendingReceiptFile && !receiptFile ? request.receipt_file_url : null}
+          fileName={
+            pendingReceiptFile?.name ||
+            receiptFile?.name ||
+            request.receipt_file_name ||
+            'comprobante_pago'
+          }
+          title={
+            previewMode === 'confirm'
+              ? 'Verificar Comprobante antes de Cargar'
+              : 'Comprobante de Pago'
+          }
+          subtitle={
+            previewMode === 'confirm'
+              ? 'Verifica que los datos del pago y número de referencia sean correctos antes de confirmar.'
+              : undefined
+          }
+          mode={previewMode}
+          confirmText="Cargar Comprobante"
+          cancelText={previewMode === 'confirm' ? 'Cancelar' : 'Cerrar'}
+          onConfirm={handleConfirmReceipt}
+          onCancel={handleCancelReceipt}
+          onModify={handleTriggerModify}
+        />
       </div>
     </div>
   );

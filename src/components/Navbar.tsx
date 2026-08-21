@@ -11,14 +11,15 @@ import {
   LayoutDashboard,
   Bell,
   BellRing,
-  BellOff
+  BellOff,
+  Building2
 } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 
 interface NavbarProps {
   currentUser: UserProfile;
-  activeTab: 'dashboard' | 'history' | 'users';
-  setActiveTab: (tab: 'dashboard' | 'history' | 'users') => void;
+  activeTab: 'dashboard' | 'history' | 'beneficiaries' | 'users';
+  setActiveTab: (tab: 'dashboard' | 'history' | 'beneficiaries' | 'users') => void;
   onOpenNewRequest: () => void;
   onLogout: () => void;
 }
@@ -97,6 +98,18 @@ export const Navbar: React.FC<NavbarProps> = ({
             >
               <History className="w-3.5 h-3.5" />
               <span>Historial (Archivo)</span>
+            </button>
+
+            <button
+              onClick={() => setActiveTab('beneficiaries')}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-bold transition-all ${
+                activeTab === 'beneficiaries'
+                  ? 'bg-white text-[#00b4a2] shadow-xs'
+                  : 'text-slate-600 hover:text-slate-900 hover:bg-slate-200/60'
+              }`}
+            >
+              <Building2 className="w-3.5 h-3.5" />
+              <span>Beneficiarios</span>
             </button>
 
             {currentUser.role === 'admin' && (
@@ -203,6 +216,16 @@ export const Navbar: React.FC<NavbarProps> = ({
         >
           <History className="w-4 h-4" />
           <span>Historial</span>
+        </button>
+
+        <button
+          onClick={() => setActiveTab('beneficiaries')}
+          className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold transition-colors ${
+            activeTab === 'beneficiaries' ? 'text-[#00b4a2] bg-teal-50/80' : 'text-slate-500 hover:text-slate-800'
+          }`}
+        >
+          <Building2 className="w-4 h-4" />
+          <span>Beneficiarios</span>
         </button>
 
         {currentUser.role === 'admin' && (

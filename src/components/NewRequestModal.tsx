@@ -1,12 +1,15 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import {
   CreatePaymentRequestInput,
   PaymentCurrency,
   PaymentMethodType,
   PaymentRequest,
   ServiceCategory,
-  GuestItem
+  GuestItem,
+  Beneficiary
 } from '../types';
+import { fetchBeneficiaries } from '../services/dataService';
+import { FilePreviewModal } from './FilePreviewModal';
 import {
   X,
   Upload,
@@ -34,7 +37,10 @@ import {
   Smartphone,
   QrCode,
   DollarSign,
-  Banknote
+  Banknote,
+  Pencil,
+  FileCheck,
+  Search
 } from 'lucide-react';
 
 interface NewRequestModalProps {
@@ -42,6 +48,7 @@ interface NewRequestModalProps {
   onClose: () => void;
   onSubmit: (input: CreatePaymentRequestInput) => Promise<void>;
   editingRequest?: PaymentRequest | null;
+  beneficiaries?: Beneficiary[];
 }
 
 const POPULAR_BANKS = [
@@ -65,6 +72,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   onClose,
   onSubmit,
   editingRequest,
+  beneficiaries,
 }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -101,6 +109,22 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     setGuestList(prev => prev.map((g, i) => i === index ? { ...g, [field]: val } : g));
   };
 
+  // Beneficiaries list state
+  const [beneficiariesList, setBeneficiariesList] = useState<Beneficiary[]>(beneficiaries || []);
+  const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>('');
+
+  useEffect(() => {
+    if (isOpen) {
+      if (beneficiaries && beneficiaries.length > 0) {
+        setBeneficiariesList(beneficiaries);
+      } else {
+        fetchBeneficiaries()
+          .then((list) => setBeneficiariesList(list))
+          .catch(() => {});
+      }
+    }
+  }, [isOpen, beneficiaries]);
+
   // Form State
   const [formData, setFormData] = useState({
     title: '',
@@ -108,9 +132,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     hotel_name: '',
     locator: '',
     location: '',
-    room_type: 'HABITACION SENCILLA',
+    room_type: '',
     people_count: 1,
-    additionals: 'Desayuno incluido',
+    additionals: '',
     nights_dates: '',
     route_from_to: '',
     expense_concept: '',
@@ -133,13 +157,137 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     notes: '',
   });
 
+  const handleResetBeneficiary = () => {
+    setSelectedBeneficiaryId('');
+    setRawText('');
+    setFormData((prev) => ({
+      ...prev,
+      title: '',
+      hotel_name: '',
+      airline: '',
+      expense_concept: '',
+      bank_beneficiary: '',
+      bank_rif: '',
+      bank_name: 'BANESCO',
+      bank_account: '',
+      pago_movil_phone: '',
+      pago_movil_ci: '',
+      binance_email: '',
+      binance_pay_id: '',
+      zelle_email: '',
+      zelle_name: '',
+      cash_receiver: '',
+      notes: '',
+    }));
+  };
+
+  const handleSelectBeneficiary = (benId: string) => {
+    if (!benId) {
+      handleResetBeneficiary();
+      return;
+    }
+
+    setSelectedBeneficiaryId(benId);
+    const ben = beneficiariesList.find((b) => b.id === benId);
+    if (!ben) return;
+
+    const bDetails = ben.bank_details;
+    const targetCat = ben.category || 'hospedaje';
+    const targetMethod = bDetails.payment_method || 'transferencia_bs';
+    setCategory(targetCat);
+    setPaymentMethod(targetMethod);
+
+    const isDirect = targetMethod === 'binance' || targetMethod === 'zelle_usd' || targetMethod === 'efectivo_usd';
+    const targetCurr = isDirect ? 'USD' : 'VES';
+    setCurrency(targetCurr);
+
+    const enrichedForm = {
+      ...formData,
+      hotel_name: ben.name,
+      airline: targetCat === 'vuelos' ? ben.name : formData.airline,
+      expense_concept: targetCat === 'gastos_apoyo' ? ben.name : formData.expense_concept,
+      bank_beneficiary: ben.name,
+      bank_rif: ben.rif || bDetails.rif || '',
+      bank_name: bDetails.bank || 'BANESCO',
+      bank_account: bDetails.account_number || '',
+      pago_movil_phone: bDetails.pago_movil_phone || '',
+      pago_movil_ci: bDetails.pago_movil_ci || '',
+      binance_email: bDetails.binance_email || '',
+      binance_pay_id: bDetails.binance_pay_id || '',
+      zelle_email: bDetails.zelle_email || '',
+      zelle_name: bDetails.zelle_name || '',
+      cash_receiver: bDetails.cash_receiver || '',
+      notes: bDetails.notes || '',
+    };
+
+    setFormData(enrichedForm);
+
+    // Auto-llenar plantilla con los datos del servicio y solo campos faltantes
+    const guide = generateStructureTemplate(targetCat, targetMethod, ben);
+    setRawText(guide);
+    handleAutoParseText(guide, targetCat, targetMethod, targetCurr, enrichedForm);
+  };
+
   const [supportFile, setSupportFile] = useState<File | null>(null);
+  const [pendingSupportFile, setPendingSupportFile] = useState<File | null>(null);
+  const [isPreviewModalOpen, setIsPreviewModalOpen] = useState(false);
+  const [previewMode, setPreviewMode] = useState<'confirm' | 'view'>('confirm');
   const [showConfirmDialog, setShowConfirmDialog] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+
+  const handleFileSelected = (file: File | null) => {
+    if (!file) return;
+    setPendingSupportFile(file);
+    setPreviewMode('confirm');
+    setIsPreviewModalOpen(true);
+  };
+
+  const handleConfirmSupportFile = () => {
+    if (pendingSupportFile) {
+      setSupportFile(pendingSupportFile);
+      setPendingSupportFile(null);
+    }
+    setIsPreviewModalOpen(false);
+  };
+
+  const handleCancelSupportFile = () => {
+    setPendingSupportFile(null);
+    setIsPreviewModalOpen(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+
+  const handleOpenViewSupport = () => {
+    setPreviewMode('view');
+    setIsPreviewModalOpen(true);
+  };
+
+  const handleTriggerModifyFile = () => {
+    fileInputRef.current?.click();
+  };
+
+  const handleModalPaste = (e: React.ClipboardEvent) => {
+    const items = e.clipboardData?.items;
+    if (!items) return;
+    for (let i = 0; i < items.length; i++) {
+      if (items[i].type.startsWith('image/')) {
+        const blob = items[i].getAsFile();
+        if (blob) {
+          const file = new File([blob], `soporte_${Date.now()}.png`, { type: blob.type || 'image/png' });
+          handleFileSelected(file);
+          e.preventDefault();
+          break;
+        }
+      }
+    }
+  };
 
   const resetForm = () => {
     setLoading(false);
     setErrorMsg('');
     setShowConfirmDialog(false);
+    setPendingSupportFile(null);
+    setIsPreviewModalOpen(false);
+    setSelectedBeneficiaryId('');
     setStep('paste');
     setRawText('');
     setCopiedTemplate(false);
@@ -154,9 +302,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       hotel_name: '',
       locator: '',
       location: '',
-      room_type: 'HABITACION SENCILLA',
+      room_type: '',
       people_count: 1,
-      additionals: 'Desayuno incluido',
+      additionals: '',
       nights_dates: '',
       route_from_to: '',
       expense_concept: '',
@@ -240,48 +388,56 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
 
   if (!isOpen) return null;
 
-  // Generador dinámico de plantillas limpias según los 5 Rubros y Método de Pago
-  const generateStructureTemplate = (cat: ServiceCategory, method: PaymentMethodType): string => {
+  // Generador dinámico de plantillas limpias según los 5 Rubros, Método de Pago o Beneficiario
+  const generateStructureTemplate = (
+    cat: ServiceCategory,
+    method: PaymentMethodType,
+    ben?: Beneficiary | null
+  ): string => {
     const lines: string[] = [];
+    const effectiveCat = ben?.category || cat;
+    const effectiveMethod = ben?.bank_details?.payment_method || method;
+    const benName = ben ? ben.name : '';
 
-    if (cat === 'hospedaje') {
-      lines.push('Asunto: PAGO HOSPEDAJE');
+    if (effectiveCat === 'hospedaje') {
+      lines.push(benName ? `Asunto: PAGO HOSPEDAJE - ${benName}` : 'Asunto: PAGO HOSPEDAJE');
       lines.push('Servicio: Hospedaje');
       lines.push('Cliente: ');
-      lines.push('Hotel: ');
+      lines.push(benName ? `Hotel: ${benName}` : 'Hotel: ');
       lines.push('Huésped: ');
       lines.push('LOC: ');
       lines.push('Ubicación: ');
       lines.push('Habitación: ');
       lines.push('Fechas: ');
       lines.push('Observacion: ');
-    } else if (cat === 'traslado') {
-      lines.push('Asunto: PAGO TRASLADO EJECUTIVO');
+    } else if (effectiveCat === 'traslado') {
+      lines.push(benName ? `Asunto: PAGO TRASLADO EJECUTIVO - ${benName}` : 'Asunto: PAGO TRASLADO EJECUTIVO');
       lines.push('Servicio: Traslado');
       lines.push('Cliente: ');
-      lines.push('Empresa Traslado: ');
+      lines.push(benName ? `Empresa Traslado: ${benName}` : 'Empresa Traslado: ');
       lines.push('Pasajero: ');
       lines.push('LOC: ');
       lines.push('Ruta: ');
       lines.push('Fechas: ');
       lines.push('Observacion: ');
-    } else if (cat === 'vuelos') {
-      lines.push('Asunto: EMISION BOLETO AEREO');
+    } else if (effectiveCat === 'vuelos') {
+      lines.push(benName ? `Asunto: EMISION BOLETO AEREO - ${benName}` : 'Asunto: EMISION BOLETO AEREO');
       lines.push('Servicio: Vuelos');
       lines.push('Cliente: ');
-      lines.push('Aerolínea: ');
+      lines.push(benName ? `Aerolínea: ${benName}` : 'Aerolínea: ');
       lines.push('Ruta: ');
       lines.push('Pasajero: ');
       lines.push('LOC: ');
       lines.push('Fechas: ');
       lines.push('Observacion: ');
-    } else if (cat === 'gastos_apoyo') {
-      lines.push('Asunto: APOYO PARA GASTOS');
+    } else if (effectiveCat === 'gastos_apoyo') {
+      lines.push(benName ? `Asunto: APOYO PARA GASTOS - ${benName}` : 'Asunto: APOYO PARA GASTOS');
       lines.push('Servicio: Gastos');
-      lines.push('Concepto: ');
+      lines.push('Cliente: ');
+      lines.push(benName ? `Concepto: ${benName}` : 'Concepto: ');
       lines.push('Observacion: ');
-    } else if (cat === 'viaticos') {
-      lines.push('Asunto: SOLICITUD DE VIATICOS');
+    } else if (effectiveCat === 'viaticos') {
+      lines.push(benName ? `Asunto: SOLICITUD DE VIATICOS - ${benName}` : 'Asunto: SOLICITUD DE VIATICOS');
       lines.push('Servicio: VIATICOS');
       lines.push('Cliente: ');
       lines.push('Usuario: ');
@@ -291,10 +447,10 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     }
 
     // Montos
-    if (method === 'binance' || method === 'zelle_usd' || method === 'efectivo_usd' || method === 'efectivo_bs') {
+    if (effectiveMethod === 'binance' || effectiveMethod === 'zelle_usd' || effectiveMethod === 'efectivo_usd' || effectiveMethod === 'efectivo_bs') {
       lines.push('Monto USD: ');
-      lines.push(`Metodo: ${method === 'binance' ? 'Binance' : method === 'zelle_usd' ? 'Zelle' : 'Efectivo'}`);
-    } else if (method === 'pago_movil') {
+      lines.push(`Metodo: ${effectiveMethod === 'binance' ? 'Binance' : effectiveMethod === 'zelle_usd' ? 'Zelle' : 'Efectivo'}`);
+    } else if (effectiveMethod === 'pago_movil') {
       lines.push('Monto USD: ');
       lines.push('Tasa BCV: ');
       lines.push('Metodo: Pago Movil');
@@ -305,23 +461,48 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     }
 
     // Datos Bancarios del Beneficiario / Titular de la cuenta
-    lines.push('Beneficiario / Titular Cuenta: ');
+    if (ben) {
+      const bDetails = ben.bank_details;
+      lines.push(`Beneficiario / Titular Cuenta: ${ben.name || bDetails?.beneficiary || ''}`);
+      if (ben.rif || bDetails?.rif) {
+        lines.push(`RIF: ${ben.rif || bDetails?.rif}`);
+      }
 
-    if (method === 'transferencia_bs') {
-      lines.push('RIF: ');
-      lines.push('Banco: ');
-      lines.push('Cuenta: ');
-    } else if (method === 'pago_movil') {
-      lines.push('Banco: ');
-      lines.push('Pago movil: ');
-      lines.push('Cedula PM: ');
-    } else if (method === 'binance') {
-      lines.push('Pay ID: ');
-      lines.push('Binance Email: ');
-    } else if (method === 'zelle_usd') {
-      lines.push('Zelle Email: ');
-    } else if (method === 'efectivo_usd' || method === 'efectivo_bs') {
-      lines.push('Persona que recibe efectivo: ');
+      if (effectiveMethod === 'transferencia_bs') {
+        lines.push(`Banco: ${bDetails?.bank || 'BANESCO'}`);
+        lines.push(`Cuenta: ${bDetails?.account_number || ''}`);
+      } else if (effectiveMethod === 'pago_movil') {
+        lines.push(`Banco: ${bDetails?.bank || 'BANESCO'}`);
+        lines.push(`Pago movil: ${bDetails?.pago_movil_phone || ''}`);
+        lines.push(`Cedula PM: ${bDetails?.pago_movil_ci || ben.rif || ''}`);
+      } else if (effectiveMethod === 'binance') {
+        lines.push(`Pay ID: ${bDetails?.binance_pay_id || ''}`);
+        lines.push(`Binance Email: ${bDetails?.binance_email || ''}`);
+      } else if (effectiveMethod === 'zelle_usd') {
+        lines.push(`Zelle Email: ${bDetails?.zelle_email || ''}`);
+        lines.push(`Titular Zelle: ${bDetails?.zelle_name || ben.name || ''}`);
+      } else if (effectiveMethod === 'efectivo_usd' || effectiveMethod === 'efectivo_bs') {
+        lines.push(`Persona que recibe efectivo: ${bDetails?.cash_receiver || ben.name || ''}`);
+      }
+    } else {
+      lines.push('Beneficiario / Titular Cuenta: ');
+
+      if (effectiveMethod === 'transferencia_bs') {
+        lines.push('RIF: ');
+        lines.push('Banco: ');
+        lines.push('Cuenta: ');
+      } else if (effectiveMethod === 'pago_movil') {
+        lines.push('Banco: ');
+        lines.push('Pago movil: ');
+        lines.push('Cedula PM: ');
+      } else if (effectiveMethod === 'binance') {
+        lines.push('Pay ID: ');
+        lines.push('Binance Email: ');
+      } else if (effectiveMethod === 'zelle_usd') {
+        lines.push('Zelle Email: ');
+      } else if (effectiveMethod === 'efectivo_usd' || effectiveMethod === 'efectivo_bs') {
+        lines.push('Persona que recibe efectivo: ');
+      }
     }
 
     return lines.join('\n');
@@ -674,11 +855,28 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const isGastos = detectedCategory === 'gastos_apoyo';
     const isViaticos = detectedCategory === 'viaticos';
 
+    const selectedBen = selectedBeneficiaryId ? beneficiariesList.find(b => b.id === selectedBeneficiaryId) : null;
+    const benDetails = selectedBen?.bank_details;
+
+    const finalBeneficiary = parsedBeneficiary || (selectedBen ? selectedBen.name : '');
+    const finalRif = parsedRif || (selectedBen ? (selectedBen.rif || benDetails?.rif || '') : '');
+    const finalBank = (parsedBank ? parsedBank.toUpperCase() : '') || (selectedBen ? (benDetails?.bank || 'BANESCO') : (currentForm.bank_name || 'BANESCO'));
+    const finalAccount = (parsedAccount ? parsedAccount.replace(/[^0-9-]/g, '') : '') || (selectedBen ? (benDetails?.account_number || '') : (parsedAccount ? parsedAccount.replace(/[^0-9-]/g, '') : ''));
+    const finalPmPhone = (parsedPagoMovilPhone ? parsedPagoMovilPhone.replace(/[^0-9]/g, '') : '') || (selectedBen ? (benDetails?.pago_movil_phone || '') : '');
+    const finalPmCi = parsedPagoMovilCi || (selectedBen ? (benDetails?.pago_movil_ci || '') : '');
+    const finalBinanceEmail = parsedBinanceEmail || (selectedBen ? (benDetails?.binance_email || '') : '');
+    const finalBinancePayId = parsedBinancePayId || (selectedBen ? (benDetails?.binance_pay_id || '') : '');
+    const finalZelleEmail = parsedZelleEmail || (selectedBen ? (benDetails?.zelle_email || '') : '');
+    const finalZelleName = parsedZelleName || (selectedBen ? (benDetails?.zelle_name || '') : '');
+    const finalCashReceiver = parsedCashReceiver || (selectedBen ? (benDetails?.cash_receiver || '') : '');
+
+    const finalHotel = isViaticos ? 'VIATICOS' : isGastos ? (parsedExpenseConcept || (selectedBen ? selectedBen.name : 'GASTOS')) : (parsedHotel || (selectedBen ? selectedBen.name : ''));
+
     const updatedFormData = {
       ...currentForm,
       title: parsedTitle || defaultTitle,
       client: parsedClient || currentForm.client,
-      hotel_name: isViaticos ? 'VIATICOS' : isGastos ? (parsedExpenseConcept || 'GASTOS') : (parsedHotel || currentForm.hotel_name),
+      hotel_name: finalHotel,
       locator: parsedLocator || currentForm.locator,
       location: parsedLocation || currentForm.location,
       room_type: parsedRoomType || currentForm.room_type,
@@ -687,22 +885,22 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       additionals: parsedAdditionals || currentForm.additionals,
       route_from_to: isTraslado ? (parsedRoute || currentForm.route_from_to) : '',
       flight_route: isVuelos ? (parsedRoute || currentForm.flight_route) : '',
-      airline: isVuelos ? (parsedHotel || currentForm.airline) : '',
-      expense_concept: isGastos ? (parsedExpenseConcept || currentForm.expense_concept) : '',
+      airline: isVuelos ? (parsedHotel || currentForm.airline || selectedBen?.name || '') : '',
+      expense_concept: isGastos ? (parsedExpenseConcept || currentForm.expense_concept || selectedBen?.name || '') : '',
       amount_usd: isNaN(numUsd) ? currentForm.amount_usd : numUsd,
       bcv_rate: isNaN(numBcv) ? currentForm.bcv_rate : numBcv,
       amount_bs: !isNaN(finalBs) ? finalBs : (!isNaN(numUsd) && !isNaN(numBcv) ? Number((numUsd * numBcv).toFixed(2)) : currentForm.amount_bs),
-      bank_beneficiary: parsedBeneficiary || currentForm.bank_beneficiary,
-      bank_rif: parsedRif || currentForm.bank_rif,
-      bank_name: parsedBank ? parsedBank.toUpperCase() : currentForm.bank_name,
-      bank_account: parsedAccount ? parsedAccount.replace(/[^0-9-]/g, '') : currentForm.bank_account,
-      pago_movil_phone: parsedPagoMovilPhone ? parsedPagoMovilPhone.replace(/[^0-9]/g, '') : currentForm.pago_movil_phone,
-      pago_movil_ci: parsedPagoMovilCi || currentForm.pago_movil_ci,
-      binance_email: parsedBinanceEmail || currentForm.binance_email,
-      binance_pay_id: parsedBinancePayId || currentForm.binance_pay_id,
-      zelle_email: parsedZelleEmail || currentForm.zelle_email,
-      zelle_name: parsedZelleName || currentForm.zelle_name,
-      cash_receiver: parsedCashReceiver || currentForm.cash_receiver,
+      bank_beneficiary: finalBeneficiary,
+      bank_rif: finalRif,
+      bank_name: finalBank,
+      bank_account: finalAccount,
+      pago_movil_phone: finalPmPhone,
+      pago_movil_ci: finalPmCi,
+      binance_email: finalBinanceEmail,
+      binance_pay_id: finalBinancePayId,
+      zelle_email: finalZelleEmail,
+      zelle_name: finalZelleName,
+      cash_receiver: finalCashReceiver,
     };
 
     return {
@@ -715,8 +913,15 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     };
   };
 
-  const handleAutoParseText = (textToParse: string, targetCat = category, targetMethod = paymentMethod, targetCurr = currency) => {
-    const result = parseMessageData(textToParse, formData, targetCat, targetMethod, targetCurr);
+  const handleAutoParseText = (
+    textToParse: string,
+    targetCat = category,
+    targetMethod = paymentMethod,
+    targetCurr = currency,
+    overrideForm?: typeof formData
+  ) => {
+    const formToUse = overrideForm || formData;
+    const result = parseMessageData(textToParse, formToUse, targetCat, targetMethod, targetCurr);
     if (!result) return;
 
     if (result.detectedUrgent) setIsUrgent(true);
@@ -735,7 +940,8 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const isDirect = newMethod === 'binance' || newMethod === 'zelle_usd' || newMethod === 'efectivo_usd';
     const newCurr = isDirect ? 'USD' : 'VES';
     setCurrency(newCurr);
-    const text = generateStructureTemplate(newCat, newMethod);
+    const ben = beneficiariesList.find((b) => b.id === selectedBeneficiaryId);
+    const text = generateStructureTemplate(newCat, newMethod, ben);
     try {
       navigator.clipboard?.writeText(text);
     } catch (e) {
@@ -927,7 +1133,11 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     new Intl.NumberFormat('es-VE', { minimumFractionDigits: 2, maximumFractionDigits: 2 }).format(val);
 
   return (
-    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-fade-in">
+    <div
+      onPaste={handleModalPaste}
+      tabIndex={0}
+      className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-slate-900/60 backdrop-blur-sm overflow-y-auto animate-fade-in focus:outline-none"
+    >
       <div className="bg-white w-full sm:max-w-xl rounded-t-3xl sm:rounded-3xl border border-slate-200 shadow-modal max-h-[92vh] flex flex-col my-auto text-slate-800">
         
         {/* Header */}
@@ -971,7 +1181,106 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
           {/* ========================================================================= */}
           {step === 'paste' && (
             <div className="space-y-4 animate-fade-in">
+              {/* Beneficiary Quick Selector at Top */}
+              <div className="bg-teal-50/50 rounded-2xl border border-teal-200/80 p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between flex-wrap gap-1">
+                  <label className="text-[11px] font-bold text-teal-900 flex items-center gap-1.5">
+                    <Building2 className="w-3.5 h-3.5 text-[#00b4a2]" />
+                    <span>Seleccionar Beneficiario de la Base de Datos:</span>
+                  </label>
+                  <span className="text-[10px] text-teal-700 font-medium">
+                    {selectedBeneficiaryId ? '✨ Datos bancarios vinculados automáticamente' : 'Autocompleta el servicio y datos de pago'}
+                  </span>
+                </div>
 
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="w-3.5 h-3.5 text-teal-500 absolute left-3 top-1/2 -translate-y-1/2" />
+                    <select
+                      value={selectedBeneficiaryId}
+                      onChange={(e) => handleSelectBeneficiary(e.target.value)}
+                      className={`w-full border rounded-xl pl-8 pr-3 py-2 text-xs font-bold transition-all shadow-2xs cursor-pointer truncate ${
+                        selectedBeneficiaryId
+                          ? 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-400/20'
+                          : 'bg-white border-teal-300 text-slate-800'
+                      }`}
+                    >
+                      <option value="">🔍 Seleccionar un beneficiario de la base de datos...</option>
+                      {beneficiariesList.map((b) => (
+                        <option key={b.id} value={b.id}>
+                          {b.name} {b.rif ? `(${b.rif})` : ''} • {b.category ? b.category.toUpperCase() : 'HOSPEDAJE'} • {b.bank_details.bank || b.bank_details.payment_method}
+                        </option>
+                      ))}
+                    </select>
+                  </div>
+
+                  {selectedBeneficiaryId && (
+                    <button
+                      type="button"
+                      onClick={handleResetBeneficiary}
+                      className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors shrink-0 flex items-center gap-1"
+                      title="Deseleccionar y mostrar selectores manuales"
+                    >
+                      <X className="w-3.5 h-3.5 text-slate-500" />
+                      <span className="hidden sm:inline">Restablecer</span>
+                    </button>
+                  )}
+                </div>
+
+                {selectedBeneficiaryId && (
+                  <div className="p-3 bg-emerald-50/90 rounded-2xl border-2 border-emerald-300 text-xs text-emerald-950 space-y-1.5 animate-fade-in shadow-2xs">
+                    <div className="flex items-center justify-between gap-2 border-b border-emerald-200/80 pb-1.5">
+                      <div className="flex items-center gap-2">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="font-extrabold text-slate-900 text-xs">
+                          {formData.bank_beneficiary || formData.hotel_name}
+                        </span>
+                        {formData.bank_rif && (
+                          <span className="font-mono text-[11px] font-bold text-emerald-800 bg-emerald-100 px-1.5 py-0.5 rounded">
+                            {formData.bank_rif}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[10px] bg-emerald-600 text-white font-black px-2 py-0.5 rounded-full shrink-0 shadow-2xs">
+                        ✨ Datos Bancarios Vinculados
+                      </span>
+                    </div>
+
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 text-[11px] font-medium text-slate-700">
+                      <div>
+                        <span className="text-slate-500 font-semibold">Banco: </span>
+                        <strong className="text-slate-900">{formData.bank_name || 'BANESCO'}</strong>
+                      </div>
+                      {paymentMethod === 'transferencia_bs' && (
+                        <div>
+                          <span className="text-slate-500 font-semibold">Cuenta: </span>
+                          <strong className="font-mono text-emerald-900 font-bold">{formData.bank_account || 'Sin cuenta'}</strong>
+                        </div>
+                      )}
+                      {paymentMethod === 'pago_movil' && (
+                        <div>
+                          <span className="text-slate-500 font-semibold">Pago Móvil: </span>
+                          <strong className="font-mono text-emerald-900 font-bold">{formData.pago_movil_phone} ({formData.pago_movil_ci})</strong>
+                        </div>
+                      )}
+                      {paymentMethod === 'binance' && (
+                        <div>
+                          <span className="text-slate-500 font-semibold">Binance: </span>
+                          <strong className="font-mono text-emerald-900 font-bold">{formData.binance_pay_id || formData.binance_email}</strong>
+                        </div>
+                      )}
+                      {paymentMethod === 'zelle_usd' && (
+                        <div>
+                          <span className="text-slate-500 font-semibold">Zelle: </span>
+                          <strong className="font-mono text-emerald-900 font-bold">{formData.zelle_email} ({formData.zelle_name})</strong>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+
+              {/* Textarea Container */}
               <div className="bg-teal-50/50 rounded-2xl border border-teal-200/80 p-4 space-y-3">
                 <div className="flex items-center justify-between flex-wrap gap-2">
                   <div className="flex items-center gap-2">
@@ -981,61 +1290,79 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                     </span>
                   </div>
 
-                  {/* 2 Selectores: Rubro y Método de Pago */}
-                  <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
-                    {/* Selector 1: Rubro */}
-                    <select
-                      value={category}
-                      onChange={(e) => handleApplyTemplate(e.target.value as ServiceCategory, paymentMethod)}
-                      className="bg-white border-2 border-teal-300 hover:border-[#00b4a2] text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#00b4a2]/20 shadow-2xs cursor-pointer"
-                      title="Seleccionar Rubro del Servicio"
-                    >
-                      <option value="hospedaje">🏨 Hospedaje / Hotel</option>
-                      <option value="traslado">🚗 Traslado Ejecutivo</option>
-                      <option value="vuelos">✈️ Vuelo / Boleto</option>
-                      <option value="gastos_apoyo">🧾 Gastos de Apoyo</option>
-                      <option value="viaticos">💼 Solicitud de Viáticos</option>
-                    </select>
+                  {/* SI hay beneficiario seleccionado: OCULTAR SELECTORES Y MOSTRAR BADGE DEL SERVICIO */}
+                  {selectedBeneficiaryId ? (
+                    <div className="flex flex-wrap items-center gap-1.5 bg-white px-3 py-1.5 rounded-xl border border-teal-300 shadow-2xs animate-fade-in">
+                      <span className="text-[11px] font-bold text-teal-900 flex items-center gap-1">
+                        {category === 'traslado' ? '🚗 Traslado' : category === 'vuelos' ? '✈️ Vuelos' : category === 'gastos_apoyo' ? '🧾 Gastos' : category === 'viaticos' ? '💼 Viáticos' : '🏨 Hospedaje'}
+                      </span>
+                      <span className="text-slate-300">•</span>
+                      <span className="text-[11px] font-bold text-slate-700">
+                        {paymentMethod === 'binance' ? '💰 Binance' : paymentMethod === 'zelle_usd' ? '💵 Zelle' : paymentMethod === 'pago_movil' ? '📱 Pago Móvil' : paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs' ? '💵 Efectivo' : '🏦 Transferencia'}
+                      </span>
+                    </div>
+                  ) : (
+                    /* SI NO hay beneficiario seleccionado: MOSTRAR SELECTORES DE RUBRO Y MÉTODO DE PAGO */
+                    <div className="flex flex-wrap items-center gap-1.5 w-full sm:w-auto">
+                      {/* Selector 1: Rubro */}
+                      <select
+                        value={category}
+                        onChange={(e) => handleApplyTemplate(e.target.value as ServiceCategory, paymentMethod)}
+                        className="bg-white border-2 border-teal-300 hover:border-[#00b4a2] text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#00b4a2]/20 shadow-2xs cursor-pointer"
+                        title="Seleccionar Rubro del Servicio"
+                      >
+                        <option value="hospedaje">🏨 Hospedaje / Hotel</option>
+                        <option value="traslado">🚗 Traslado Ejecutivo</option>
+                        <option value="vuelos">✈️ Vuelo / Boleto</option>
+                        <option value="gastos_apoyo">🧾 Gastos de Apoyo</option>
+                        <option value="viaticos">💼 Solicitud de Viáticos</option>
+                      </select>
 
-                    {/* Selector 2: Método de Pago */}
-                    <select
-                      value={paymentMethod}
-                      onChange={(e) => handleApplyTemplate(category, e.target.value as PaymentMethodType)}
-                      className="bg-white border-2 border-teal-300 hover:border-[#00b4a2] text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#00b4a2]/20 shadow-2xs cursor-pointer"
-                      title="Seleccionar Método de Pago"
-                    >
-                      <option value="transferencia_bs">🏦 Transferencia (Bs)</option>
-                      <option value="pago_movil">📱 Pago Móvil (Bs)</option>
-                      <option value="binance">💰 Binance (USDT)</option>
-                      <option value="zelle_usd">💵 Zelle (USD)</option>
-                      <option value="efectivo_usd">💵 Efectivo ($ / Bs)</option>
-                    </select>
+                      {/* Selector 2: Método de Pago */}
+                      <select
+                        value={paymentMethod}
+                        onChange={(e) => handleApplyTemplate(category, e.target.value as PaymentMethodType)}
+                        className="bg-white border-2 border-teal-300 hover:border-[#00b4a2] text-slate-800 text-xs font-bold rounded-xl px-2.5 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#00b4a2]/20 shadow-2xs cursor-pointer"
+                        title="Seleccionar Método de Pago"
+                      >
+                        <option value="transferencia_bs">🏦 Transferencia (Bs)</option>
+                        <option value="pago_movil">📱 Pago Móvil (Bs)</option>
+                        <option value="binance">💰 Binance (USDT)</option>
+                        <option value="zelle_usd">💵 Zelle (USD)</option>
+                        <option value="efectivo_usd">💵 Efectivo ($ / Bs)</option>
+                      </select>
 
-                    <button
-                      type="button"
-                      onClick={() => handleApplyTemplate(category, paymentMethod)}
-                      className="px-2.5 py-1.5 bg-[#00b4a2] hover:bg-[#009b8b] text-white rounded-xl font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors shrink-0"
-                      title="Cargar y Copiar la estructura guía en la caja de texto"
-                    >
-                      {copiedTemplate ? (
-                        <>
-                          <CheckCircle2 className="w-3.5 h-3.5" />
-                          <span>¡Copiada!</span>
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="w-3.5 h-3.5" />
-                          <span>Cargar Guía</span>
-                        </>
-                      )}
-                    </button>
-                  </div>
+                      <button
+                        type="button"
+                        onClick={() => handleApplyTemplate(category, paymentMethod)}
+                        className="px-2.5 py-1.5 bg-[#00b4a2] hover:bg-[#009b8b] text-white rounded-xl font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors shrink-0"
+                        title="Cargar y Copiar la estructura guía en la caja de texto"
+                      >
+                        {copiedTemplate ? (
+                          <>
+                            <CheckCircle2 className="w-3.5 h-3.5" />
+                            <span>¡Copiada!</span>
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="w-3.5 h-3.5" />
+                            <span>Cargar Guía</span>
+                          </>
+                        )}
+                      </button>
+                    </div>
+                  )}
                 </div>
 
                 {/* Caja de Texto Grande y Cómoda */}
                 <textarea
                   rows={7}
-                  placeholder={`Ejemplo de texto:\n\nAsunto: PAGO PENDIENTE EXTENSION KARIÑA\nCliente: G1\nHotel: HOTEL KARIÑA PUNTA DE MATA\nHuésped: José Gregorio Hernández V-18.452.910\nLOC: 00000015\nFechas: 22/07 AL 27/07\nMonto USD: 450\nTasa BCV: 737.88\nBeneficiario: INVERSIONES HOTEL KARIÑA C.A.\nBanco: BANESCO\nCuenta: 01340034120341098234`}
+                  placeholder={
+                    selectedBeneficiaryId
+                      ? `Ejemplo para ${formData.bank_beneficiary || 'este beneficiario'} (Solo datos faltantes):\n\n` +
+                        generateStructureTemplate(category, paymentMethod, beneficiariesList.find(b => b.id === selectedBeneficiaryId))
+                      : `Ejemplo de texto:\n\nAsunto: PAGO PENDIENTE EXTENSION KARIÑA\nCliente: G1\nHotel: HOTEL KARIÑA PUNTA DE MATA\nHuésped: José Gregorio Hernández V-18.452.910\nLOC: 00000015\nFechas: 22/07 AL 27/07\nMonto USD: 450\nTasa BCV: 737.88\nBeneficiario: INVERSIONES HOTEL KARIÑA C.A.\nBanco: BANESCO\nCuenta: 01340034120341098234`
+                  }
                   value={rawText}
                   onChange={(e) => {
                     setRawText(e.target.value);
@@ -1043,34 +1370,6 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   }}
                   className="w-full bg-white border border-teal-300 rounded-2xl p-3.5 text-xs text-slate-900 placeholder-slate-400 focus:outline-none focus:border-[#00b4a2] font-mono shadow-2xs leading-relaxed min-h-[170px]"
                 />
-
-                {/* Adjuntar Soporte de Reserva */}
-                <div className="flex items-center justify-between gap-2 pt-0.5">
-                  <label className="active-press cursor-pointer flex items-center gap-2 px-3 py-1.5 bg-white hover:bg-slate-100 text-slate-700 rounded-xl font-bold text-xs border border-slate-200 transition-colors shadow-2xs">
-                    <Upload className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{supportFile ? 'Cambiar Soporte' : 'Adjuntar Documento / Foto (Opcional)'}</span>
-                    <input
-                      type="file"
-                      accept=".pdf,image/*"
-                      onChange={(e) => setSupportFile(e.target.files?.[0] || null)}
-                      className="hidden"
-                    />
-                  </label>
-
-                  {supportFile && (
-                    <div className="flex items-center gap-1.5 bg-teal-100/80 px-2.5 py-1 rounded-xl text-teal-950 font-bold text-xs truncate max-w-[180px]">
-                      <FileText className="w-3 h-3 text-[#00b4a2] shrink-0" />
-                      <span className="truncate">{supportFile.name}</span>
-                      <button
-                        type="button"
-                        onClick={() => setSupportFile(null)}
-                        className="text-rose-600 hover:text-rose-800"
-                      >
-                        <X className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  )}
-                </div>
               </div>
 
               {/* Live Detection Summary Pill (Solo si hay texto pegado) */}
@@ -1612,12 +1911,85 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                 </div>
 
                 {/* Soporte Adjunto */}
-                {supportFile && (
-                  <div className="p-2.5 bg-teal-50 rounded-xl border border-teal-200 flex items-center justify-between text-teal-900 font-bold text-xs">
-                    <div className="flex items-center gap-2 truncate">
-                      <FileText className="w-4 h-4 text-[#00b4a2]" />
-                      <span className="truncate">Soporte: {supportFile.name}</span>
+                {supportFile ? (
+                  <div className="p-3 bg-teal-50 rounded-2xl border border-teal-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-teal-200/80 text-teal-900 flex items-center justify-center shrink-0">
+                        <FileCheck className="w-4 h-4 text-[#009b8b]" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[11px] font-bold text-teal-950 block truncate">
+                          Soporte Adjunto: {supportFile.name}
+                        </span>
+                        <span className="text-[10px] text-slate-500 font-mono">
+                          {(supportFile.size / 1024).toFixed(1)} KB
+                        </span>
+                      </div>
                     </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleOpenViewSupport}
+                        className="px-2.5 py-1 bg-white hover:bg-teal-100 text-teal-900 rounded-lg font-bold text-[11px] border border-teal-300 flex items-center gap-1 transition-colors active-press shadow-2xs"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#00b4a2]" />
+                        <span>Vista Previa</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTriggerModifyFile}
+                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg font-bold text-[11px] border border-amber-300 flex items-center gap-1 transition-colors active-press shadow-2xs"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Modificar Archivo</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : editingRequest?.support_file_url ? (
+                  <div className="p-3 bg-slate-50 rounded-2xl border border-slate-200 flex flex-wrap items-center justify-between gap-2 shadow-2xs">
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-8 h-8 rounded-xl bg-slate-200 text-slate-700 flex items-center justify-center shrink-0">
+                        <FileText className="w-4 h-4 text-slate-600" />
+                      </div>
+                      <div className="min-w-0">
+                        <span className="text-[11px] font-bold text-slate-900 block truncate">
+                          {editingRequest.support_file_name || 'Soporte de Reserva Registrado'}
+                        </span>
+                        <span className="text-[10px] text-slate-500">Archivo existente</span>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <button
+                        type="button"
+                        onClick={handleOpenViewSupport}
+                        className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-800 rounded-lg font-bold text-[11px] border border-slate-300 flex items-center gap-1 transition-colors active-press"
+                      >
+                        <Eye className="w-3.5 h-3.5 text-[#00b4a2]" />
+                        <span>Ver Soporte</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={handleTriggerModifyFile}
+                        className="px-2.5 py-1 bg-amber-50 hover:bg-amber-100 text-amber-900 rounded-lg font-bold text-[11px] border border-amber-300 flex items-center gap-1 transition-colors active-press shadow-2xs"
+                      >
+                        <Pencil className="w-3.5 h-3.5 text-amber-700" />
+                        <span>Modificar Archivo</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="p-2.5 bg-slate-50 rounded-2xl border border-dashed border-slate-300 flex items-center justify-between text-xs">
+                    <span className="text-slate-500 text-[11px]">Sin documento de soporte adjunto</span>
+                    <button
+                      type="button"
+                      onClick={handleTriggerModifyFile}
+                      className="px-2.5 py-1 bg-white hover:bg-slate-100 text-slate-700 rounded-lg font-bold text-[11px] border border-slate-200 flex items-center gap-1 active-press"
+                    >
+                      <Upload className="w-3 h-3 text-slate-500" />
+                      <span>Adjuntar Soporte</span>
+                    </button>
                   </div>
                 )}
               </div>
@@ -1954,6 +2326,33 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       💵 Divisas (USD)
                     </button>
                   </div>
+                </div>
+
+                {/* Beneficiary Quick Selector in Step 3 */}
+                <div className="bg-slate-50 p-2.5 rounded-xl border border-slate-200 space-y-1.5">
+                  <div className="flex items-center justify-between">
+                    <label className="text-[11px] font-bold text-slate-700 flex items-center gap-1">
+                      <Building2 className="w-3.5 h-3.5 text-[#00b4a2]" />
+                      <span>Cargar Datos desde Beneficiario Guardado:</span>
+                    </label>
+                    {selectedBeneficiaryId && (
+                      <span className="text-[10px] text-emerald-700 font-bold bg-emerald-100 px-2 py-0.5 rounded-full">
+                        ✨ Beneficiario Activo
+                      </span>
+                    )}
+                  </div>
+                  <select
+                    value={selectedBeneficiaryId}
+                    onChange={(e) => handleSelectBeneficiary(e.target.value)}
+                    className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 text-xs font-bold text-slate-800 focus:outline-none focus:border-[#00b4a2] cursor-pointer truncate"
+                  >
+                    <option value="">🔍 Seleccionar un beneficiario de la base de datos...</option>
+                    {beneficiariesList.map((b) => (
+                      <option key={b.id} value={b.id}>
+                        {b.name} {b.rif ? `(${b.rif})` : ''} - {b.bank_details.bank || b.bank_details.payment_method}
+                      </option>
+                    ))}
+                  </select>
                 </div>
 
                 {/* Botones de Métodos de Pago */}
@@ -2353,6 +2752,35 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
             </div>
           </div>
         )}
+
+        {/* Modal de Vista Previa del Soporte */}
+        <FilePreviewModal
+          isOpen={isPreviewModalOpen}
+          file={pendingSupportFile || supportFile}
+          fileUrl={!pendingSupportFile && !supportFile ? editingRequest?.support_file_url : null}
+          fileName={
+            pendingSupportFile?.name ||
+            supportFile?.name ||
+            editingRequest?.support_file_name ||
+            'soporte_pago'
+          }
+          title={
+            previewMode === 'confirm'
+              ? 'Vista Previa del Soporte a Cargar'
+              : 'Soporte de la Solicitud'
+          }
+          subtitle={
+            previewMode === 'confirm'
+              ? 'Revisa que la foto o documento sea el correcto y legible antes de adjuntarlo.'
+              : undefined
+          }
+          mode={previewMode}
+          confirmText="Cargar Soporte"
+          cancelText={previewMode === 'confirm' ? 'Cancelar' : 'Cerrar'}
+          onConfirm={handleConfirmSupportFile}
+          onCancel={handleCancelSupportFile}
+          onModify={handleTriggerModifyFile}
+        />
       </div>
     </div>
   );

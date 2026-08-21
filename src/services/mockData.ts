@@ -1,4 +1,4 @@
-import { PaymentRequest, UserProfile } from '../types';
+import { PaymentRequest, UserProfile, Beneficiary } from '../types';
 
 export const INITIAL_USERS: UserProfile[] = [
   {
@@ -261,3 +261,99 @@ export const INITIAL_REQUESTS: PaymentRequest[] = [
     updated_at: new Date(Date.now() - 3600000 * 2).toISOString()
   }
 ];
+
+export const INITIAL_BENEFICIARIES: Beneficiary[] = [
+  {
+    id: 'ben-001',
+    name: 'INVERSIONES HOTEL KARIÑA C.A.',
+    rif: 'J-30981234-5',
+    category: 'hospedaje',
+    bank_details: {
+      payment_method: 'transferencia_bs',
+      beneficiary: 'INVERSIONES HOTEL KARIÑA C.A.',
+      rif: 'J-30981234-5',
+      bank: 'BANESCO',
+      account_number: '01340034120341098234',
+      account_type: 'Corriente'
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'ben-002',
+    name: 'HOTELERA EUROBUILDING PZO C.A.',
+    rif: 'J-00293841-2',
+    category: 'hospedaje',
+    bank_details: {
+      payment_method: 'transferencia_bs',
+      beneficiary: 'HOTELERA EUROBUILDING PZO C.A.',
+      rif: 'J-00293841-2',
+      bank: 'BANCO MERCANTIL',
+      account_number: '01050012991051239845',
+      account_type: 'Corriente'
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'ben-003',
+    name: 'TRANSPORTE EJECUTIVO VIP C.A.',
+    rif: 'J-40912837-4',
+    category: 'traslado',
+    bank_details: {
+      payment_method: 'pago_movil',
+      beneficiary: 'TRANSPORTE EJECUTIVO VIP',
+      rif: 'J-40912837-4',
+      bank: 'BANESCO',
+      pago_movil_phone: '04129876543',
+      pago_movil_ci: 'J-409128374'
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'ben-004',
+    name: 'LINEA AEREA LASER AIRLINES C.A.',
+    rif: 'J-30129834-0',
+    category: 'vuelos',
+    bank_details: {
+      payment_method: 'transferencia_bs',
+      beneficiary: 'LINEA AEREA LASER AIRLINES C.A.',
+      rif: 'J-30129834-0',
+      bank: 'BANCO PROVINCIAL',
+      account_number: '01080014230100982341',
+      account_type: 'Corriente'
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'ben-005',
+    name: 'SERVICIOS TURISTICOS ZELLE USD',
+    rif: 'V-19823412',
+    category: 'hospedaje',
+    bank_details: {
+      payment_method: 'zelle_usd',
+      beneficiary: 'SERVICIOS TURISTICOS INTERNACIONALES',
+      zelle_email: 'pagos.serviciosturisticos@gmail.com',
+      zelle_name: 'SERVICIOS TURISTICOS C.A.'
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  },
+  {
+    id: 'ben-006',
+    name: 'LOGISTICA & PROVEEDORES BINANCE PAY',
+    rif: 'V-20194823',
+    category: 'gastos_apoyo',
+    bank_details: {
+      payment_method: 'binance',
+      beneficiary: 'LOGISTICA DE CAMPO OPERACIONES',
+      binance_email: 'logistica.campo.ve@gmail.com',
+      binance_pay_id: '582910482'
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  }
+];
+

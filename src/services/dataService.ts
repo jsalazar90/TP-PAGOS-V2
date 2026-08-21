@@ -3,14 +3,16 @@ import {
   FinancialSummary,
   PaymentRequest,
   RequestStatus,
-  UserProfile
+  UserProfile,
+  Beneficiary
 } from '../types';
-import { INITIAL_REQUESTS, INITIAL_USERS } from './mockData';
+import { INITIAL_REQUESTS, INITIAL_USERS, INITIAL_BENEFICIARIES } from './mockData';
 import { uploadAttachment } from './storage';
 import { isSupabaseConfigured, supabase } from './supabase';
 
 const REQUESTS_STORAGE_KEY = 'jt_pagos_requests_v1';
 const USERS_STORAGE_KEY = 'jt_pagos_users_v1';
+const BENEFICIARIES_STORAGE_KEY = 'jt_pagos_beneficiaries_v1';
 const DELETED_REQUESTS_KEY = 'jt_pagos_deleted_requests_v1';
 
 function getDeletedRequestIds(): Set<string> {
@@ -100,6 +102,69 @@ function getLocalUsers(): UserProfile[] {
 
 function setLocalUsers(users: UserProfile[]) {
   localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(users));
+}
+
+export function normalizeBeneficiary(b: any): Beneficiary {
+  let bDetails = b.bank_details;
+  if (typeof bDetails === 'string') {
+    try {
+      bDetails = JSON.parse(bDetails);
+    } catch (e) {
+      bDetails = {};
+    }
+  }
+  bDetails = bDetails || {};
+
+  const benName = (b.name || bDetails.beneficiary || b.bank_beneficiary || '').trim().toUpperCase();
+  const benRif = (b.rif || bDetails.rif || b.bank_rif || '').trim().toUpperCase();
+
+  return {
+    id: String(b.id || `ben-${Date.now()}`),
+    name: benName,
+    rif: benRif,
+    category: b.category || 'hospedaje',
+    bank_details: {
+      payment_method: bDetails.payment_method || b.payment_method || 'transferencia_bs',
+      beneficiary: benName,
+      rif: benRif,
+      bank: (bDetails.bank || b.bank_name || 'BANESCO').trim().toUpperCase(),
+      account_number: (bDetails.account_number || b.bank_account || '').trim(),
+      account_type: bDetails.account_type || 'Corriente',
+      pago_movil_phone: (bDetails.pago_movil_phone || b.pago_movil_phone || '').trim(),
+      pago_movil_ci: (bDetails.pago_movil_ci || b.pago_movil_ci || '').trim().toUpperCase(),
+      binance_email: (bDetails.binance_email || b.binance_email || '').trim(),
+      binance_pay_id: (bDetails.binance_pay_id || b.binance_pay_id || '').trim(),
+      zelle_email: (bDetails.zelle_email || b.zelle_email || '').trim(),
+      zelle_name: (bDetails.zelle_name || b.zelle_name || '').trim().toUpperCase(),
+      cash_receiver: (bDetails.cash_receiver || b.cash_receiver || '').trim().toUpperCase(),
+      notes: bDetails.notes || ''
+    },
+    created_at: b.created_at || new Date().toISOString(),
+    updated_at: b.updated_at || new Date().toISOString()
+  };
+}
+
+// Initial local storage setup for Beneficiaries
+function getLocalBeneficiaries(): Beneficiary[] {
+  const stored = localStorage.getItem(BENEFICIARIES_STORAGE_KEY);
+  if (!stored) {
+    localStorage.setItem(BENEFICIARIES_STORAGE_KEY, JSON.stringify(INITIAL_BENEFICIARIES));
+    return INITIAL_BENEFICIARIES.map(normalizeBeneficiary);
+  }
+  try {
+    const parsed = JSON.parse(stored);
+    if (!Array.isArray(parsed) || parsed.length === 0) {
+      localStorage.setItem(BENEFICIARIES_STORAGE_KEY, JSON.stringify(INITIAL_BENEFICIARIES));
+      return INITIAL_BENEFICIARIES.map(normalizeBeneficiary);
+    }
+    return parsed.map(normalizeBeneficiary);
+  } catch (e) {
+    return INITIAL_BENEFICIARIES.map(normalizeBeneficiary);
+  }
+}
+
+function setLocalBeneficiaries(bens: Beneficiary[]) {
+  localStorage.setItem(BENEFICIARIES_STORAGE_KEY, JSON.stringify(bens.map(normalizeBeneficiary)));
 }
 
 export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<PaymentRequest[]> {
@@ -633,6 +698,162 @@ export async function updateUserPassword(
   return updatedUser;
 }
 
+// ==========================================
+// BENEFICIARY DIRECTORY SERVICES
+// ==========================================
+
+export async function fetchBeneficiaries(): Promise<Beneficiary[]> {
+  const localList = getLocalBeneficiaries();
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('beneficiaries')
+        .select('*')
+        .order('name', { ascending: true });
+
+      if (error) {
+        console.warn('Supabase fetchBeneficiaries error, using local fallback:', error.message);
+        return localList;
+      }
+
+      if (data && data.length > 0) {
+        const enriched: Beneficiary[] = data.map(normalizeBeneficiary);
+        setLocalBeneficiaries(enriched);
+        return enriched;
+      }
+      return localList;
+    } catch (e) {
+      console.warn('Supabase fetchBeneficiaries exception, using local:', e);
+      return localList;
+    }
+  }
+
+  return localList;
+}
+
+export async function createBeneficiary(
+  data: Omit<Beneficiary, 'id' | 'created_at' | 'updated_at'>
+): Promise<Beneficiary> {
+  const generatedId =
+    typeof crypto !== 'undefined' && crypto.randomUUID
+      ? crypto.randomUUID()
+      : `ben-${Date.now()}`;
+
+  const newBeneficiary: Beneficiary = {
+    id: generatedId,
+    name: data.name.trim().toUpperCase(),
+    rif: data.rif?.trim().toUpperCase(),
+    category: data.category,
+    bank_details: {
+      ...data.bank_details,
+      beneficiary: data.bank_details.beneficiary?.trim().toUpperCase() || data.name.trim().toUpperCase(),
+      rif: data.bank_details.rif?.trim().toUpperCase() || data.rif?.trim().toUpperCase(),
+      bank: data.bank_details.bank?.trim().toUpperCase(),
+      account_number: data.bank_details.account_number?.trim()
+    },
+    created_at: new Date().toISOString(),
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const payload: any = {
+        id: newBeneficiary.id,
+        name: newBeneficiary.name,
+        rif: newBeneficiary.rif,
+        category: newBeneficiary.category,
+        bank_details: newBeneficiary.bank_details
+      };
+      const { data: inserted, error } = await supabase
+        .from('beneficiaries')
+        .insert([payload])
+        .select()
+        .single();
+
+      if (!error && inserted) {
+        const local = getLocalBeneficiaries();
+        setLocalBeneficiaries([inserted, ...local.filter(b => b.id !== inserted.id)]);
+        return inserted;
+      }
+    } catch (e) {
+      console.warn('Supabase createBeneficiary fallback to local:', e);
+    }
+  }
+
+  const local = getLocalBeneficiaries();
+  const updated = [newBeneficiary, ...local.filter(b => b.id !== newBeneficiary.id)];
+  setLocalBeneficiaries(updated);
+  return newBeneficiary;
+}
+
+export async function updateBeneficiary(
+  id: string,
+  data: Partial<Beneficiary>
+): Promise<Beneficiary> {
+  const local = getLocalBeneficiaries();
+  const index = local.findIndex(b => b.id === id);
+  if (index === -1) throw new Error('Beneficiario no encontrado');
+
+  const updatedBeneficiary: Beneficiary = {
+    ...local[index],
+    ...data,
+    name: data.name ? data.name.trim().toUpperCase() : local[index].name,
+    rif: data.rif !== undefined ? data.rif.trim().toUpperCase() : local[index].rif,
+    bank_details: {
+      ...local[index].bank_details,
+      ...(data.bank_details || {})
+    },
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data: updated, error } = await supabase
+        .from('beneficiaries')
+        .update({
+          name: updatedBeneficiary.name,
+          rif: updatedBeneficiary.rif,
+          category: updatedBeneficiary.category,
+          bank_details: updatedBeneficiary.bank_details,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (!error && updated) {
+        local[index] = updated;
+        setLocalBeneficiaries(local);
+        return updated;
+      }
+    } catch (e) {
+      console.warn('Supabase updateBeneficiary fallback to local:', e);
+    }
+  }
+
+  local[index] = updatedBeneficiary;
+  setLocalBeneficiaries(local);
+  return updatedBeneficiary;
+}
+
+export async function deleteBeneficiary(id: string): Promise<void> {
+  const local = getLocalBeneficiaries();
+  const filtered = local.filter(b => b.id !== id);
+  setLocalBeneficiaries(filtered);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { error } = await supabase.from('beneficiaries').delete().eq('id', id);
+      if (error) {
+        console.warn('Supabase deleteBeneficiary warning:', error.message);
+      }
+    } catch (e) {
+      console.warn('Supabase deleteBeneficiary fallback to local:', e);
+    }
+  }
+}
+
 export async function updatePaymentRequest(
   requestId: string,
   input: CreatePaymentRequestInput,
@@ -1026,3 +1247,106 @@ export function exportRequestsToCSV(requests: PaymentRequest[], filenamePrefix =
   link.click();
   document.body.removeChild(link);
 }
+
+export async function updateRequestSupportFile(
+  requestId: string,
+  file: File,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  const uploadRes = await uploadAttachment(file);
+  const supportUrl = uploadRes.url;
+  const supportFileName = uploadRes.fileName;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('payment_requests')
+        .update({
+          support_file_url: supportUrl,
+          support_file_name: supportFileName,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId)
+        .select('*, profiles:created_by(full_name, username)')
+        .single();
+
+      if (!error && data) {
+        return {
+          ...data,
+          creator_name:
+            data.creator_name || data.profiles?.full_name || data.profiles?.username || currentUser.full_name
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase updateRequestSupportFile failed, fallback to local:', e);
+    }
+  }
+
+  // Local fallback
+  const requests = getLocalRequests();
+  const index = requests.findIndex(r => r.id === requestId);
+  if (index === -1) throw new Error('Solicitud no encontrada');
+
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    support_file_url: supportUrl,
+    support_file_name: supportFileName,
+    updated_at: new Date().toISOString()
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
+export async function updateRequestReceiptFile(
+  requestId: string,
+  file: File,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  const uploadRes = await uploadAttachment(file);
+  const receiptUrl = uploadRes.url;
+  const receiptFileName = uploadRes.fileName;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('payment_requests')
+        .update({
+          receipt_file_url: receiptUrl,
+          receipt_file_name: receiptFileName,
+          updated_at: new Date().toISOString()
+        })
+        .eq('id', requestId)
+        .select('*, profiles:created_by(full_name, username)')
+        .single();
+
+      if (!error && data) {
+        return {
+          ...data,
+          creator_name:
+            data.creator_name || data.profiles?.full_name || data.profiles?.username || currentUser.full_name
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase updateRequestReceiptFile failed, fallback to local:', e);
+    }
+  }
+
+  // Local fallback
+  const requests = getLocalRequests();
+  const index = requests.findIndex(r => r.id === requestId);
+  if (index === -1) throw new Error('Solicitud no encontrada');
+
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    receipt_file_url: receiptUrl,
+    receipt_file_name: receiptFileName,
+    updated_at: new Date().toISOString()
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
