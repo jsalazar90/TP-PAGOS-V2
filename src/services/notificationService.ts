@@ -3,6 +3,26 @@
 // Soporte para Notificaciones del Sistema (PWA/Móvil), Audio Chime y Web Push
 // ==============================================================================
 
+import { supabase, isSupabaseConfigured } from './supabase';
+import { UserProfile } from '../types';
+
+export const VAPID_PUBLIC_KEY =
+  import.meta.env.VITE_VAPID_PUBLIC_KEY ||
+  'BKFk07uvGtfC_nICDOZn30wUNA7RaxYSMXCqx_qNu5VsCGW8YdkRKGSNg5cE2cy53RR_YZbvWDLObMpw5g1N2tE';
+
+// Función para convertir la llave VAPID base64url a Uint8Array
+function urlBase64ToUint8Array(base64String: string): Uint8Array {
+  const padding = '='.repeat((4 - (base64String.length % 4)) % 4);
+  const base64 = (base64String + padding).replace(/-/g, '+').replace(/_/g, '/');
+  const rawData = window.atob(base64);
+  const buffer = new ArrayBuffer(rawData.length);
+  const outputArray = new Uint8Array(buffer);
+  for (let i = 0; i < rawData.length; ++i) {
+    outputArray[i] = rawData.charCodeAt(i);
+  }
+  return outputArray;
+}
+
 class NotificationService {
   private audioCtx: AudioContext | null = null;
 
@@ -76,9 +96,14 @@ class NotificationService {
     }
   }
 
-  // Verificar si las notificaciones están soportadas
+  // Verificar si las notificaciones estándar están soportadas
   public isSupported(): boolean {
     return 'Notification' in window;
+  }
+
+  // Verificar si Web Push en segundo plano está soportado
+  public isPushSupported(): boolean {
+    return 'serviceWorker' in navigator && 'PushManager' in window && 'Notification' in window;
   }
 
   // Obtener estado del permiso
@@ -99,7 +124,107 @@ class NotificationService {
     }
   }
 
-  // Enviar notificación del sistema (al teléfono / escritorio)
+  // Obtener la suscripción push actual activa
+  public async getPushSubscription(): Promise<PushSubscription | null> {
+    if (!this.isPushSupported()) return null;
+    try {
+      const registration = await navigator.serviceWorker.ready;
+      return await registration.pushManager.getSubscription();
+    } catch (e) {
+      console.warn('Error obteniendo suscripción push:', e);
+      return null;
+    }
+  }
+
+  // Verificar si este dispositivo ya tiene una suscripción activa
+  public async isPushSubscribed(): Promise<boolean> {
+    const sub = await this.getPushSubscription();
+    return sub !== null && Notification.permission === 'granted';
+  }
+
+  // Suscribir al usuario (exclusivo para administradores) al sistema Push en segundo plano
+  public async subscribeAdminToPush(currentUser: UserProfile): Promise<{ success: boolean; message: string }> {
+    if (currentUser.role !== 'admin') {
+      return { success: false, message: 'Las notificaciones push en segundo plano están reservadas para administradores.' };
+    }
+
+    if (!this.isPushSupported()) {
+      return { success: false, message: 'Tu navegador o dispositivo no soporta notificaciones Push en segundo plano.' };
+    }
+
+    try {
+      // 1. Solicitar permiso de notificaciones al sistema operativo
+      const permission = await this.requestPermission();
+      if (permission !== 'granted') {
+        return { success: false, message: 'Permiso de notificaciones denegado en el dispositivo.' };
+      }
+
+      // 2. Obtener el Service Worker activo
+      const registration = await navigator.serviceWorker.ready;
+
+      // 3. Obtener o crear la suscripción Web Push
+      let subscription = await registration.pushManager.getSubscription();
+      if (!subscription) {
+        const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+        subscription = await registration.pushManager.subscribe({
+          userVisibleOnly: true,
+          applicationServerKey: convertedVapidKey as unknown as BufferSource
+        });
+      }
+
+      const subJson = subscription.toJSON();
+      if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {
+        return { success: false, message: 'No se pudieron extraer las llaves criptográficas del dispositivo.' };
+      }
+
+      // 4. Guardar o actualizar la suscripción en Supabase
+      if (isSupabaseConfigured && supabase) {
+        const { error } = await supabase.from('push_subscriptions').upsert(
+          {
+            user_id: currentUser.id,
+            user_role: currentUser.role,
+            endpoint: subJson.endpoint,
+            p256dh: subJson.keys.p256dh,
+            auth: subJson.keys.auth,
+            user_agent: navigator.userAgent,
+            updated_at: new Date().toISOString()
+          },
+          { onConflict: 'endpoint' }
+        );
+
+        if (error) {
+          console.error('Error al registrar suscripción en base de datos:', error);
+          return { success: false, message: `Error en base de datos: ${error.message}` };
+        }
+      }
+
+      return { success: true, message: '¡Notificaciones en segundo plano activadas exitosamente en este teléfono!' };
+    } catch (err: any) {
+      console.error('Error suscribiendo a notificaciones push:', err);
+      return { success: false, message: err.message || 'Error al configurar notificaciones push.' };
+    }
+  }
+
+  // Desuscribir el dispositivo de las notificaciones push
+  public async unsubscribeAdminFromPush(_currentUser?: UserProfile): Promise<{ success: boolean; message: string }> {
+    try {
+      const subscription = await this.getPushSubscription();
+      if (subscription) {
+        const endpoint = subscription.endpoint;
+        await subscription.unsubscribe();
+
+        if (isSupabaseConfigured && supabase) {
+          await supabase.from('push_subscriptions').delete().eq('endpoint', endpoint);
+        }
+      }
+      return { success: true, message: 'Notificaciones en segundo plano desactivadas en este dispositivo.' };
+    } catch (e: any) {
+      console.error('Error desuscribiendo:', e);
+      return { success: false, message: e.message || 'Error al desactivar notificaciones.' };
+    }
+  }
+
+  // Enviar notificación local inmediata del sistema (cuando la app está en primer plano)
   public async sendNotification(
     title: string,
     options: {

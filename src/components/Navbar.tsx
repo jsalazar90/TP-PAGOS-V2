@@ -34,32 +34,73 @@ export const Navbar: React.FC<NavbarProps> = ({
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => {
     return notificationService.getPermission();
   });
+  const [isPushActive, setIsPushActive] = useState<boolean>(false);
+  const [isSubscribing, setIsSubscribing] = useState<boolean>(false);
 
   useEffect(() => {
-    if (notificationService.isSupported()) {
-      setNotifPermission(notificationService.getPermission());
-    }
-  }, []);
+    const checkStatus = async () => {
+      if (notificationService.isSupported()) {
+        setNotifPermission(notificationService.getPermission());
+      }
+      if (currentUser.role === 'admin' && notificationService.isPushSupported()) {
+        const active = await notificationService.isPushSubscribed();
+        setIsPushActive(active);
+      }
+    };
+    checkStatus();
+  }, [currentUser]);
 
   const handleToggleNotifications = async () => {
+    if (isSubscribing) return;
+
     if (!notificationService.isSupported()) {
       alert('Tu navegador o dispositivo no soporta notificaciones web.');
       return;
     }
 
+    if (currentUser.role === 'admin' && notificationService.isPushSupported()) {
+      setIsSubscribing(true);
+      try {
+        if (!isPushActive) {
+          const res = await notificationService.subscribeAdminToPush(currentUser);
+          if (res.success) {
+            setIsPushActive(true);
+            setNotifPermission('granted');
+            notificationService.sendNotification('🔔 Notificaciones de Fondo Activadas', {
+              body: '¡Excelente! Recibirás alertas incluso cuando la app esté cerrada.',
+              soundType: 'new_request'
+            });
+          } else {
+            alert(res.message);
+          }
+        } else {
+          // Ya está suscrito: reproducir tono de prueba y enviar notificación
+          notificationService.sendNotification('🔔 Alertas Push Activas', {
+            body: 'El sistema de notificaciones en segundo plano está conectado y listo.',
+            soundType: 'new_request'
+          });
+        }
+      } catch (e: any) {
+        console.error('Error al gestionar notificaciones push:', e);
+      } finally {
+        setIsSubscribing(false);
+      }
+      return;
+    }
+
+    // Para usuarios solicitantes / operadores
     if (notifPermission !== 'granted') {
       const res = await notificationService.requestPermission();
       setNotifPermission(res);
       if (res === 'granted') {
         notificationService.sendNotification('🔔 Notificaciones Activadas', {
-          body: 'Recibirás alertas en tiempo real al crearse nuevas solicitudes.',
+          body: 'Recibirás alertas en tiempo real al crearse o actualizarse solicitudes.',
           soundType: 'new_request'
         });
       }
     } else {
-      // Test audio chime and notification
       notificationService.sendNotification('🔔 Notificaciones Activas', {
-        body: 'Sistema de alertas funcionando correctamente en este teléfono.',
+        body: 'Sistema de alertas funcionando correctamente en este dispositivo.',
         soundType: 'new_request'
       });
     }
@@ -132,27 +173,41 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Notification Alert Bell Button */}
             <button
               onClick={handleToggleNotifications}
+              disabled={isSubscribing}
               title={
-                notifPermission === 'granted'
-                  ? 'Notificaciones en vivo activas (toca para probar sonido)'
-                  : 'Activar alertas en vivo en este teléfono'
+                currentUser.role === 'admin'
+                  ? isPushActive
+                    ? 'Notificaciones Push en segundo plano activas (toca para probar)'
+                    : 'Activar Notificaciones Push en segundo plano en este teléfono'
+                  : notifPermission === 'granted'
+                  ? 'Notificaciones activas'
+                  : 'Activar notificaciones'
               }
               className={`active-press p-2 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all ${
-                notifPermission === 'granted'
-                  ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100'
+                isSubscribing
+                  ? 'bg-slate-100 text-slate-400 border-slate-200 animate-pulse'
+                  : (currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted')
+                  ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 shadow-2xs'
                   : notifPermission === 'denied'
-                  ? 'bg-slate-100 text-slate-400 border-slate-200'
+                  ? 'bg-rose-50 text-rose-500 border-rose-200'
                   : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 animate-pulse-subtle'
               }`}
             >
-              {notifPermission === 'granted' ? (
-                <BellRing className="w-4 h-4 text-[#00b4a2]" />
+              {(currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted') ? (
+                <>
+                  <BellRing className="w-4 h-4 text-[#00b4a2]" />
+                  <span className="hidden xl:inline text-[11px] font-semibold text-teal-800">
+                    {currentUser.role === 'admin' ? 'Push 24/7 Activo' : 'Alertas ON'}
+                  </span>
+                </>
               ) : notifPermission === 'denied' ? (
-                <BellOff className="w-4 h-4 text-slate-400" />
+                <BellOff className="w-4 h-4 text-rose-400" />
               ) : (
                 <>
                   <Bell className="w-4 h-4 text-amber-600 animate-bounce" />
-                  <span className="hidden sm:inline">Activar Alertas</span>
+                  <span className="hidden sm:inline text-amber-900 font-bold">
+                    {currentUser.role === 'admin' ? 'Activar Push Móvil' : 'Activar Alertas'}
+                  </span>
                 </>
               )}
             </button>
@@ -243,19 +298,28 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Mobile Notifications Button in Bottom Bar */}
         <button
           onClick={handleToggleNotifications}
+          disabled={isSubscribing}
           className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold transition-colors ${
-            notifPermission === 'granted'
+            (currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted')
               ? 'text-teal-700 hover:bg-teal-50'
               : 'text-amber-700 bg-amber-50 animate-pulse'
           }`}
           title="Activar o probar alertas"
         >
-          {notifPermission === 'granted' ? (
+          {(currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted') ? (
             <BellRing className="w-4 h-4 text-[#00b4a2]" />
           ) : (
             <Bell className="w-4 h-4 text-amber-600" />
           )}
-          <span>{notifPermission === 'granted' ? 'Alertas ON' : 'Activar'}</span>
+          <span>
+            {currentUser.role === 'admin'
+              ? isPushActive
+                ? 'Push 24/7'
+                : 'Activar'
+              : notifPermission === 'granted'
+              ? 'Alertas'
+              : 'Activar'}
+          </span>
         </button>
 
         {/* Mobile Logout Button in Bottom Bar */}
