@@ -11,8 +11,8 @@ dotenv.config();
 const SUPABASE_URL = process.env.VITE_SUPABASE_URL || 'https://frrjnamanvtobawtimlv.supabase.co';
 const SUPABASE_ANON_KEY = process.env.VITE_SUPABASE_ANON_KEY || '';
 
-const VAPID_PUBLIC_KEY = process.env.VITE_VAPID_PUBLIC_KEY || 'BKFk07uvGtfC_nICDOZn30wUNA7RaxYSMXCqx_qNu5VsCGW8YdkRKGSNg5cE2cy53RR_YZbvWDLObMpw5g1N2tE';
-const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || '7kSwp1YIc2dX2Cj0FHGdosGaD6PH16zIgURWQ012eRahRANCAAShZNO7rxrXwv5yAgzmZ99MFDQO0WsWEjFwqsf6jbuVbAhlvGHZEShkjYOXBNnMud0Uf2GW71gyzmzKcOYNTdrR';
+const VAPID_PUBLIC_KEY = process.env.VITE_VAPID_PUBLIC_KEY || 'BEAspF_YJBRvzHGj2C42G0z0PPTlRyB95mMWtQmSrpUf45QtLLJvYH-M7rMU4gdvQNWckSCKM5t09YpLw_acXoU';
+const VAPID_PRIVATE_KEY = process.env.VAPID_PRIVATE_KEY || 'Nu3RM3KBXKHBaCnSmjTajrZVLC3u8kVIR37yP5SBPL0';
 
 webpush.setVapidDetails('mailto:soporte@travelpoint.com', VAPID_PUBLIC_KEY, VAPID_PRIVATE_KEY);
 

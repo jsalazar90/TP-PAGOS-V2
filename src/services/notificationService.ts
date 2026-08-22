@@ -8,7 +8,7 @@ import { UserProfile } from '../types';
 
 export const VAPID_PUBLIC_KEY =
   import.meta.env.VITE_VAPID_PUBLIC_KEY ||
-  'BKFk07uvGtfC_nICDOZn30wUNA7RaxYSMXCqx_qNu5VsCGW8YdkRKGSNg5cE2cy53RR_YZbvWDLObMpw5g1N2tE';
+  'BEAspF_YJBRvzHGj2C42G0z0PPTlRyB95mMWtQmSrpUf45QtLLJvYH-M7rMU4gdvQNWckSCKM5t09YpLw_acXoU';
 
 // Función para convertir la llave VAPID base64url a Uint8Array
 function urlBase64ToUint8Array(base64String: string): Uint8Array {
@@ -180,8 +180,7 @@ class NotificationService {
 
   // Suscribir al usuario (exclusivo para administradores) al sistema Push en segundo plano
   public async subscribeAdminToPush(
-    currentUser: UserProfile,
-    forceRecreate = false
+    currentUser: UserProfile
   ): Promise<{ success: boolean; message: string }> {
     if (currentUser.role !== 'admin') {
       return { success: false, message: 'Las notificaciones push en segundo plano están reservadas para administradores.' };
@@ -201,25 +200,22 @@ class NotificationService {
       // 2. Obtener el Service Worker activo
       const registration = await navigator.serviceWorker.ready;
 
-      // 3. Obtener o crear la suscripción Web Push
+      // 3. Renovar o crear la suscripción Web Push con la llave VAPID actual
       let subscription = await registration.pushManager.getSubscription();
-
-      if (subscription && forceRecreate) {
+      if (subscription) {
         try {
           await subscription.unsubscribe();
-          subscription = null;
         } catch (e) {
           console.warn('Error al desuscribir previo:', e);
         }
+        subscription = null;
       }
 
-      if (!subscription) {
-        const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
-        subscription = await registration.pushManager.subscribe({
-          userVisibleOnly: true,
-          applicationServerKey: convertedVapidKey as unknown as BufferSource
-        });
-      }
+      const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
+      subscription = await registration.pushManager.subscribe({
+        userVisibleOnly: true,
+        applicationServerKey: convertedVapidKey as unknown as BufferSource
+      });
 
       const subJson = subscription.toJSON();
       if (!subJson.endpoint || !subJson.keys?.p256dh || !subJson.keys?.auth) {

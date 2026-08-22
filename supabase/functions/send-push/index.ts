@@ -15,8 +15,8 @@ const corsHeaders = {
 // Obtener variables de entorno
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL') || '';
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') || '';
-const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') || 'BKFk07uvGtfC_nICDOZn30wUNA7RaxYSMXCqx_qNu5VsCGW8YdkRKGSNg5cE2cy53RR_YZbvWDLObMpw5g1N2tE';
-const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') || '7kSwp1YIc2dX2Cj0FHGdosGaD6PH16zIgURWQ012eRahRANCAAShZNO7rxrXwv5yAgzmZ99MFDQO0WsWEjFwqsf6jbuVbAhlvGHZEShkjYOXBNnMud0Uf2GW71gyzmzKcOYNTdrR';
+const VAPID_PUBLIC_KEY = Deno.env.get('VAPID_PUBLIC_KEY') || 'BEAspF_YJBRvzHGj2C42G0z0PPTlRyB95mMWtQmSrpUf45QtLLJvYH-M7rMU4gdvQNWckSCKM5t09YpLw_acXoU';
+const VAPID_PRIVATE_KEY = Deno.env.get('VAPID_PRIVATE_KEY') || 'Nu3RM3KBXKHBaCnSmjTajrZVLC3u8kVIR37yP5SBPL0';
 const VAPID_SUBJECT = Deno.env.get('VAPID_SUBJECT') || 'mailto:soporte@travelpoint.com';
 
 // Configurar WebPush con VAPID
