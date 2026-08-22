@@ -10,6 +10,7 @@ import {
 } from '../types';
 import { fetchBeneficiaries } from '../services/dataService';
 import { FilePreviewModal } from './FilePreviewModal';
+import { BeneficiaryPickerModal } from './BeneficiaryPickerModal';
 import {
   X,
   Upload,
@@ -112,6 +113,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   // Beneficiaries list state
   const [beneficiariesList, setBeneficiariesList] = useState<Beneficiary[]>(beneficiaries || []);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>('');
+  const [isBeneficiaryPickerOpen, setIsBeneficiaryPickerOpen] = useState<boolean>(false);
 
   useEffect(() => {
     if (isOpen) {
@@ -1182,9 +1184,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
           {step === 'paste' && (
             <div className="space-y-4 animate-fade-in">
               {/* Beneficiary Quick Selector at Top */}
-              <div className="bg-teal-50/50 rounded-2xl border border-teal-200/80 p-3.5 space-y-2.5">
+              <div className="bg-teal-50/60 rounded-2xl border border-teal-200/90 p-3.5 space-y-2.5">
                 <div className="flex items-center justify-between flex-wrap gap-1">
-                  <label className="text-[11px] font-bold text-teal-900 flex items-center gap-1.5">
+                  <label className="text-[11px] font-bold text-teal-950 flex items-center gap-1.5">
                     <Building2 className="w-3.5 h-3.5 text-[#00b4a2]" />
                     <span>Seleccionar Beneficiario de la Base de Datos:</span>
                   </label>
@@ -1193,39 +1195,61 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   </span>
                 </div>
 
-                <div className="flex items-center gap-2">
-                  <div className="relative flex-1">
-                    <Search className="w-3.5 h-3.5 text-teal-500 absolute left-3 top-1/2 -translate-y-1/2" />
-                    <select
-                      value={selectedBeneficiaryId}
-                      onChange={(e) => handleSelectBeneficiary(e.target.value)}
-                      className={`w-full border rounded-xl pl-8 pr-3 py-2 text-xs font-bold transition-all shadow-2xs cursor-pointer truncate ${
-                        selectedBeneficiaryId
-                          ? 'bg-emerald-50 border-emerald-400 text-emerald-950 ring-2 ring-emerald-400/20'
-                          : 'bg-white border-teal-300 text-slate-800'
-                      }`}
-                    >
-                      <option value="">🔍 Seleccionar un beneficiario de la base de datos...</option>
-                      {beneficiariesList.map((b) => (
-                        <option key={b.id} value={b.id}>
-                          {b.name} {b.rif ? `(${b.rif})` : ''} • {b.category ? b.category.toUpperCase() : 'HOSPEDAJE'} • {b.bank_details.bank || b.bank_details.payment_method}
-                        </option>
-                      ))}
-                    </select>
-                  </div>
+                {!selectedBeneficiaryId ? (
+                  <button
+                    type="button"
+                    onClick={() => setIsBeneficiaryPickerOpen(true)}
+                    className="w-full flex items-center justify-between p-3 bg-white hover:bg-teal-50/50 border-2 border-dashed border-teal-300 hover:border-teal-400 rounded-2xl text-xs font-bold text-slate-700 hover:text-teal-900 transition-all shadow-2xs group active-press"
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="w-7 h-7 rounded-xl bg-teal-100/80 text-[#009b8b] flex items-center justify-center group-hover:scale-105 transition-transform shrink-0">
+                        <Search className="w-4 h-4" />
+                      </div>
+                      <div className="text-left truncate">
+                        <span className="block font-bold text-slate-800 text-xs truncate">
+                          🔍 Seleccionar un beneficiario de la base de datos...
+                        </span>
+                        <span className="block text-[10px] text-slate-400 font-normal">
+                          Toca para buscar por nombre, RIF, banco o cuenta ({beneficiariesList.length} disponibles)
+                        </span>
+                      </div>
+                    </div>
 
-                  {selectedBeneficiaryId && (
+                    <span className="px-3 py-1 bg-teal-50 group-hover:bg-[#00b4a2] text-teal-800 group-hover:text-white rounded-xl text-xs font-bold transition-all shadow-2xs shrink-0 ml-2">
+                      Buscar
+                    </span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsBeneficiaryPickerOpen(true)}
+                      className="flex-1 flex items-center justify-between p-2.5 bg-emerald-50 hover:bg-emerald-100/70 border-2 border-emerald-400 rounded-2xl text-xs font-bold text-emerald-950 transition-all shadow-2xs active-press"
+                    >
+                      <div className="flex items-center gap-2 truncate">
+                        <CheckCircle2 className="w-4 h-4 text-emerald-600 shrink-0" />
+                        <span className="truncate">{formData.bank_beneficiary || formData.hotel_name}</span>
+                        {formData.bank_rif && (
+                          <span className="font-mono text-[10px] bg-emerald-200/70 text-emerald-900 px-1.5 py-0.5 rounded shrink-0">
+                            {formData.bank_rif}
+                          </span>
+                        )}
+                      </div>
+                      <span className="text-[11px] text-emerald-800 underline ml-2 shrink-0">
+                        Cambiar
+                      </span>
+                    </button>
                     <button
                       type="button"
                       onClick={handleResetBeneficiary}
-                      className="px-2.5 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 rounded-xl font-bold text-xs transition-colors shrink-0 flex items-center gap-1"
-                      title="Deseleccionar y mostrar selectores manuales"
+                      className="px-3 py-2.5 bg-white hover:bg-rose-50 text-slate-500 hover:text-rose-600 border border-slate-200 hover:border-rose-200 rounded-2xl font-bold text-xs transition-colors shrink-0 flex items-center gap-1 shadow-2xs"
+                      title="Quitar y restablecer"
                     >
-                      <X className="w-3.5 h-3.5 text-slate-500" />
-                      <span className="hidden sm:inline">Restablecer</span>
+                      <X className="w-3.5 h-3.5" />
+                      <span className="hidden sm:inline">Quitar</span>
                     </button>
-                  )}
-                </div>
+                  </div>
+                )}
 
                 {selectedBeneficiaryId && (
                   <div className="p-3 bg-emerald-50/90 rounded-2xl border-2 border-emerald-300 text-xs text-emerald-950 space-y-1.5 animate-fade-in shadow-2xs">
@@ -2780,6 +2804,15 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
           onConfirm={handleConfirmSupportFile}
           onCancel={handleCancelSupportFile}
           onModify={handleTriggerModifyFile}
+        />
+
+        {/* Modal Interactivo de Búsqueda y Selección de Beneficiario */}
+        <BeneficiaryPickerModal
+          isOpen={isBeneficiaryPickerOpen}
+          onClose={() => setIsBeneficiaryPickerOpen(false)}
+          beneficiaries={beneficiariesList}
+          selectedBeneficiaryId={selectedBeneficiaryId}
+          onSelect={handleSelectBeneficiary}
         />
       </div>
     </div>

@@ -1139,8 +1139,12 @@ export async function cancelModificationRequest(
 
 export async function deletePaymentRequest(
   requestId: string,
-  _currentUser: UserProfile
+  currentUser: UserProfile
 ): Promise<void> {
+  if (currentUser.role !== 'admin') {
+    throw new Error('Permiso denegado: Solo los usuarios administradores pueden eliminar solicitudes.');
+  }
+
   const requests = getLocalRequests();
   const existing = requests.find(r => r.id === requestId);
 

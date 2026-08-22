@@ -32,6 +32,9 @@ import { StatusChangeModal } from './components/StatusChangeModal';
 import { RequestDetailModal } from './components/RequestDetailModal';
 import { ModificationRequestModal } from './components/ModificationRequestModal';
 import { NotificationDiagnosticsModal } from './components/NotificationDiagnosticsModal';
+import { AuditorLoginView } from './components/AuditorLoginView';
+import { AuditorView } from './components/AuditorView';
+import { logAuditEvent } from './services/auditService';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { notificationService } from './services/notificationService';
 import { CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
@@ -65,6 +68,38 @@ export function App() {
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<PaymentRequest | null>(null);
   const [modificationModalRequest, setModificationModalRequest] = useState<PaymentRequest | null>(null);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+
+  // Auditor Module State (/auditor)
+  const [isAuditorRoute, setIsAuditorRoute] = useState<boolean>(() => {
+    return window.location.pathname.toLowerCase().startsWith('/auditor') ||
+           window.location.search.includes('view=auditor');
+  });
+  const [isAuditorLoggedIn, setIsAuditorLoggedIn] = useState<boolean>(() => {
+    return sessionStorage.getItem('tp_super_auditor_user') === 'jhoansg';
+  });
+
+  useEffect(() => {
+    const checkRoute = () => {
+      const isAuditor = window.location.pathname.toLowerCase().startsWith('/auditor') ||
+                        window.location.search.includes('view=auditor');
+      setIsAuditorRoute(isAuditor);
+      // Re-validar credencial exclusiva de super usuario al cambiar de ruta
+      setIsAuditorLoggedIn(sessionStorage.getItem('tp_super_auditor_user') === 'jhoansg');
+    };
+    window.addEventListener('popstate', checkRoute);
+    return () => window.removeEventListener('popstate', checkRoute);
+  }, []);
+
+  const handleGoToMainFromAuditor = () => {
+    window.history.pushState({}, '', '/');
+    setIsAuditorRoute(false);
+  };
+
+  const handleAuditorLogout = () => {
+    sessionStorage.removeItem('tp_super_auditor_user');
+    sessionStorage.removeItem('tp_super_auditor_session');
+    setIsAuditorLoggedIn(false);
+  };
 
   // Toast notifications
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -336,10 +371,20 @@ export function App() {
   };
 
   const handleDeleteBeneficiary = async (id: string) => {
+    const ben = beneficiariesList.find(b => b.id === id);
     try {
       await deleteBeneficiary(id);
       setBeneficiariesList(prev => prev.filter(b => b.id !== id));
       showToast('Beneficiario eliminado del directorio', 'success');
+
+      logAuditEvent({
+        action_type: 'delete_beneficiary',
+        user: currentUser,
+        target_id: id,
+        target_title: ben?.name || 'Beneficiario',
+        details: `El usuario ${currentUser?.full_name || 'Admin'} eliminó al beneficiario "${ben?.name || id}" del directorio.`,
+        metadata: { name: ben?.name, rif: ben?.rif }
+      }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error al eliminar: ${err.message}`, 'error');
     }
@@ -348,12 +393,33 @@ export function App() {
   const handleLoginSuccess = (user: UserProfile) => {
     localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(user));
     setCurrentUser(user);
+
+    // Si no es el super usuario jhoansg, aislar y borrar credencial de auditor
+    if (user.username?.toLowerCase() !== 'jhoansg') {
+      sessionStorage.removeItem('tp_super_auditor_user');
+      sessionStorage.removeItem('tp_super_auditor_session');
+      setIsAuditorLoggedIn(false);
+    } else {
+      sessionStorage.setItem('tp_super_auditor_user', 'jhoansg');
+      setIsAuditorLoggedIn(true);
+    }
+
     loadRequests(user);
     showToast(`Bienvenido(a), ${user.full_name}`, 'success');
+
+    logAuditEvent({
+      action_type: 'login',
+      user: user,
+      details: `Inicio de sesión exitoso: ${user.full_name} (@${user.username}) con rol ${user.role.toUpperCase()}.`,
+      metadata: { username: user.username, role: user.role }
+    }).catch(console.warn);
   };
 
   const handleLogout = () => {
     localStorage.removeItem(SESSION_STORAGE_KEY);
+    sessionStorage.removeItem('tp_super_auditor_user');
+    sessionStorage.removeItem('tp_super_auditor_session');
+    setIsAuditorLoggedIn(false);
     setCurrentUser(null);
     setRequests([]);
     setActiveTab('dashboard');
@@ -368,10 +434,28 @@ export function App() {
         const updated = await updatePaymentRequest(editingRequest.id, input, currentUser);
         setRequests(prev => prev.map(r => r.id === editingRequest.id ? updated : r));
         showToast(`Solicitud LOC: #${updated.locator} actualizada exitosamente`, 'success');
+
+        logAuditEvent({
+          action_type: 'update_request',
+          user: currentUser,
+          target_id: updated.locator,
+          target_title: updated.title,
+          details: `El administrador ${currentUser.full_name} modificó los datos de la solicitud #${updated.locator} (Cliente: ${updated.client}, Monto: $${updated.amount_usd} USD).`,
+          metadata: { locator: updated.locator, client: updated.client, amount_usd: updated.amount_usd, category: updated.category }
+        }).catch(console.warn);
       } else {
         const newReq = await createPaymentRequest(input, currentUser);
         setRequests(prev => [newReq, ...prev]);
         showToast(`Solicitud LOC: #${newReq.locator} creada exitosamente`, 'success');
+
+        logAuditEvent({
+          action_type: 'create_request',
+          user: currentUser,
+          target_id: newReq.locator,
+          target_title: newReq.title,
+          details: `Solicitud #${newReq.locator} creada por ${currentUser.full_name} para el cliente "${newReq.client}" (${newReq.category?.toUpperCase() || 'HOSPEDAJE'}). Monto: $${newReq.amount_usd} USD / Bs. ${newReq.amount_bs || 0}.`,
+          metadata: { locator: newReq.locator, client: newReq.client, category: newReq.category, amount_usd: newReq.amount_usd, status: newReq.status }
+        }).catch(console.warn);
       }
       setEditingRequest(null);
     } catch (err: any) {
@@ -387,6 +471,15 @@ export function App() {
       await deletePaymentRequest(request.id, currentUser);
       setRequests(prev => prev.filter(r => r.id !== request.id));
       showToast(`Solicitud LOC: #${request.locator} eliminada`, 'success');
+
+      logAuditEvent({
+        action_type: 'delete_request',
+        user: currentUser,
+        target_id: request.locator,
+        target_title: request.title,
+        details: `ALERTA DE SEGURIDAD: El administrador ${currentUser.full_name} eliminó permanentemente la solicitud #${request.locator} (Cliente: "${request.client}", Monto: $${request.amount_usd} USD).`,
+        metadata: { locator: request.locator, client: request.client, amount_usd: request.amount_usd, category: request.category }
+      }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error al eliminar solicitud: ${err.message}`, 'error');
     }
@@ -411,6 +504,15 @@ export function App() {
       };
 
       showToast(`Estado actualizado a "${statusLabels[newStatus]}"`, 'success');
+
+      logAuditEvent({
+        action_type: 'status_change',
+        user: currentUser,
+        target_id: updatedReq.locator,
+        target_title: updatedReq.title,
+        details: `Estado de la solicitud #${updatedReq.locator} cambiado a "${statusLabels[newStatus]}" por ${currentUser?.full_name || 'Admin'}.${originBank ? ` Banco Emisor: ${originBank}.` : ''}${receiptFile ? ' Con comprobante adjunto cargado.' : ''}`,
+        metadata: { locator: updatedReq.locator, new_status: newStatus, origin_bank: originBank }
+      }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error: ${err.message}`, 'error');
       throw err;
@@ -423,6 +525,15 @@ export function App() {
       const newUser = await createNewUser(userData);
       setUsersList(prev => [newUser, ...prev]);
       showToast(`Usuario "${newUser.full_name}" registrado con éxito`, 'success');
+
+      logAuditEvent({
+        action_type: 'create_user',
+        user: currentUser,
+        target_id: newUser.username,
+        target_title: newUser.full_name,
+        details: `El administrador ${currentUser?.full_name || 'Admin'} registró un nuevo usuario: "${newUser.full_name}" (@${newUser.username}) con rol ${newUser.role.toUpperCase()}.`,
+        metadata: { username: newUser.username, role: newUser.role }
+      }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error al registrar usuario: ${err.message}`, 'error');
       throw err;
@@ -435,6 +546,15 @@ export function App() {
       const updated = await toggleUserActiveStatus(userId);
       setUsersList(prev => prev.map(u => u.id === userId ? updated : u));
       showToast(`Estado del usuario actualizado`, 'success');
+
+      logAuditEvent({
+        action_type: 'toggle_user_status',
+        user: currentUser,
+        target_id: updated.username,
+        target_title: updated.full_name,
+        details: `El administrador ${currentUser?.full_name || 'Admin'} cambió el estado del usuario "${updated.full_name}" a ${updated.is_active ? 'ACTIVO' : 'INACTIVO'}.`,
+        metadata: { username: updated.username, is_active: updated.is_active }
+      }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error: ${err.message}`, 'error');
     }
@@ -446,6 +566,15 @@ export function App() {
       const updated = await updateUserPassword(userId, newPass);
       setUsersList(prev => prev.map(u => (u.id === userId ? updated : u)));
       showToast(`Contraseña actualizada con éxito para "${updated.full_name}".`, 'success');
+
+      logAuditEvent({
+        action_type: 'change_password',
+        user: currentUser,
+        target_id: updated.username,
+        target_title: updated.full_name,
+        details: `El administrador ${currentUser?.full_name || 'Admin'} actualizó la contraseña del usuario "${updated.full_name}" (@${updated.username}).`,
+        metadata: { username: updated.username }
+      }).catch(console.warn);
     } catch (e: any) {
       showToast(e.message || 'Error al cambiar la contraseña', 'error');
       throw e;
@@ -466,6 +595,15 @@ export function App() {
         setSelectedRequestForDetail(updated);
       }
       showToast(`Solicitud de modificación enviada al administrador`, 'success');
+
+      logAuditEvent({
+        action_type: 'request_modification',
+        user: currentUser,
+        target_id: updated.locator,
+        target_title: updated.title,
+        details: `El solicitante ${currentUser.full_name} solicitó modificar la solicitud #${updated.locator}. Observación: "${reason}".`,
+        metadata: { locator: updated.locator, reason }
+      }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error: ${err.message}`, 'error');
       throw err;
@@ -481,6 +619,15 @@ export function App() {
         setSelectedRequestForDetail(updated);
       }
       showToast(`Solicitud de modificación cancelada / descartada`, 'success');
+
+      logAuditEvent({
+        action_type: 'cancel_modification',
+        user: currentUser,
+        target_id: request.locator,
+        target_title: request.title,
+        details: `El usuario ${currentUser.full_name} canceló/descartó la petición de modificación para la solicitud #${request.locator}.`,
+        metadata: { locator: request.locator }
+      }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error: ${err.message}`, 'error');
     }
@@ -517,6 +664,24 @@ export function App() {
       throw err;
     }
   };
+
+  // Render Auditor Sub-Page (/auditor)
+  if (isAuditorRoute) {
+    if (!isAuditorLoggedIn) {
+      return (
+        <AuditorLoginView
+          onLoginSuccess={() => setIsAuditorLoggedIn(true)}
+          onGoToMain={handleGoToMainFromAuditor}
+        />
+      );
+    }
+    return (
+      <AuditorView
+        onLogout={handleAuditorLogout}
+        onGoToMain={handleGoToMainFromAuditor}
+      />
+    );
+  }
 
   if (!currentUser) {
     return <LoginView onLoginSuccess={handleLoginSuccess} availableUsers={usersList} />;
@@ -573,7 +738,7 @@ export function App() {
                 onOpenNewRequest={handleOpenNewRequest}
                 onOpenBeneficiaries={() => setActiveTab('beneficiaries')}
                 onEditRequest={handleOpenEditRequest}
-                onDeleteRequest={handleDeleteRequest}
+                onDeleteRequest={currentUser.role === 'admin' ? handleDeleteRequest : undefined}
                 onRequestModification={handleRequestModification}
                 onCancelModification={handleCancelModification}
                 onRefresh={() => loadRequests(currentUser)}

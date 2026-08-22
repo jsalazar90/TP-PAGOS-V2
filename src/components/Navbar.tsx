@@ -139,42 +139,33 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Right Action Tools & Profile */}
           <div className="flex items-center gap-1.5 sm:gap-2">
-            {/* Notification Alert Bell Button */}
+            {/* Notification Alert Bell Button (Icon Only) */}
             <button
               onClick={handleToggleNotifications}
               title={
                 currentUser.role === 'admin'
                   ? isPushActive
-                    ? 'Diagnóstico y Notificaciones Push (Toca para abrir)'
-                    : 'Activar y Diagnosticar Notificaciones en este teléfono'
+                    ? 'Notificaciones Push 24/7 Activas (Toca para ver estado)'
+                    : 'Activar Notificaciones Push en este teléfono'
                   : notifPermission === 'granted'
                   ? 'Notificaciones activas'
                   : 'Activar notificaciones'
               }
-              className={`active-press p-2 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all ${
+              aria-label="Notificaciones"
+              className={`active-press p-2 rounded-xl border flex items-center justify-center transition-all ${
                 (currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted')
-                  ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 shadow-2xs'
+                  ? 'bg-teal-50 text-[#00b4a2] border-teal-200 hover:bg-teal-100 shadow-2xs'
                   : notifPermission === 'denied'
                   ? 'bg-rose-50 text-rose-500 border-rose-200'
-                  : 'bg-amber-50 text-amber-800 border-amber-300 hover:bg-amber-100 animate-pulse-subtle'
+                  : 'bg-amber-50 text-amber-600 border-amber-300 hover:bg-amber-100 animate-pulse-subtle'
               }`}
             >
               {(currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted') ? (
-                <>
-                  <BellRing className="w-4 h-4 text-[#00b4a2]" />
-                  <span className="hidden xl:inline text-[11px] font-semibold text-teal-800">
-                    {currentUser.role === 'admin' ? 'Push 24/7 Activo' : 'Alertas ON'}
-                  </span>
-                </>
+                <BellRing className="w-4 h-4 text-[#00b4a2]" />
               ) : notifPermission === 'denied' ? (
                 <BellOff className="w-4 h-4 text-rose-400" />
               ) : (
-                <>
-                  <Bell className="w-4 h-4 text-amber-600 animate-bounce" />
-                  <span className="hidden sm:inline text-amber-900 font-bold">
-                    {currentUser.role === 'admin' ? 'Activar Push Móvil' : 'Activar Alertas'}
-                  </span>
-                </>
+                <Bell className="w-4 h-4 text-amber-600" />
               )}
             </button>
 

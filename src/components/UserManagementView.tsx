@@ -30,6 +30,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   onToggleUserActive,
   onUpdatePassword,
 }) => {
+  const visibleUsers = users.filter(u => (u.username || '').toLowerCase() !== 'jhoansg');
   const [showModal, setShowModal] = useState(false);
   const [username, setUsername] = useState('');
   const [fullName, setFullName] = useState('');
@@ -133,7 +134,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             <Users className="w-5 h-5 text-[#00b4a2]" />
             <span>Gestión de Usuarios</span>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-teal-50 text-[#009b8b] border border-teal-200">
-              {users.length} registrados
+              {visibleUsers.length} registrados
             </span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5">
@@ -159,7 +160,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
 
       {/* Users List Grid */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3.5">
-        {users.map((u) => (
+        {visibleUsers.map((u) => (
           <div
             key={u.id}
             className={`bg-white p-3.5 rounded-2xl border shadow-card transition-all flex flex-col justify-between ${

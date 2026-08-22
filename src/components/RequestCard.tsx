@@ -59,9 +59,9 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   const [copiedLoc, setCopiedLoc] = useState(false);
 
   const isDirectUsd = request.currency === 'USD' || request.bcv_rate === 0;
-  const canEditOrDelete =
+  const canDelete =
     request.status !== 'realizado' &&
-    (currentUser.role === 'admin' || request.created_by === currentUser.id);
+    currentUser.role === 'admin';
 
   const handleCopyLocator = () => {
     navigator.clipboard.writeText(request.locator);
@@ -424,7 +424,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               </button>
             )}
 
-            {canEditOrDelete && onDeleteRequest && (
+            {canDelete && onDeleteRequest && (
               <button
                 onClick={() => {
                   if (
@@ -433,7 +433,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
                     onDeleteRequest(request);
                   }
                 }}
-                title="Eliminar solicitud"
+                title="Eliminar solicitud (Solo Administradores)"
                 className="active-press p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
               >
                 <Trash2 className="w-3.5 h-3.5 text-rose-600" />
