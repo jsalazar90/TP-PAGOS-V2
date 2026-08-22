@@ -3,10 +3,13 @@
 -- TP PAGOS PRO - Travel Point
 -- ==============================================================================
 
--- 1. Crear tabla de suscripciones push
-CREATE TABLE IF NOT EXISTS public.push_subscriptions (
+-- 1. Eliminar tabla previa para limpiar constraints conflictivas
+DROP TABLE IF EXISTS public.push_subscriptions CASCADE;
+
+-- 2. Crear tabla de suscripciones push
+CREATE TABLE public.push_subscriptions (
   id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-  user_id UUID REFERENCES public.profiles(id) ON DELETE CASCADE,
+  user_id TEXT,
   user_role TEXT NOT NULL DEFAULT 'admin',
   endpoint TEXT NOT NULL UNIQUE,
   p256dh TEXT NOT NULL,
@@ -16,26 +19,24 @@ CREATE TABLE IF NOT EXISTS public.push_subscriptions (
   updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- 2. Índices de optimización
+-- 3. Índices de optimización
 CREATE INDEX IF NOT EXISTS idx_push_subs_user_id ON public.push_subscriptions(user_id);
 CREATE INDEX IF NOT EXISTS idx_push_subs_role ON public.push_subscriptions(user_role);
 
--- 3. Habilitar Row Level Security (RLS)
+-- 4. Habilitar Row Level Security (RLS)
 ALTER TABLE public.push_subscriptions ENABLE ROW LEVEL SECURITY;
 
--- 4. Políticas de acceso para el cliente
-DROP POLICY IF EXISTS "Permitir lectura de suscripciones push" ON public.push_subscriptions;
+-- 5. Políticas de acceso para el cliente
 CREATE POLICY "Permitir lectura de suscripciones push"
   ON public.push_subscriptions FOR SELECT
   USING (true);
 
-DROP POLICY IF EXISTS "Permitir insercion y actualizacion de suscripciones" ON public.push_subscriptions;
 CREATE POLICY "Permitir insercion y actualizacion de suscripciones"
   ON public.push_subscriptions FOR ALL
   USING (true)
   WITH CHECK (true);
 
--- 5. Trigger para actualizar updated_at automáticamente
+-- 6. Trigger para actualizar updated_at automáticamente
 CREATE OR REPLACE FUNCTION update_push_sub_updated_at()
 RETURNS TRIGGER AS $$
 BEGIN
@@ -49,14 +50,3 @@ CREATE TRIGGER trg_push_subscriptions_updated_at
   BEFORE UPDATE ON public.push_subscriptions
   FOR EACH ROW
   EXECUTE FUNCTION update_push_sub_updated_at();
-
--- ==============================================================================
--- CONFIGURACIÓN DEL WEBHOOK DE SUPABASE:
--- ==============================================================================
--- En el panel de Supabase:
--- 1. Ve a Database -> Webhooks -> "Create a new webhook"
--- 2. Name: notify_admins_push
--- 3. Table: payment_requests
--- 4. Events: Insert, Update
--- 5. Type: Supabase Edge Functions -> send-push
--- ==============================================================================

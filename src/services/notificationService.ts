@@ -136,14 +136,53 @@ class NotificationService {
     }
   }
 
-  // Verificar si este dispositivo ya tiene una suscripción activa
-  public async isPushSubscribed(): Promise<boolean> {
+  // Verificar si este dispositivo ya tiene una suscripción activa y sincronizada en Supabase
+  public async isPushSubscribed(currentUser?: UserProfile): Promise<boolean> {
     const sub = await this.getPushSubscription();
-    return sub !== null && Notification.permission === 'granted';
+    if (!sub || Notification.permission !== 'granted') {
+      return false;
+    }
+
+    // Si tenemos el usuario admin y Supabase está activo, asegurar que exista en la BD
+    if (currentUser && currentUser.role === 'admin' && isSupabaseConfigured && supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('push_subscriptions')
+          .select('id')
+          .eq('endpoint', sub.endpoint)
+          .maybeSingle();
+
+        // Si no está en Supabase (ej: se borró de la BD), re-sincronizarlo automáticamente
+        if (!error && !data) {
+          const subJson = sub.toJSON();
+          if (subJson.endpoint && subJson.keys?.p256dh && subJson.keys?.auth) {
+            await supabase.from('push_subscriptions').upsert(
+              {
+                user_id: currentUser.id,
+                user_role: currentUser.role,
+                endpoint: subJson.endpoint,
+                p256dh: subJson.keys.p256dh,
+                auth: subJson.keys.auth,
+                user_agent: navigator.userAgent,
+                updated_at: new Date().toISOString()
+              },
+              { onConflict: 'endpoint' }
+            );
+          }
+        }
+      } catch (e) {
+        console.warn('Error verificando sincronización en Supabase:', e);
+      }
+    }
+
+    return true;
   }
 
   // Suscribir al usuario (exclusivo para administradores) al sistema Push en segundo plano
-  public async subscribeAdminToPush(currentUser: UserProfile): Promise<{ success: boolean; message: string }> {
+  public async subscribeAdminToPush(
+    currentUser: UserProfile,
+    forceRecreate = false
+  ): Promise<{ success: boolean; message: string }> {
     if (currentUser.role !== 'admin') {
       return { success: false, message: 'Las notificaciones push en segundo plano están reservadas para administradores.' };
     }
@@ -156,7 +195,7 @@ class NotificationService {
       // 1. Solicitar permiso de notificaciones al sistema operativo
       const permission = await this.requestPermission();
       if (permission !== 'granted') {
-        return { success: false, message: 'Permiso de notificaciones denegado en el dispositivo.' };
+        return { success: false, message: 'Permiso de notificaciones denegado en el dispositivo. Ve a Ajustes del teléfono para permitirlo.' };
       }
 
       // 2. Obtener el Service Worker activo
@@ -164,6 +203,16 @@ class NotificationService {
 
       // 3. Obtener o crear la suscripción Web Push
       let subscription = await registration.pushManager.getSubscription();
+
+      if (subscription && forceRecreate) {
+        try {
+          await subscription.unsubscribe();
+          subscription = null;
+        } catch (e) {
+          console.warn('Error al desuscribir previo:', e);
+        }
+      }
+
       if (!subscription) {
         const convertedVapidKey = urlBase64ToUint8Array(VAPID_PUBLIC_KEY);
         subscription = await registration.pushManager.subscribe({
@@ -193,12 +242,12 @@ class NotificationService {
         );
 
         if (error) {
-          console.error('Error al registrar suscripción en base de datos:', error);
-          return { success: false, message: `Error en base de datos: ${error.message}` };
+          console.error('Error al registrar suscripción en Supabase:', error);
+          return { success: false, message: `Error en Supabase: ${error.message}` };
         }
       }
 
-      return { success: true, message: '¡Notificaciones en segundo plano activadas exitosamente en este teléfono!' };
+      return { success: true, message: '¡Dispositivo sincronizado en Supabase y notificaciones Push 24/7 activas!' };
     } catch (err: any) {
       console.error('Error suscribiendo a notificaciones push:', err);
       return { success: false, message: err.message || 'Error al configurar notificaciones push.' };

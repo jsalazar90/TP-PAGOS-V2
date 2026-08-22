@@ -43,7 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({
         setNotifPermission(notificationService.getPermission());
       }
       if (currentUser.role === 'admin' && notificationService.isPushSupported()) {
-        const active = await notificationService.isPushSubscribed();
+        const active = await notificationService.isPushSubscribed(currentUser);
         setIsPushActive(active);
       }
     };
@@ -61,24 +61,16 @@ export const Navbar: React.FC<NavbarProps> = ({
     if (currentUser.role === 'admin' && notificationService.isPushSupported()) {
       setIsSubscribing(true);
       try {
-        if (!isPushActive) {
-          const res = await notificationService.subscribeAdminToPush(currentUser);
-          if (res.success) {
-            setIsPushActive(true);
-            setNotifPermission('granted');
-            notificationService.sendNotification('🔔 Notificaciones de Fondo Activadas', {
-              body: '¡Excelente! Recibirás alertas incluso cuando la app esté cerrada.',
-              soundType: 'new_request'
-            });
-          } else {
-            alert(res.message);
-          }
-        } else {
-          // Ya está suscrito: reproducir tono de prueba y enviar notificación
-          notificationService.sendNotification('🔔 Alertas Push Activas', {
-            body: 'El sistema de notificaciones en segundo plano está conectado y listo.',
+        const res = await notificationService.subscribeAdminToPush(currentUser);
+        if (res.success) {
+          setIsPushActive(true);
+          setNotifPermission('granted');
+          notificationService.sendNotification('🔔 Notificaciones de Fondo Sincronizadas', {
+            body: '¡Dispositivo registrado en la base de datos! Recibirás alertas con la app cerrada.',
             soundType: 'new_request'
           });
+        } else {
+          alert(res.message);
         }
       } catch (e: any) {
         console.error('Error al gestionar notificaciones push:', e);
