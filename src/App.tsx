@@ -232,6 +232,65 @@ export function App() {
     };
   }, [currentUser]);
 
+  // Función para abrir automáticamente la ficha de solicitud (Deep Link desde Push o URL)
+  const openRequestById = async (reqId: string, user: UserProfile) => {
+    if (!reqId) return;
+
+    // 1. Buscar en la lista actual cargada
+    let target = requests.find(r => r.id === reqId || r.locator === reqId);
+
+    // 2. Si no está en memoria, consultar la lista fresca de Supabase
+    if (!target) {
+      try {
+        const freshList = await fetchPaymentRequests(user);
+        setRequests(freshList);
+        target = freshList.find(r => r.id === reqId || r.locator === reqId);
+      } catch (e) {
+        console.warn('Error buscando solicitud para detalle:', e);
+      }
+    }
+
+    if (target) {
+      setActiveTab(target.status === 'realizado' ? 'history' : 'dashboard');
+      setSelectedRequestForDetail(target);
+    }
+  };
+
+  // Manejar apertura automática al hacer clic en notificación (URL ?request=ID)
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const params = new URLSearchParams(window.location.search);
+    const reqParam = params.get('request') || params.get('requestId') || params.get('id') || params.get('locator');
+
+    if (reqParam) {
+      openRequestById(reqParam, currentUser);
+      // Limpiar parámetro de la URL sin recargar
+      window.history.replaceState({}, document.title, window.location.pathname);
+    }
+  }, [currentUser]);
+
+  // Escuchar mensaje del Service Worker cuando la app ya estaba abierta en segundo plano
+  useEffect(() => {
+    if (!currentUser) return;
+
+    const handleSWMessage = (event: MessageEvent) => {
+      if (event.data && event.data.type === 'OPEN_REQUEST_DETAIL' && event.data.requestId) {
+        openRequestById(event.data.requestId, currentUser);
+      }
+    };
+
+    if ('serviceWorker' in navigator) {
+      navigator.serviceWorker.addEventListener('message', handleSWMessage);
+    }
+
+    return () => {
+      if ('serviceWorker' in navigator) {
+        navigator.serviceWorker.removeEventListener('message', handleSWMessage);
+      }
+    };
+  }, [currentUser, requests]);
+
   // Fetch payment requests and beneficiaries when currentUser changes
   const loadRequests = async (user: UserProfile) => {
     try {

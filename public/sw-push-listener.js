@@ -1,6 +1,6 @@
 // ==============================================================================
 // SERVICE WORKER - BACKGROUND WEB PUSH NOTIFICATION LISTENER
-// TP PAGOS PRO - Android Background Alert Handler
+// TP PAGOS PRO - Android Background Alert Handler & Request Deep Link
 // ==============================================================================
 
 self.addEventListener('push', function (event) {
@@ -24,18 +24,20 @@ self.addEventListener('push', function (event) {
   const isModification = payload.isModification === true || (payload.title && payload.title.includes('Modificación'));
 
   const title = payload.title || (isUrgent ? '🔥 SOLICITUD URGENTE - TP PAGOS' : '🔔 Nueva Solicitud - TP PAGOS');
-  
+  const reqId = payload.requestId || payload.id || null;
+  const directUrl = reqId ? `/?request=${encodeURIComponent(reqId)}` : (payload.url || '/');
+
   const options = {
     body: payload.body || 'Tienes una nueva solicitud pendiente de revisión.',
     icon: payload.icon || '/pwa-192x192.png',
     badge: payload.badge || '/pwa-192x192.png',
-    tag: payload.tag || (payload.requestId ? `req-${payload.requestId}` : `tp-pagos-alert-${Date.now()}`),
+    tag: payload.tag || (reqId ? `req-${reqId}` : `tp-pagos-alert-${Date.now()}`),
     renotify: true,
-    requireInteraction: isUrgent, // En solicitudes urgentes se mantiene fija hasta que se abra
+    requireInteraction: isUrgent, // En solicitudes urgentes se mantiene fija en Android
     vibrate: isUrgent ? [300, 100, 300, 100, 400] : [200, 100, 200],
     data: {
-      url: payload.url || '/',
-      requestId: payload.requestId || null,
+      url: directUrl,
+      requestId: reqId,
       dateOfArrival: Date.now()
     },
     actions: [
@@ -63,24 +65,32 @@ self.addEventListener('notificationclick', function (event) {
     return;
   }
 
-  const targetUrl = (event.notification.data && event.notification.data.url) ? event.notification.data.url : '/';
+  const reqId = event.notification.data?.requestId;
+  const targetUrl = reqId
+    ? `/?request=${encodeURIComponent(reqId)}`
+    : (event.notification.data?.url || '/');
 
   event.waitUntil(
     clients.matchAll({ type: 'window', includeUncontrolled: true }).then(function (clientList) {
-      // Si la app ya está abierta en alguna pestaña o standalone PWA, enfocarla
+      // 1. Si la app ya está abierta en alguna pestaña o standalone PWA, enfocarla y enviarle el mensaje directo
       for (let i = 0; i < clientList.length; i++) {
         const client = clientList[i];
-        if ('focus' in client) {
-          if (client.url.includes(self.location.origin)) {
+        if (client.url.includes(self.location.origin)) {
+          if ('focus' in client) {
             client.focus();
-            if (targetUrl !== '/' && 'navigate' in client) {
-              client.navigate(targetUrl);
-            }
-            return;
           }
+          if (reqId) {
+            client.postMessage({
+              type: 'OPEN_REQUEST_DETAIL',
+              requestId: reqId
+            });
+          } else if ('navigate' in client && targetUrl !== '/') {
+            client.navigate(targetUrl);
+          }
+          return;
         }
       }
-      // Si la app está totalmente cerrada, abrir una nueva ventana
+      // 2. Si la app está totalmente cerrada, abrir una nueva ventana directamente con la solicitud
       if (clients.openWindow) {
         return clients.openWindow(targetUrl);
       }
