@@ -31,6 +31,7 @@ import { NewRequestModal } from './components/NewRequestModal';
 import { StatusChangeModal } from './components/StatusChangeModal';
 import { RequestDetailModal } from './components/RequestDetailModal';
 import { ModificationRequestModal } from './components/ModificationRequestModal';
+import { NotificationDiagnosticsModal } from './components/NotificationDiagnosticsModal';
 import { PWAInstallBanner } from './components/PWAInstallBanner';
 import { notificationService } from './services/notificationService';
 import { CheckCircle2, AlertCircle, Sparkles } from 'lucide-react';
@@ -63,6 +64,7 @@ export function App() {
   const [selectedRequestForStatus, setSelectedRequestForStatus] = useState<PaymentRequest | null>(null);
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<PaymentRequest | null>(null);
   const [modificationModalRequest, setModificationModalRequest] = useState<PaymentRequest | null>(null);
+  const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
 
   // Toast notifications
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
@@ -479,6 +481,7 @@ export function App() {
         activeTab={activeTab}
         setActiveTab={setActiveTab}
         onOpenNewRequest={handleOpenNewRequest}
+        onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
         onLogout={handleLogout}
       />
 
@@ -613,6 +616,12 @@ export function App() {
           setEditingBeneficiary(null);
         }}
         onSave={handleSaveBeneficiary}
+      />
+
+      <NotificationDiagnosticsModal
+        isOpen={isDiagnosticsOpen}
+        onClose={() => setIsDiagnosticsOpen(false)}
+        currentUser={currentUser}
       />
     </div>
   );

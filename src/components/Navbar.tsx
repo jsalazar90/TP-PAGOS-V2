@@ -21,6 +21,7 @@ interface NavbarProps {
   activeTab: 'dashboard' | 'history' | 'beneficiaries' | 'users';
   setActiveTab: (tab: 'dashboard' | 'history' | 'beneficiaries' | 'users') => void;
   onOpenNewRequest: () => void;
+  onOpenDiagnostics: () => void;
   onLogout: () => void;
 }
 
@@ -29,13 +30,13 @@ export const Navbar: React.FC<NavbarProps> = ({
   activeTab,
   setActiveTab,
   onOpenNewRequest,
+  onOpenDiagnostics,
   onLogout,
 }) => {
   const [notifPermission, setNotifPermission] = useState<NotificationPermission>(() => {
     return notificationService.getPermission();
   });
   const [isPushActive, setIsPushActive] = useState<boolean>(false);
-  const [isSubscribing, setIsSubscribing] = useState<boolean>(false);
 
   useEffect(() => {
     const checkStatus = async () => {
@@ -51,32 +52,8 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [currentUser]);
 
   const handleToggleNotifications = async () => {
-    if (isSubscribing) return;
-
-    if (!notificationService.isSupported()) {
-      alert('Tu navegador o dispositivo no soporta notificaciones web.');
-      return;
-    }
-
-    if (currentUser.role === 'admin' && notificationService.isPushSupported()) {
-      setIsSubscribing(true);
-      try {
-        const res = await notificationService.subscribeAdminToPush(currentUser);
-        if (res.success) {
-          setIsPushActive(true);
-          setNotifPermission('granted');
-          notificationService.sendNotification('🔔 Notificaciones de Fondo Sincronizadas', {
-            body: '¡Dispositivo registrado en la base de datos! Recibirás alertas con la app cerrada.',
-            soundType: 'new_request'
-          });
-        } else {
-          alert(res.message);
-        }
-      } catch (e: any) {
-        console.error('Error al gestionar notificaciones push:', e);
-      } finally {
-        setIsSubscribing(false);
-      }
+    if (currentUser.role === 'admin') {
+      onOpenDiagnostics();
       return;
     }
 
@@ -165,20 +142,17 @@ export const Navbar: React.FC<NavbarProps> = ({
             {/* Notification Alert Bell Button */}
             <button
               onClick={handleToggleNotifications}
-              disabled={isSubscribing}
               title={
                 currentUser.role === 'admin'
                   ? isPushActive
-                    ? 'Notificaciones Push en segundo plano activas (toca para probar)'
-                    : 'Activar Notificaciones Push en segundo plano en este teléfono'
+                    ? 'Diagnóstico y Notificaciones Push (Toca para abrir)'
+                    : 'Activar y Diagnosticar Notificaciones en este teléfono'
                   : notifPermission === 'granted'
                   ? 'Notificaciones activas'
                   : 'Activar notificaciones'
               }
               className={`active-press p-2 rounded-xl border flex items-center gap-1.5 text-xs font-bold transition-all ${
-                isSubscribing
-                  ? 'bg-slate-100 text-slate-400 border-slate-200 animate-pulse'
-                  : (currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted')
+                (currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted')
                   ? 'bg-teal-50 text-teal-700 border-teal-200 hover:bg-teal-100 shadow-2xs'
                   : notifPermission === 'denied'
                   ? 'bg-rose-50 text-rose-500 border-rose-200'
@@ -290,7 +264,6 @@ export const Navbar: React.FC<NavbarProps> = ({
         {/* Mobile Notifications Button in Bottom Bar */}
         <button
           onClick={handleToggleNotifications}
-          disabled={isSubscribing}
           className={`flex flex-col items-center gap-0.5 py-1 px-2.5 rounded-xl text-[10px] font-bold transition-colors ${
             (currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted')
               ? 'text-teal-700 hover:bg-teal-50'
