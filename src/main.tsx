@@ -1,7 +1,19 @@
 import React, { Component, ErrorInfo, ReactNode } from 'react';
 import ReactDOM from 'react-dom/client';
+import { registerSW } from 'virtual:pwa-register';
 import { App } from './App';
 import './index.css';
+
+// Registrar Service Worker de PWA con soporte Push en segundo plano
+registerSW({
+  immediate: true,
+  onNeedRefresh() {
+    console.log('[PWA] Nueva versión disponible.');
+  },
+  onOfflineReady() {
+    console.log('[PWA] Aplicación lista para trabajar sin conexión.');
+  }
+});
 
 interface ErrorBoundaryProps {
   children: ReactNode;

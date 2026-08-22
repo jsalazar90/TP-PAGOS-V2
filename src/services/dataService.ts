@@ -9,6 +9,7 @@ import {
 import { INITIAL_REQUESTS, INITIAL_USERS, INITIAL_BENEFICIARIES } from './mockData';
 import { uploadAttachment } from './storage';
 import { isSupabaseConfigured, supabase } from './supabase';
+import { broadcastPushToAdmins } from './pushSender';
 
 const REQUESTS_STORAGE_KEY = 'jt_pagos_requests_v1';
 const USERS_STORAGE_KEY = 'jt_pagos_users_v1';
@@ -385,6 +386,20 @@ export async function createPaymentRequest(
       }
 
       const data = await resilientSupabaseInsert(newRecord);
+
+      // Despachar notificación Push en segundo plano a todos los administradores
+      const isUrgent = newRecord.status === 'urgente';
+      const pushTitle = isUrgent
+        ? `🔥 NUEVA SOLICITUD URGENTE #${data.locator || ''}`
+        : `🔔 Nueva Solicitud de Pago #${data.locator || ''}`;
+      const pushBody = `${data.title || 'Servicio'} • Cliente: ${data.client || 'N/A'} • Monto: $${data.amount_usd || 0} USD`;
+
+      broadcastPushToAdmins({
+        title: pushTitle,
+        body: pushBody,
+        urgent: isUrgent,
+        requestId: data.id
+      }).catch(e => console.warn('Push broadcast error:', e));
 
       return {
         ...data,
@@ -1040,6 +1055,13 @@ export async function requestModification(
         .single();
 
       if (!error && data) {
+        broadcastPushToAdmins({
+          title: `⚠️ Modificación Solicitada #${data.locator || ''}`,
+          body: `${currentUser.full_name}: ${reason}`,
+          urgent: true,
+          requestId: data.id
+        }).catch(e => console.warn('Push broadcast error:', e));
+
         return {
           ...data,
           creator_name: data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
