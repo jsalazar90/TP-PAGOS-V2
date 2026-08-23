@@ -13,7 +13,9 @@ import {
   Trash2,
   Landmark,
   Eye,
-  Pencil
+  Pencil,
+  XCircle,
+  Ban
 } from 'lucide-react';
 
 interface StatusChangeModalProps {
@@ -220,6 +222,25 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
           </p>
         </div>
 
+        {/* Banner de Solicitud de Anulación si aplica */}
+        {request.cancellation_requested && (
+          <div className="p-3 bg-rose-50 border border-rose-200 rounded-xl text-xs text-rose-800 space-y-1">
+            <div className="flex items-center gap-1.5 font-bold text-rose-900">
+              <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>El solicitante ha pedido ANULAR este pago:</span>
+            </div>
+            <p className="font-semibold text-rose-950 italic bg-white/70 p-2 rounded-lg border border-rose-200">
+              "{request.cancellation_reason}"
+            </p>
+            {request.cancellation_requested_by && (
+              <p className="text-[10px] text-rose-600">
+                Solicitado por: <strong>{request.cancellation_requested_by}</strong> •{' '}
+                {request.cancellation_requested_at ? new Date(request.cancellation_requested_at).toLocaleString() : ''}
+              </p>
+            )}
+          </div>
+        )}
+
         {errorMsg && (
           <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs flex items-start gap-1.5">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -235,16 +256,18 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
 
           <div className="grid grid-cols-1 gap-1.5 text-xs">
             {[
-              { status: 'px_fondos', title: 'PxFondos', desc: 'En espera de disponibilidad de fondos para ejecutar el pago' },
-              { status: 'en_proceso', title: 'En Proceso', desc: 'Pago en gestión activa con el banco o canal de destino' },
               { status: 'urgente', title: 'Urgente', desc: 'Prioridad máxima e inmediata para procesar el pago' },
+              { status: 'en_proceso', title: 'En Proceso', desc: 'Pago en gestión activa con el banco o canal de destino' },
               { status: 'realizado', title: 'Realizado (Pago Concretado)', desc: 'Requiere adjuntar o pegar soporte de comprobante obligatorio' },
+              { status: 'anulado', title: 'Anulado (Cancelación)', desc: 'Anula esta solicitud. Se traslada al historial con saldos en 0.' },
             ].map((item) => (
               <label
                 key={item.status}
                 className={`flex items-start gap-2.5 p-2.5 rounded-xl border cursor-pointer transition-all ${
                   selectedStatus === item.status
-                    ? 'bg-indigo-50/80 border-indigo-300 text-slate-900'
+                    ? item.status === 'anulado'
+                      ? 'bg-rose-50 border-rose-300 text-rose-900'
+                      : 'bg-indigo-50/80 border-indigo-300 text-slate-900'
                     : 'bg-white border-slate-200 text-slate-600 hover:border-slate-300'
                 }`}
               >
@@ -267,6 +290,19 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
             ))}
           </div>
         </div>
+
+        {/* Mensaje de confirmación cuando se selecciona Anulado */}
+        {selectedStatus === 'anulado' && (
+          <div className="p-3 bg-rose-50 rounded-xl border border-rose-200 space-y-1.5 text-xs text-rose-900">
+            <div className="flex items-center gap-1.5 font-bold text-rose-800">
+              <XCircle className="w-4 h-4 text-rose-600" />
+              <span>Confirmación de Anulación</span>
+            </div>
+            <p className="text-[11px] text-rose-700 leading-relaxed">
+              Al confirmar, la solicitud <strong>#{request.locator}</strong> se registrará como <strong>ANULADA</strong> con saldos en 0 en el Historial. No afectará los totales de montos liquidados ni pendientes.
+            </p>
+          </div>
+        )}
 
         {/* File Upload & Paste Section for Realizado */}
         {selectedStatus === 'realizado' && (

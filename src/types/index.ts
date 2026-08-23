@@ -11,7 +11,7 @@ export interface UserProfile {
   created_at: string;
 }
 
-export type RequestStatus = 'px_fondos' | 'en_proceso' | 'urgente' | 'realizado';
+export type RequestStatus = 'urgente' | 'en_proceso' | 'realizado' | 'anulado';
 export type PaymentMethodType =
   | 'transferencia_bs'
   | 'pago_movil'
@@ -91,6 +91,10 @@ export interface PaymentRequest {
   modification_reason?: string;
   modification_requested_at?: string;
   modification_requested_by?: string;
+  cancellation_requested?: boolean;
+  cancellation_reason?: string;
+  cancellation_requested_at?: string;
+  cancellation_requested_by?: string;
   created_by: string;
   creator_name?: string;
   created_at: string;
@@ -127,6 +131,10 @@ export interface CreatePaymentRequestInput {
   modification_reason?: string;
   modification_requested_at?: string;
   modification_requested_by?: string;
+  cancellation_requested?: boolean;
+  cancellation_reason?: string;
+  cancellation_requested_at?: string;
+  cancellation_requested_by?: string;
 }
 
 export interface FilterState {
@@ -142,9 +150,10 @@ export interface FinancialSummary {
   totalPendingBs: number;
   totalPaidUsd: number;
   totalPaidBs: number;
-  countPxFondos: number;
   countEnProceso: number;
   countUrgente: number;
   countRealizado: number;
+  countAnulado: number;
+  countCancellationRequested: number;
   countTotal: number;
 }

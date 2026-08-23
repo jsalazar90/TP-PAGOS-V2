@@ -304,15 +304,30 @@ export async function ensureProfileInSupabase(user: UserProfile): Promise<UserPr
 
 async function resilientSupabaseInsert(record: any, retryCount = 0): Promise<any> {
   if (!supabase) throw new Error('Supabase client not available');
-  const { data, error } = await supabase
+  let { data, error } = await supabase
     .from('payment_requests')
     .insert([record])
     .select('*, profiles:created_by(full_name, username)')
     .single();
 
   if (error) {
-    const missingColMatch = error.message?.match(/Could not find the '([^']+)' column/i);
-    if (missingColMatch && missingColMatch[1] && retryCount < 5) {
+    if (error.message?.includes('relationship') || error.message?.includes('profiles') || error.code === 'PGRST200') {
+      const retryNoJoin = await supabase
+        .from('payment_requests')
+        .insert([record])
+        .select('*')
+        .single();
+      if (!retryNoJoin.error && retryNoJoin.data) {
+        return retryNoJoin.data;
+      }
+      error = retryNoJoin.error || error;
+    }
+
+    const missingColMatch =
+      error.message?.match(/Could not find the '([^']+)' column/i) ||
+      error.message?.match(/column "([^"]+)" of relation/i) ||
+      error.message?.match(/column '([^']+)'/i);
+    if (missingColMatch && missingColMatch[1] && retryCount < 6) {
       const missingCol = missingColMatch[1];
       console.warn(
         `[Supabase Notice] La columna '${missingCol}' no existe aún en la base de datos remota. Reintentando guardado compatible...`
@@ -321,8 +336,84 @@ async function resilientSupabaseInsert(record: any, retryCount = 0): Promise<any
       delete adjusted[missingCol];
       return resilientSupabaseInsert(adjusted, retryCount + 1);
     }
+
+    if (
+      (error.message?.includes('invalid input value for enum') ||
+       error.message?.includes('check constraint') ||
+       error.message?.includes('status')) &&
+      record.status &&
+      retryCount < 6
+    ) {
+      console.warn(
+        `[Supabase Notice] El valor de status '${record.status}' no está registrado en el enum Postgres de Supabase. Reintentando con status compatible...`
+      );
+      const adjusted = { ...record, status: 'en_proceso' };
+      return resilientSupabaseInsert(adjusted, retryCount + 1);
+    }
+
     throw new Error(error.message);
   }
+  return data;
+}
+
+async function resilientSupabaseUpdate(requestId: string, payload: any, retryCount = 0): Promise<any> {
+  if (!supabase) throw new Error('Supabase client not available');
+
+  let { data, error } = await supabase
+    .from('payment_requests')
+    .update(payload)
+    .eq('id', requestId)
+    .select('*, profiles:created_by(full_name, username)')
+    .single();
+
+  if (error) {
+    if (error.message?.includes('relationship') || error.message?.includes('profiles') || error.code === 'PGRST200') {
+      const retryNoJoin = await supabase
+        .from('payment_requests')
+        .update(payload)
+        .eq('id', requestId)
+        .select('*')
+        .single();
+
+      if (!retryNoJoin.error && retryNoJoin.data) {
+        return retryNoJoin.data;
+      }
+      error = retryNoJoin.error || error;
+    }
+
+    const missingColMatch =
+      error.message?.match(/Could not find the '([^']+)' column/i) ||
+      error.message?.match(/column "([^"]+)" of relation/i) ||
+      error.message?.match(/column '([^']+)'/i);
+
+    if (missingColMatch && missingColMatch[1] && retryCount < 6) {
+      const missingCol = missingColMatch[1];
+      console.warn(
+        `[Supabase Notice] La columna '${missingCol}' no existe en la base de datos remota. Reintentando actualización compatible...`
+      );
+      const adjusted = { ...payload };
+      delete adjusted[missingCol];
+      return resilientSupabaseUpdate(requestId, adjusted, retryCount + 1);
+    }
+
+    if (
+      (error.message?.includes('invalid input value for enum') ||
+       error.message?.includes('check constraint') ||
+       error.message?.includes('status')) &&
+      payload.status &&
+      retryCount < 6
+    ) {
+      console.warn(
+        `[Supabase Notice] El valor de status '${payload.status}' no está registrado en el enum Postgres de Supabase. Omitiendo status en Supabase y persistiendo localmente...`
+      );
+      const adjusted = { ...payload };
+      delete adjusted.status;
+      return resilientSupabaseUpdate(requestId, adjusted, retryCount + 1);
+    }
+
+    throw new Error(error.message);
+  }
+
   return data;
 }
 
@@ -500,15 +591,13 @@ export async function updateRequestStatus(
       if (originBank !== undefined) {
         updateData.origin_bank = originBank;
       }
+      if (newStatus === 'anulado') {
+        updateData.cancellation_requested = false;
+      }
 
-      const { data, error } = await supabase
-        .from('payment_requests')
-        .update(updateData)
-        .eq('id', requestId)
-        .select('*, profiles:created_by(full_name, username)')
-        .single();
+      const data = await resilientSupabaseUpdate(requestId, updateData);
 
-      if (!error && data) {
+      if (data) {
         return {
           ...data,
           origin_bank: data.origin_bank || originBank || '',
@@ -516,28 +605,8 @@ export async function updateRequestStatus(
             data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
         };
       }
-
-      // If missing column error for origin_bank, retry without it
-      if (error && error.message?.includes('origin_bank')) {
-        const fallbackData = { ...updateData };
-        delete fallbackData.origin_bank;
-        const { data: retryData } = await supabase
-          .from('payment_requests')
-          .update(fallbackData)
-          .eq('id', requestId)
-          .select('*, profiles:created_by(full_name, username)')
-          .single();
-        if (retryData) {
-          return {
-            ...retryData,
-            origin_bank: originBank || '',
-            creator_name:
-              retryData.creator_name || retryData.profiles?.full_name || retryData.profiles?.username || 'Usuario'
-          };
-        }
-      }
     } catch (e) {
-      console.warn('Supabase updateRequestStatus failed, fallback to local:', e);
+      console.warn('Supabase updateRequestStatus fallback to local:', e);
     }
   }
 
@@ -966,14 +1035,9 @@ export async function updatePaymentRequest(
         updated_at: new Date().toISOString()
       };
 
-      const { data, error } = await supabase
-        .from('payment_requests')
-        .update(updateRecord)
-        .eq('id', requestId)
-        .select('*, profiles:created_by(full_name, username)')
-        .single();
+      const data = await resilientSupabaseUpdate(requestId, updateRecord);
 
-      if (!error && data) {
+      if (data) {
         return {
           ...data,
           guest_list: input.guest_list,
@@ -1047,14 +1111,9 @@ export async function requestModification(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
-        .from('payment_requests')
-        .update(updatePayload)
-        .eq('id', requestId)
-        .select('*, profiles:created_by(full_name, username)')
-        .single();
+      const data = await resilientSupabaseUpdate(requestId, updatePayload);
 
-      if (!error && data) {
+      if (data) {
         broadcastPushToAdmins({
           title: `⚠️ Modificación Solicitada #${data.locator || ''}`,
           body: `${currentUser.full_name}: ${reason}`,
@@ -1068,7 +1127,7 @@ export async function requestModification(
         };
       }
     } catch (e) {
-      console.warn('Supabase requestModification failed, fallback to local:', e);
+      console.warn('Supabase requestModification fallback to local:', e);
     }
   }
 
@@ -1100,21 +1159,16 @@ export async function cancelModificationRequest(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
-        .from('payment_requests')
-        .update(updatePayload)
-        .eq('id', requestId)
-        .select('*, profiles:created_by(full_name, username)')
-        .single();
+      const data = await resilientSupabaseUpdate(requestId, updatePayload);
 
-      if (!error && data) {
+      if (data) {
         return {
           ...data,
           creator_name: data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
         };
       }
     } catch (e) {
-      console.warn('Supabase cancelModificationRequest failed, fallback to local:', e);
+      console.warn('Supabase cancelModificationRequest fallback to local:', e);
     }
   }
 
@@ -1129,6 +1183,101 @@ export async function cancelModificationRequest(
     modification_reason: '',
     modification_requested_at: undefined,
     modification_requested_by: undefined,
+    updated_at: new Date().toISOString()
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
+export async function requestCancellation(
+  requestId: string,
+  reason: string,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  const updatePayload = {
+    cancellation_requested: true,
+    cancellation_reason: reason,
+    cancellation_requested_at: new Date().toISOString(),
+    cancellation_requested_by: currentUser.full_name || currentUser.username,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+
+      if (data) {
+        broadcastPushToAdmins({
+          title: `🚫 Anulación Solicitada #${data.locator || ''}`,
+          body: `${currentUser.full_name}: ${reason}`,
+          urgent: true,
+          requestId: data.id
+        }).catch(e => console.warn('Push broadcast error:', e));
+
+        return {
+          ...data,
+          creator_name: data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase requestCancellation fallback to local:', e);
+    }
+  }
+
+  // Local fallback
+  const requests = getLocalRequests();
+  const index = requests.findIndex(r => r.id === requestId);
+  if (index === -1) throw new Error('Solicitud no encontrada');
+
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    ...updatePayload
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
+export async function cancelCancellationRequest(
+  requestId: string
+): Promise<PaymentRequest> {
+  const updatePayload = {
+    cancellation_requested: false,
+    cancellation_reason: '',
+    cancellation_requested_at: null,
+    cancellation_requested_by: null,
+    updated_at: new Date().toISOString()
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+
+      if (data) {
+        return {
+          ...data,
+          creator_name: data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
+        };
+      }
+    } catch (e) {
+      console.warn('Supabase cancelCancellationRequest fallback to local:', e);
+    }
+  }
+
+  // Local fallback
+  const requests = getLocalRequests();
+  const index = requests.findIndex(r => r.id === requestId);
+  if (index === -1) throw new Error('Solicitud no encontrada');
+
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    cancellation_requested: false,
+    cancellation_reason: '',
+    cancellation_requested_at: undefined,
+    cancellation_requested_by: undefined,
     updated_at: new Date().toISOString()
   };
 
@@ -1178,26 +1327,33 @@ export function calculateFinancialSummary(requests: PaymentRequest[]): Financial
   let totalPendingBs = 0;
   let totalPaidUsd = 0;
   let totalPaidBs = 0;
-  let countPxFondos = 0;
   let countEnProceso = 0;
   let countUrgente = 0;
   let countRealizado = 0;
+  let countAnulado = 0;
+  let countCancellationRequested = 0;
 
   for (const req of requests) {
     const usd = Number(req.amount_usd) || 0;
     const bs = Number(req.amount_bs) || 0;
 
+    if (req.cancellation_requested) {
+      countCancellationRequested++;
+    }
+
     if (req.status === 'realizado') {
       countRealizado++;
       totalPaidUsd += usd;
       totalPaidBs += bs;
+    } else if (req.status === 'anulado') {
+      // Las solicitudes anuladas van con saldo en 0 y no suman a pendientes ni a pagados
+      countAnulado++;
     } else {
       totalPendingUsd += usd;
       totalPendingBs += bs;
 
       if (req.status === 'urgente') countUrgente++;
       else if (req.status === 'en_proceso') countEnProceso++;
-      else if (req.status === 'px_fondos') countPxFondos++;
     }
   }
 
@@ -1206,10 +1362,11 @@ export function calculateFinancialSummary(requests: PaymentRequest[]): Financial
     totalPendingBs: Number(totalPendingBs.toFixed(2)),
     totalPaidUsd: Number(totalPaidUsd.toFixed(2)),
     totalPaidBs: Number(totalPaidBs.toFixed(2)),
-    countPxFondos,
     countEnProceso,
     countUrgente,
     countRealizado,
+    countAnulado,
+    countCancellationRequested,
     countTotal: requests.length
   };
 }
@@ -1266,6 +1423,10 @@ export function exportRequestsToCSV(requests: PaymentRequest[], filenamePrefix =
       b.cash_receiver ||
       '';
 
+    const isAnulado = r.status === 'anulado';
+    const exportedUsd = isAnulado ? 0 : (r.amount_usd || 0);
+    const exportedBs = isAnulado ? 0 : (r.amount_bs || 0);
+
     return [
       r.request_number,
       `"${(r.locator || '').replace(/"/g, '""')}"`,
@@ -1278,9 +1439,9 @@ export function exportRequestsToCSV(requests: PaymentRequest[], filenamePrefix =
       `"${(r.room_type || '').replace(/"/g, '""')}"`,
       `"${(r.nights_dates || '').replace(/"/g, '""')}"`,
       r.currency || 'VES',
-      `"${formatCurrencyForCSV(r.amount_usd || 0, 2)}"`,
-      `"${formatCurrencyForCSV(r.bcv_rate || 0, 4)}"`,
-      `"${formatCurrencyForCSV(r.amount_bs || 0, 2)}"`,
+      `"${formatCurrencyForCSV(exportedUsd, 2)}"`,
+      `"${formatCurrencyForCSV(isAnulado ? 0 : (r.bcv_rate || 0), 4)}"`,
+      `"${formatCurrencyForCSV(exportedBs, 2)}"`,
       `"${(b.payment_method || 'transferencia_bs').replace(/_/g, ' ').toUpperCase()}"`,
       `"${(b.beneficiary || '').replace(/"/g, '""')}"`,
       `"${(r.origin_bank || '').replace(/"/g, '""')}"`,
@@ -1316,18 +1477,13 @@ export async function updateRequestSupportFile(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
-        .from('payment_requests')
-        .update({
-          support_file_url: supportUrl,
-          support_file_name: supportFileName,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-        .select('*, profiles:created_by(full_name, username)')
-        .single();
+      const data = await resilientSupabaseUpdate(requestId, {
+        support_file_url: supportUrl,
+        support_file_name: supportFileName,
+        updated_at: new Date().toISOString()
+      });
 
-      if (!error && data) {
+      if (data) {
         return {
           ...data,
           creator_name:
@@ -1335,7 +1491,7 @@ export async function updateRequestSupportFile(
         };
       }
     } catch (e) {
-      console.warn('Supabase updateRequestSupportFile failed, fallback to local:', e);
+      console.warn('Supabase updateRequestSupportFile fallback to local:', e);
     }
   }
 
@@ -1367,18 +1523,13 @@ export async function updateRequestReceiptFile(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
-        .from('payment_requests')
-        .update({
-          receipt_file_url: receiptUrl,
-          receipt_file_name: receiptFileName,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', requestId)
-        .select('*, profiles:created_by(full_name, username)')
-        .single();
+      const data = await resilientSupabaseUpdate(requestId, {
+        receipt_file_url: receiptUrl,
+        receipt_file_name: receiptFileName,
+        updated_at: new Date().toISOString()
+      });
 
-      if (!error && data) {
+      if (data) {
         return {
           ...data,
           creator_name:
@@ -1386,7 +1537,7 @@ export async function updateRequestReceiptFile(
         };
       }
     } catch (e) {
-      console.warn('Supabase updateRequestReceiptFile failed, fallback to local:', e);
+      console.warn('Supabase updateRequestReceiptFile fallback to local:', e);
     }
   }
 

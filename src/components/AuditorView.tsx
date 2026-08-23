@@ -23,6 +23,7 @@ import {
   Building2,
   KeyRound,
   AlertTriangle,
+  Ban,
   X
 } from 'lucide-react';
 
@@ -137,6 +138,18 @@ export const AuditorView: React.FC<AuditorViewProps> = ({
         return (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1">
             <AlertTriangle className="w-3 h-3 text-amber-700" /> Petición de Modificación
+          </span>
+        );
+      case 'request_cancellation':
+        return (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-rose-50 text-rose-900 border border-rose-300 flex items-center gap-1">
+            <Ban className="w-3 h-3 text-rose-600" /> Solicitud de Anulación
+          </span>
+        );
+      case 'cancel_cancellation':
+        return (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-300 flex items-center gap-1">
+            <X className="w-3 h-3 text-slate-500" /> Anulación Cancelada
           </span>
         );
       case 'cancel_modification':

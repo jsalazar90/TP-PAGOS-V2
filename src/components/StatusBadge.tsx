@@ -1,6 +1,6 @@
 import React from 'react';
 import { RequestStatus } from '../types';
-import { Wallet, RefreshCw, AlertTriangle, CheckCircle2 } from 'lucide-react';
+import { RefreshCw, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 
 interface StatusBadgeProps {
   status: RequestStatus;
@@ -9,11 +9,11 @@ interface StatusBadgeProps {
 
 export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' }) => {
   const config = {
-    px_fondos: {
-      label: 'PxFondos',
-      bg: 'bg-amber-50 text-amber-900 border-amber-300 font-bold',
-      icon: Wallet,
-      dotBg: 'bg-amber-500',
+    urgente: {
+      label: 'URGENTE',
+      bg: 'bg-rose-100 text-rose-900 border-rose-400 font-black shadow-2xs',
+      icon: AlertTriangle,
+      dotBg: 'bg-rose-600',
     },
     en_proceso: {
       label: 'En Proceso',
@@ -21,21 +21,21 @@ export const StatusBadge: React.FC<StatusBadgeProps> = ({ status, size = 'md' })
       icon: RefreshCw,
       dotBg: 'bg-blue-500',
     },
-    urgente: {
-      label: 'URGENTE',
-      bg: 'bg-rose-100 text-rose-900 border-rose-400 font-black shadow-2xs',
-      icon: AlertTriangle,
-      dotBg: 'bg-rose-600',
-    },
     realizado: {
       label: 'Realizado',
       bg: 'bg-emerald-50 text-emerald-800 border-emerald-300 font-bold',
       icon: CheckCircle2,
       dotBg: 'bg-emerald-500',
     },
+    anulado: {
+      label: 'Anulado',
+      bg: 'bg-slate-100 text-slate-700 border-slate-300 font-bold',
+      icon: XCircle,
+      dotBg: 'bg-slate-400',
+    },
   };
 
-  const currentConfig = config[status] || config.px_fondos;
+  const currentConfig = config[status] || config.en_proceso;
   const { label, bg, icon: Icon, dotBg } = currentConfig;
 
   const sizeClasses = {

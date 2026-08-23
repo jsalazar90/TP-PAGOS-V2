@@ -10,6 +10,8 @@ export type AuditActionType =
   | 'create_request'
   | 'request_modification'
   | 'cancel_modification'
+  | 'request_cancellation'
+  | 'cancel_cancellation'
   | 'update_request'
   | 'status_change'
   | 'delete_request'
@@ -158,6 +160,8 @@ export function exportAuditLogsToCSV(logs: AuditLogEntry[]) {
     create_request: 'Creación de Solicitud',
     request_modification: 'Petición de Modificación',
     cancel_modification: 'Cancelación de Modificación',
+    request_cancellation: 'Solicitud de Anulación',
+    cancel_cancellation: 'Descarte de Anulación',
     update_request: 'Modificación de Solicitud',
     status_change: 'Cambio de Estado / Pago',
     delete_request: 'Eliminación de Solicitud',

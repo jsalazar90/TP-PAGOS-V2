@@ -24,7 +24,8 @@ import {
   Edit3,
   Clock,
   Upload,
-  Eye
+  Eye,
+  Ban
 } from 'lucide-react';
 
 interface RequestDetailModalProps {
@@ -35,6 +36,8 @@ interface RequestDetailModalProps {
   onEditRequest?: (request: PaymentRequest) => void;
   onRequestModification?: (request: PaymentRequest) => void;
   onCancelModification?: (request: PaymentRequest) => void;
+  onRequestCancellation?: (request: PaymentRequest) => void;
+  onCancelCancellation?: (request: PaymentRequest) => void;
   onUpdateSupportFile?: (requestId: string, file: File) => Promise<void>;
   onUpdateReceiptFile?: (requestId: string, file: File) => Promise<void>;
 }
@@ -47,6 +50,8 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
   onEditRequest,
   onRequestModification,
   onCancelModification,
+  onRequestCancellation,
+  onCancelCancellation,
   onUpdateSupportFile,
   onUpdateReceiptFile,
 }) => {
@@ -298,6 +303,57 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                     Descartar
                   </button>
                 )}
+              </div>
+            )}
+            {currentUser?.role === 'solicitante' && onCancelModification && (
+              <div className="flex items-center justify-between text-[11px] text-amber-800 pt-0.5">
+                <span>El administrador fue notificado para realizar los cambios.</span>
+                <button
+                  onClick={() => onCancelModification(request)}
+                  className="text-rose-600 hover:text-rose-800 font-bold hover:underline"
+                >
+                  Cancelar Petición
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Cancellation Request Alert Banner */}
+        {request.cancellation_requested && (
+          <div className="p-3 bg-rose-50 rounded-2xl border border-rose-300 space-y-2 animate-pulse-subtle">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-rose-950 flex items-center gap-1.5 text-xs">
+                <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>
+                  🚫 Anulación Solicitada
+                  {request.cancellation_requested_by ? ` por ${request.cancellation_requested_by}` : ''}
+                </span>
+              </span>
+              {request.cancellation_requested_at && (
+                <span className="text-[11px] text-rose-900 font-bold flex items-center gap-1 bg-rose-200/70 px-2 py-0.5 rounded-lg border border-rose-300">
+                  <Clock className="w-3 h-3 text-rose-800" />
+                  <span>
+                    {new Date(request.cancellation_requested_at).toLocaleDateString()} • {new Date(request.cancellation_requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                  </span>
+                </span>
+              )}
+            </div>
+            <div className="bg-white/90 p-2.5 rounded-xl border border-rose-200 text-xs text-rose-950 font-medium">
+              <strong className="text-rose-800 font-bold block text-[10px] uppercase">
+                Motivo de Anulación:
+              </strong>
+              {request.cancellation_reason || 'Sin motivo especificado.'}
+            </div>
+            {currentUser?.role === 'solicitante' && onCancelCancellation && (
+              <div className="flex items-center justify-between text-[11px] text-rose-800 pt-0.5">
+                <span>El administrador fue notificado para anular este pago.</span>
+                <button
+                  onClick={() => onCancelCancellation(request)}
+                  className="text-slate-600 hover:text-slate-900 font-bold hover:underline"
+                >
+                  Cancelar Petición
+                </button>
               </div>
             )}
           </div>
@@ -888,7 +944,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             </button>
           )}
 
-          {currentUser?.role === 'solicitante' && request.status !== 'realizado' && onRequestModification && (
+          {currentUser?.role === 'solicitante' && request.status !== 'realizado' && request.status !== 'anulado' && onRequestModification && (
             <button
               type="button"
               onClick={() => {
@@ -902,7 +958,25 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
               }`}
             >
               <Edit3 className="w-3.5 h-3.5" />
-              <span>{request.modification_requested ? 'Ver Modificación Pedida' : 'Pedir Modificación al Administrador'}</span>
+              <span>{request.modification_requested ? 'Ver Modificación Pedida' : 'Pedir Modificación'}</span>
+            </button>
+          )}
+
+          {currentUser?.role === 'solicitante' && request.status !== 'realizado' && request.status !== 'anulado' && onRequestCancellation && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onRequestCancellation(request);
+              }}
+              className={`active-press px-4 py-2 rounded-xl font-bold text-xs flex items-center gap-1.5 border shadow-2xs transition-colors ${
+                request.cancellation_requested
+                  ? 'bg-rose-100 hover:bg-rose-200 text-rose-900 border-rose-300'
+                  : 'bg-rose-600 hover:bg-rose-700 text-white border-transparent'
+              }`}
+            >
+              <Ban className="w-3.5 h-3.5" />
+              <span>{request.cancellation_requested ? 'Ver Anulación Pedida' : 'Solicitar Anulación'}</span>
             </button>
           )}
         </div>

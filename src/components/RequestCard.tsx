@@ -24,13 +24,13 @@ import {
   Hotel,
   Plane,
   Briefcase,
-  Wallet,
   AlertTriangle,
   Pencil,
   Trash2,
   Banknote,
   Edit3,
-  Clock
+  Clock,
+  Ban
 } from 'lucide-react';
 
 interface RequestCardProps {
@@ -42,6 +42,8 @@ interface RequestCardProps {
   onDeleteRequest?: (request: PaymentRequest) => void;
   onRequestModification?: (request: PaymentRequest) => void;
   onCancelModification?: (request: PaymentRequest) => void;
+  onRequestCancellation?: (request: PaymentRequest) => void;
+  onCancelCancellation?: (request: PaymentRequest) => void;
 }
 
 export const RequestCard: React.FC<RequestCardProps> = ({
@@ -53,6 +55,8 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   onDeleteRequest,
   onRequestModification,
   onCancelModification,
+  onRequestCancellation,
+  onCancelCancellation,
 }) => {
   const [showBankDetails, setShowBankDetails] = useState(false);
   const [copiedBank, setCopiedBank] = useState(false);
@@ -188,6 +192,66 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               <button
                 onClick={() => onCancelModification(request)}
                 className="text-rose-600 hover:text-rose-800 font-bold hover:underline"
+              >
+                Cancelar Petición
+              </button>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* Cancellation Request Alert Banner */}
+      {request.cancellation_requested && (
+        <div className="p-3 bg-rose-50/90 rounded-2xl border border-rose-300 text-xs space-y-1.5 shadow-2xs">
+          <div className="flex items-center justify-between gap-2">
+            <span className="font-bold text-rose-950 flex items-center gap-1.5 text-xs">
+              <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+              <span>
+                🚫 Anulación Solicitada
+                {request.cancellation_requested_by ? ` por ${request.cancellation_requested_by}` : ''}
+              </span>
+            </span>
+            {request.cancellation_requested_at && (
+              <span className="text-[11px] text-rose-900 font-bold flex items-center gap-1 bg-rose-200/70 px-2 py-0.5 rounded-lg border border-rose-300">
+                <Clock className="w-3 h-3 text-rose-800" />
+                <span>
+                  {new Date(request.cancellation_requested_at).toLocaleDateString()} • {new Date(request.cancellation_requested_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </span>
+            )}
+          </div>
+          <div className="bg-white/95 p-2.5 rounded-xl border border-rose-200 text-xs text-rose-950 font-medium">
+            <strong className="text-rose-800 font-bold block text-[10px] uppercase">
+              Motivo de Anulación:
+            </strong>
+            {request.cancellation_reason || 'Sin motivo especificado.'}
+          </div>
+          {currentUser.role === 'admin' && (
+            <div className="flex items-center gap-2 pt-1">
+              <button
+                onClick={() => onOpenStatusModal(request)}
+                className="active-press flex-1 py-2 px-3 rounded-xl bg-rose-600 hover:bg-rose-700 text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-colors"
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Gestionar y Anular Solicitud</span>
+              </button>
+              {onCancelCancellation && (
+                <button
+                  onClick={() => onCancelCancellation(request)}
+                  title="Descartar solicitud de anulación"
+                  className="py-2 px-3 rounded-xl bg-white hover:bg-slate-100 text-slate-600 font-semibold text-xs border border-rose-200 transition-colors"
+                >
+                  Descartar
+                </button>
+              )}
+            </div>
+          )}
+          {currentUser.role === 'solicitante' && onCancelCancellation && (
+            <div className="flex items-center justify-between text-[11px] text-rose-800 pt-0.5">
+              <span>El administrador fue notificado para anular este pago.</span>
+              <button
+                onClick={() => onCancelCancellation(request)}
+                className="text-slate-600 hover:text-slate-900 font-bold hover:underline"
               >
                 Cancelar Petición
               </button>
@@ -409,19 +473,34 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               </button>
             )}
 
-            {currentUser.role === 'solicitante' && request.status !== 'realizado' && (
-              <button
-                onClick={() => onRequestModification && onRequestModification(request)}
-                title="Pedir modificación al administrador"
-                className={`active-press px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors ${
-                  request.modification_requested
-                    ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
-                    : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200'
-                }`}
-              >
-                <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                <span>{request.modification_requested ? 'Modificación Solicitada' : 'Pedir Modificación'}</span>
-              </button>
+            {currentUser.role === 'solicitante' && request.status !== 'realizado' && request.status !== 'anulado' && (
+              <>
+                <button
+                  onClick={() => onRequestModification && onRequestModification(request)}
+                  title="Pedir modificación al administrador"
+                  className={`active-press px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors ${
+                    request.modification_requested
+                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                      : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200'
+                  }`}
+                >
+                  <Edit3 className="w-3.5 h-3.5 text-amber-600" />
+                  <span>{request.modification_requested ? 'Modificación Solicitada' : 'Pedir Modificación'}</span>
+                </button>
+
+                <button
+                  onClick={() => onRequestCancellation && onRequestCancellation(request)}
+                  title="Solicitar anulación al administrador"
+                  className={`active-press px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors ${
+                    request.cancellation_requested
+                      ? 'bg-rose-100 hover:bg-rose-200 text-rose-900 border-rose-300'
+                      : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
+                  }`}
+                >
+                  <Ban className="w-3.5 h-3.5 text-rose-600" />
+                  <span>{request.cancellation_requested ? 'Anulación Solicitada' : 'Solicitar Anulación'}</span>
+                </button>
+              </>
             )}
 
             {canDelete && onDeleteRequest && (
@@ -440,12 +519,11 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               </button>
             )}
 
-            {currentUser.role === 'admin' && request.status !== 'realizado' && (
+            {currentUser.role === 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && (
               <button
                 onClick={() => onOpenStatusModal(request)}
                 className="active-press px-3.5 py-1.5 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
               >
-                {request.status === 'px_fondos' && <Wallet className="w-3.5 h-3.5 text-amber-200" />}
                 {request.status === 'en_proceso' && <RefreshCw className="w-3.5 h-3.5" />}
                 {request.status === 'urgente' && (
                   <AlertTriangle className="w-3.5 h-3.5 text-yellow-200 animate-pulse" />

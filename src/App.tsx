@@ -10,6 +10,8 @@ import {
   updateRequestReceiptFile,
   requestModification,
   cancelModificationRequest,
+  requestCancellation,
+  cancelCancellationRequest,
   fetchUsers,
   createNewUser,
   toggleUserActiveStatus,
@@ -31,6 +33,7 @@ import { NewRequestModal } from './components/NewRequestModal';
 import { StatusChangeModal } from './components/StatusChangeModal';
 import { RequestDetailModal } from './components/RequestDetailModal';
 import { ModificationRequestModal } from './components/ModificationRequestModal';
+import { CancellationRequestModal } from './components/CancellationRequestModal';
 import { NotificationDiagnosticsModal } from './components/NotificationDiagnosticsModal';
 import { AuditorLoginView } from './components/AuditorLoginView';
 import { AuditorView } from './components/AuditorView';
@@ -67,6 +70,7 @@ export function App() {
   const [selectedRequestForStatus, setSelectedRequestForStatus] = useState<PaymentRequest | null>(null);
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<PaymentRequest | null>(null);
   const [modificationModalRequest, setModificationModalRequest] = useState<PaymentRequest | null>(null);
+  const [cancellationModalRequest, setCancellationModalRequest] = useState<PaymentRequest | null>(null);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
 
   // Auditor Module State (/auditor)
@@ -497,10 +501,10 @@ export function App() {
       setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
       
       const statusLabels: Record<RequestStatus, string> = {
-        px_fondos: 'PxFondos',
-        en_proceso: 'En Proceso',
         urgente: 'URGENTE',
-        realizado: 'Realizado (Enviado a Historial)'
+        en_proceso: 'En Proceso',
+        realizado: 'Realizado (Enviado a Historial)',
+        anulado: 'Anulado (Enviado a Historial con Saldo $0)'
       };
 
       showToast(`Estado actualizado a "${statusLabels[newStatus]}"`, 'success');
@@ -633,6 +637,58 @@ export function App() {
     }
   };
 
+  // Request Cancellation handler
+  const handleRequestCancellation = (request: PaymentRequest) => {
+    setCancellationModalRequest(request);
+  };
+
+  const handleConfirmCancellation = async (requestId: string, reason: string) => {
+    if (!currentUser) return;
+    try {
+      const updated = await requestCancellation(requestId, reason, currentUser);
+      setRequests(prev => prev.map(r => r.id === requestId ? updated : r));
+      if (selectedRequestForDetail?.id === requestId) {
+        setSelectedRequestForDetail(updated);
+      }
+      showToast(`Solicitud de anulación enviada al administrador`, 'success');
+
+      logAuditEvent({
+        action_type: 'request_cancellation',
+        user: currentUser,
+        target_id: updated.locator,
+        target_title: updated.title,
+        details: `El solicitante ${currentUser.full_name} solicitó ANULAR la solicitud #${updated.locator}. Motivo: "${reason}".`,
+        metadata: { locator: updated.locator, reason }
+      }).catch(console.warn);
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
+  const handleCancelCancellation = async (request: PaymentRequest) => {
+    if (!currentUser) return;
+    try {
+      const updated = await cancelCancellationRequest(request.id);
+      setRequests(prev => prev.map(r => r.id === request.id ? updated : r));
+      if (selectedRequestForDetail?.id === request.id) {
+        setSelectedRequestForDetail(updated);
+      }
+      showToast(`Solicitud de anulación cancelada / descartada`, 'success');
+
+      logAuditEvent({
+        action_type: 'cancel_cancellation',
+        user: currentUser,
+        target_id: request.locator,
+        target_title: request.title,
+        details: `El usuario ${currentUser.full_name} descartó la petición de anulación para la solicitud #${request.locator}.`,
+        metadata: { locator: request.locator }
+      }).catch(console.warn);
+    } catch (err: any) {
+      showToast(`Error: ${err.message}`, 'error');
+    }
+  };
+
   // Update Support File handler
   const handleUpdateSupportFile = async (requestId: string, file: File) => {
     if (!currentUser) return;
@@ -741,6 +797,8 @@ export function App() {
                 onDeleteRequest={currentUser.role === 'admin' ? handleDeleteRequest : undefined}
                 onRequestModification={handleRequestModification}
                 onCancelModification={handleCancelModification}
+                onRequestCancellation={handleRequestCancellation}
+                onCancelCancellation={handleCancelCancellation}
                 onRefresh={() => loadRequests(currentUser)}
               />
             )}
@@ -748,6 +806,7 @@ export function App() {
             {activeTab === 'history' && (
               <HistoryView
                 requests={requests}
+                currentUser={currentUser}
                 onOpenDetails={(req) => setSelectedRequestForDetail(req)}
               />
             )}
@@ -821,6 +880,8 @@ export function App() {
         onEditRequest={handleOpenEditRequest}
         onRequestModification={handleRequestModification}
         onCancelModification={handleCancelModification}
+        onRequestCancellation={handleRequestCancellation}
+        onCancelCancellation={handleCancelCancellation}
         onUpdateSupportFile={handleUpdateSupportFile}
         onUpdateReceiptFile={handleUpdateReceiptFile}
       />
@@ -830,6 +891,13 @@ export function App() {
         isOpen={Boolean(modificationModalRequest)}
         onClose={() => setModificationModalRequest(null)}
         onConfirm={handleConfirmModification}
+      />
+
+      <CancellationRequestModal
+        request={cancellationModalRequest}
+        isOpen={Boolean(cancellationModalRequest)}
+        onClose={() => setCancellationModalRequest(null)}
+        onConfirm={handleConfirmCancellation}
       />
 
       <BeneficiaryModal

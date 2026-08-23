@@ -29,6 +29,8 @@ interface DashboardProps {
   onDeleteRequest?: (request: PaymentRequest) => void;
   onRequestModification?: (request: PaymentRequest) => void;
   onCancelModification?: (request: PaymentRequest) => void;
+  onRequestCancellation?: (request: PaymentRequest) => void;
+  onCancelCancellation?: (request: PaymentRequest) => void;
 }
 
 export const Dashboard: React.FC<DashboardProps> = ({
@@ -43,8 +45,10 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onDeleteRequest,
   onRequestModification,
   onCancelModification,
+  onRequestCancellation,
+  onCancelCancellation,
 }) => {
-  const [activeFilter, setActiveFilter] = useState<'all' | 'px_fondos' | 'en_proceso' | 'urgente'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'en_proceso' | 'urgente'>('all');
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'amount_desc' | 'urgent_first'>('urgent_first');
@@ -52,7 +56,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const summary = useMemo(() => calculateFinancialSummary(requests), [requests]);
 
   const activeRequests = useMemo(() => {
-    return requests.filter(r => r.status !== 'realizado');
+    return requests.filter(r => r.status !== 'realizado' && r.status !== 'anulado');
   }, [requests]);
 
   const filteredRequests = useMemo(() => {
@@ -187,31 +191,33 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-rose-500 to-orange-400" />
         </div>
 
-        {/* Card 4: En Proceso / PxFondos */}
+        {/* Card 4: En Proceso */}
         <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden flex flex-col justify-between">
           <div className="flex items-center justify-between">
             <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
-              En Proceso / Fondos
+              En Proceso
             </span>
-            <div className="w-8 h-8 rounded-xl bg-amber-50 text-amber-600 flex items-center justify-center">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center">
               <Clock className="w-4 h-4" />
             </div>
           </div>
-          <div className="mt-2 flex items-baseline gap-3">
+          <div className="mt-2 flex items-baseline justify-between">
             <div>
               <p className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
                 {summary.countEnProceso}
               </p>
-              <p className="text-[10px] font-semibold text-blue-600">En Proceso</p>
+              <p className="text-[10px] font-semibold text-blue-600">Gestión Activa</p>
             </div>
-            <div className="border-l border-slate-200 pl-3">
-              <p className="text-xl sm:text-2xl font-black text-slate-900 leading-tight">
-                {summary.countPxFondos}
-              </p>
-              <p className="text-[10px] font-semibold text-amber-600">PxFondos</p>
-            </div>
+            {summary.countCancellationRequested > 0 && (
+              <div className="bg-rose-50 border border-rose-200 px-2 py-1 rounded-xl text-right">
+                <p className="text-xs font-black text-rose-700">
+                  {summary.countCancellationRequested}
+                </p>
+                <p className="text-[9px] font-bold text-rose-600">🚫 Anulación Pedida</p>
+              </div>
+            )}
           </div>
-          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-amber-400 to-yellow-300" />
+          <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 to-teal-300" />
         </div>
       </div>
 
@@ -375,23 +381,6 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {summary.countEnProceso}
               </span>
             </button>
-
-            <button
-              onClick={() => setActiveFilter('px_fondos')}
-              className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
-                activeFilter === 'px_fondos'
-                  ? 'bg-amber-600 text-white shadow-2xs'
-                  : 'text-slate-600 hover:bg-slate-100'
-              }`}
-            >
-              <Wallet className="w-3.5 h-3.5" />
-              <span>PxFondos</span>
-              <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
-                activeFilter === 'px_fondos' ? 'bg-amber-800 text-white' : 'bg-slate-100 text-slate-600'
-              }`}>
-                {summary.countPxFondos}
-              </span>
-            </button>
           </div>
 
           {/* Reset Filters Shortcut */}
@@ -425,6 +414,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
               onDeleteRequest={onDeleteRequest}
               onRequestModification={onRequestModification}
               onCancelModification={onCancelModification}
+              onRequestCancellation={onRequestCancellation}
+              onCancelCancellation={onCancelCancellation}
             />
           ))}
         </div>

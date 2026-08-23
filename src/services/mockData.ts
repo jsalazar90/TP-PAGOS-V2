@@ -58,7 +58,7 @@ export const INITIAL_REQUESTS: PaymentRequest[] = [
       account_number: '0134-0034-12-0341098234',
       account_type: 'Corriente'
     },
-    status: 'px_fondos',
+    status: 'en_proceso',
     support_file_name: 'Solicitud_Karina_G1.pdf',
     support_file_url: 'https://www.w3.org/WAI/ER/tests/xhtml/testfiles/resources/pdf/dummy.pdf',
     created_by: 'usr-sol-1',
@@ -189,7 +189,7 @@ export const INITIAL_REQUESTS: PaymentRequest[] = [
       binance_pay_id: '891024351',
       notes: 'Pago directo USDT / Binance Pay'
     },
-    status: 'px_fondos',
+    status: 'en_proceso',
     created_by: 'usr-sol-2',
     creator_name: 'Alejandro Rivas (Reservas)',
     created_at: new Date(Date.now() - 3600000 * 1).toISOString(),
@@ -222,7 +222,7 @@ export const INITIAL_REQUESTS: PaymentRequest[] = [
       pago_movil_phone: '04129876543',
       pago_movil_ci: 'J-409128374'
     },
-    status: 'px_fondos',
+    status: 'en_proceso',
     created_by: 'usr-sol-1',
     creator_name: 'María Delgado (Operaciones)',
     created_at: new Date(Date.now() - 3600000 * 3).toISOString(),
