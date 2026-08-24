@@ -500,7 +500,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                     </span>
                   </div>
                 )}
-                {request.room_type && (
+                {request.room_type && category !== 'viaticos' && (
                   <div>
                     <span className="text-slate-400 block text-[10px] font-semibold">
                       {category === 'traslado'
