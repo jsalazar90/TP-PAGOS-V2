@@ -210,22 +210,25 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
         console.warn('Supabase payment_requests query error, using local fallback:', error.message);
         list = getLocalRequests();
       } else {
+        const client = supabase;
         list = (data || []).map((item: any) => {
           let itemUsd = Number(item.amount_usd) || 0;
           const itemBs = Number(item.amount_bs) || 0;
           const itemBcv = Number(item.bcv_rate) || 0;
 
           // Auto-reparar registros existentes con USD en 0 en Supabase
-          if (itemUsd <= 0 && itemBs > 0 && itemBcv > 0) {
+          if (itemUsd <= 0 && itemBs > 0 && itemBcv > 0 && client) {
             itemUsd = Number((itemBs / itemBcv).toFixed(2));
-            supabase
+            client
               .from('payment_requests')
               .update({ amount_usd: itemUsd })
               .eq('id', item.id)
-              .then(({ error: updateErr }) => {
-                if (updateErr) console.warn('Aviso de auto-reparación Supabase:', updateErr.message);
-              })
-              .catch(() => {});
+              .then(
+                () => {},
+                (updateErr: any) => {
+                  if (updateErr) console.warn('Aviso de auto-reparación Supabase:', updateErr.message);
+                }
+              );
           }
 
           return {
