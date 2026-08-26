@@ -194,7 +194,7 @@ export function App() {
               const updatedReq = payload.new;
               const prevReq = payload.old;
 
-              // Si se solicitó una nueva modificación y el usuario es admin
+              // 1. Alerta de Modificación Solicitada (para Administradores)
               if (
                 updatedReq?.modification_requested &&
                 !prevReq?.modification_requested &&
@@ -210,6 +210,46 @@ export function App() {
                 });
 
                 showToast(modTitle, 'error');
+              }
+
+              // 2. Alerta de Solicitud Pagada / Liquidada (Para todos los usuarios y solicitantes)
+              if (
+                updatedReq?.status === 'realizado' &&
+                prevReq?.status !== 'realizado'
+              ) {
+                const isOwner = currentUser.id === updatedReq?.created_by || currentUser.username === updatedReq?.created_by;
+                const paidTitle = `✅ ¡Solicitud Pagada #${updatedReq?.locator || ''}!`;
+                const paidBody = `${updatedReq?.title || 'Servicio'} • Cliente: ${updatedReq?.client || 'N/A'} • Monto: $${updatedReq?.amount_usd || 0} USD ha sido liquidada con éxito.`;
+
+                notificationService.sendNotification(paidTitle, {
+                  body: paidBody,
+                  soundType: 'paid',
+                  tag: `paid-req-${updatedReq?.id}`
+                });
+
+                showToast(
+                  isOwner
+                    ? `🎉 ¡Tu solicitud #${updatedReq?.locator || ''} ha sido PAGADA con éxito!`
+                    : `✅ Solicitud #${updatedReq?.locator || ''} marcada como PAGADA`,
+                  'success'
+                );
+              }
+
+              // 3. Alerta de Solicitud Anulada
+              if (
+                updatedReq?.status === 'anulado' &&
+                prevReq?.status !== 'anulado'
+              ) {
+                const cancelTitle = `❌ Solicitud Anulada #${updatedReq?.locator || ''}`;
+                const cancelBody = `${updatedReq?.title || 'Servicio'} • Cliente: ${updatedReq?.client || 'N/A'} ha sido anulada.`;
+
+                notificationService.sendNotification(cancelTitle, {
+                  body: cancelBody,
+                  soundType: 'modification',
+                  tag: `cancel-req-${updatedReq?.id}`
+                });
+
+                showToast(cancelTitle, 'error');
               }
 
               fetchPaymentRequests(currentUser).then(data => {

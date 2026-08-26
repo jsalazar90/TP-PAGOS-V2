@@ -9,7 +9,7 @@ import {
 import { INITIAL_REQUESTS, INITIAL_USERS, INITIAL_BENEFICIARIES } from './mockData';
 import { uploadAttachment } from './storage';
 import { isSupabaseConfigured, supabase } from './supabase';
-import { broadcastPushToAdmins } from './pushSender';
+import { broadcastPushToAdmins, broadcastPushToAll } from './pushSender';
 
 const REQUESTS_STORAGE_KEY = 'jt_pagos_requests_v1';
 const USERS_STORAGE_KEY = 'jt_pagos_users_v1';
@@ -689,6 +689,15 @@ export async function updateRequestStatus(
       const data = await resilientSupabaseUpdate(requestId, updateData);
 
       if (data) {
+        // Despachar notificación Push de pago realizado a todos los dispositivos sincronizados
+        if (newStatus === 'realizado') {
+          broadcastPushToAll({
+            title: `✅ ¡Solicitud Pagada #${data.locator || ''}!`,
+            body: `${data.title || 'Pago'} • Cliente: ${data.client || 'N/A'} • Monto: $${data.amount_usd || 0} USD ha sido liquidada con éxito.`,
+            requestId: data.id
+          }).catch(e => console.warn('Push broadcast payment realized error:', e));
+        }
+
         return {
           ...data,
           origin_bank: data.origin_bank || originBank || '',

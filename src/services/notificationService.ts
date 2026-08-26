@@ -45,8 +45,8 @@ class NotificationService {
     }
   }
 
-  // Reproducir sonido de notificación sintetizado (2 tonos armónicos)
-  public playChime(type: 'new_request' | 'modification' | 'urgent' = 'new_request') {
+  // Reproducir sonido de notificación sintetizado (2 tonos armónicos o acorde de pago)
+  public playChime(type: 'new_request' | 'modification' | 'urgent' | 'paid' = 'new_request') {
     try {
       const ctx = this.getAudioContext();
       if (!ctx) return;
@@ -58,7 +58,19 @@ class NotificationService {
       osc.connect(gain);
       gain.connect(ctx.destination);
 
-      if (type === 'urgent') {
+      if (type === 'paid') {
+        // Tono triunfal de pago liquidado (acorde armónico ascendente: C5 -> E5 -> G5 -> C6)
+        osc.type = 'sine';
+        osc.frequency.setValueAtTime(523.25, now);
+        osc.frequency.setValueAtTime(659.25, now + 0.1);
+        osc.frequency.setValueAtTime(783.99, now + 0.2);
+        osc.frequency.setValueAtTime(1046.50, now + 0.3);
+
+        gain.gain.setValueAtTime(0.22, now);
+        gain.gain.exponentialRampToValueAtTime(0.01, now + 0.6);
+        osc.start(now);
+        osc.stop(now + 0.6);
+      } else if (type === 'urgent') {
         // Tono de urgencia (3 pitidos rápidos)
         osc.type = 'sawtooth';
         osc.frequency.setValueAtTime(880, now);
@@ -143,8 +155,8 @@ class NotificationService {
       return false;
     }
 
-    // Si tenemos el usuario admin y Supabase está activo, asegurar que exista en la BD
-    if (currentUser && currentUser.role === 'admin' && isSupabaseConfigured && supabase) {
+    // Si tenemos el usuario y Supabase está activo, asegurar que exista en la BD
+    if (currentUser && isSupabaseConfigured && supabase) {
       try {
         const { data, error } = await supabase
           .from('push_subscriptions')
@@ -178,14 +190,10 @@ class NotificationService {
     return true;
   }
 
-  // Suscribir al usuario (exclusivo para administradores) al sistema Push en segundo plano
+  // Suscribir al usuario al sistema Push en segundo plano
   public async subscribeAdminToPush(
     currentUser: UserProfile
   ): Promise<{ success: boolean; message: string }> {
-    if (currentUser.role !== 'admin') {
-      return { success: false, message: 'Las notificaciones push en segundo plano están reservadas para administradores.' };
-    }
-
     if (!this.isPushSupported()) {
       return { success: false, message: 'Tu navegador o dispositivo no soporta notificaciones Push en segundo plano.' };
     }
@@ -277,7 +285,7 @@ class NotificationService {
       icon?: string;
       tag?: string;
       data?: any;
-      soundType?: 'new_request' | 'modification' | 'urgent';
+      soundType?: 'new_request' | 'modification' | 'urgent' | 'paid';
     }
   ): Promise<boolean> {
     // 1. Reproducir sonido y vibración

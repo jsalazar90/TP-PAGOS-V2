@@ -45,8 +45,7 @@ export const NotificationDiagnosticsModal: React.FC<NotificationDiagnosticsModal
       try {
         const { data } = await supabase
           .from('push_subscriptions')
-          .select('id')
-          .eq('user_role', 'admin');
+          .select('id');
         setDbSubCount(data ? data.length : 0);
       } catch (e) {
         setDbSubCount(null);
@@ -90,7 +89,7 @@ export const NotificationDiagnosticsModal: React.FC<NotificationDiagnosticsModal
             </div>
             <div>
               <h2 className="text-sm sm:text-base font-bold">Notificaciones Push</h2>
-              <p className="text-[11px] text-slate-300">Alertas 24/7 en segundo plano para Administradores</p>
+              <p className="text-[11px] text-slate-300">Alertas 24/7 en segundo plano y pagos en tiempo real</p>
             </div>
           </div>
           <button
@@ -140,7 +139,7 @@ export const NotificationDiagnosticsModal: React.FC<NotificationDiagnosticsModal
             </div>
 
             <div className="flex items-center justify-between p-2.5 bg-slate-50 rounded-xl border border-slate-100">
-              <span className="text-slate-600 font-medium">Administradores Vinculados (Push)</span>
+              <span className="text-slate-600 font-medium">Dispositivos Vinculados (Push)</span>
               <span className="font-bold text-teal-700 bg-teal-50 px-2 py-0.5 rounded-lg border border-teal-200">
                 {dbSubCount !== null ? `${dbSubCount} dispositivo(s)` : 'Activo'}
               </span>

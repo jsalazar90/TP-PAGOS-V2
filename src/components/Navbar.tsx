@@ -43,7 +43,7 @@ export const Navbar: React.FC<NavbarProps> = ({
       if (notificationService.isSupported()) {
         setNotifPermission(notificationService.getPermission());
       }
-      if (currentUser.role === 'admin' && notificationService.isPushSupported()) {
+      if (notificationService.isPushSupported()) {
         const active = await notificationService.isPushSubscribed(currentUser);
         setIsPushActive(active);
       }
@@ -52,27 +52,7 @@ export const Navbar: React.FC<NavbarProps> = ({
   }, [currentUser]);
 
   const handleToggleNotifications = async () => {
-    if (currentUser.role === 'admin') {
-      onOpenDiagnostics();
-      return;
-    }
-
-    // Para usuarios solicitantes / operadores
-    if (notifPermission !== 'granted') {
-      const res = await notificationService.requestPermission();
-      setNotifPermission(res);
-      if (res === 'granted') {
-        notificationService.sendNotification('🔔 Notificaciones Activadas', {
-          body: 'Recibirás alertas en tiempo real al crearse o actualizarse solicitudes.',
-          soundType: 'new_request'
-        });
-      }
-    } else {
-      notificationService.sendNotification('🔔 Notificaciones Activas', {
-        body: 'Sistema de alertas funcionando correctamente en este dispositivo.',
-        soundType: 'new_request'
-      });
-    }
+    onOpenDiagnostics();
   };
 
   return (

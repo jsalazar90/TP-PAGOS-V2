@@ -22,8 +22,9 @@ self.addEventListener('push', function (event) {
 
   const isUrgent = payload.urgent === true || (payload.title && payload.title.includes('URGENTE'));
   const isModification = payload.isModification === true || (payload.title && payload.title.includes('Modificación'));
+  const isPaid = payload.isPaid === true || (payload.title && (payload.title.includes('Pagada') || payload.title.includes('PAGADA') || payload.title.includes('Liquidada')));
 
-  const title = payload.title || (isUrgent ? '🔥 SOLICITUD URGENTE - TP PAGOS' : '🔔 Nueva Solicitud - TP PAGOS');
+  const title = payload.title || (isUrgent ? '🔥 SOLICITUD URGENTE - TP PAGOS' : isPaid ? '✅ SOLICITUD PAGADA - TP PAGOS' : '🔔 Nueva Solicitud - TP PAGOS');
   const reqId = payload.requestId || payload.id || null;
   const directUrl = reqId ? `/?request=${encodeURIComponent(reqId)}` : (payload.url || '/');
 

@@ -244,3 +244,63 @@ export async function broadcastPushToAdmins(payload: PushPayload): Promise<void>
     console.warn('Error en broadcastPushToAdmins:', err);
   }
 }
+
+// Difundir notificación Push a todos los dispositivos registrados (ej: cuando una solicitud es pagada)
+export async function broadcastPushToAll(payload: PushPayload): Promise<void> {
+  if (!isSupabaseConfigured || !supabase) return;
+
+  try {
+    const { data: subscriptions, error } = await supabase
+      .from('push_subscriptions')
+      .select('id, endpoint, p256dh, auth');
+
+    if (error || !subscriptions || subscriptions.length === 0) {
+      return;
+    }
+
+    const payloadJson = JSON.stringify({
+      title: payload.title,
+      body: payload.body,
+      urgent: payload.urgent || false,
+      requestId: payload.requestId || '',
+      url: payload.url || (payload.requestId ? `/?request=${payload.requestId}` : '/')
+    });
+
+    const deadSubIds: string[] = [];
+
+    await Promise.allSettled(
+      subscriptions.map(async (sub) => {
+        try {
+          const urlObj = new URL(sub.endpoint);
+          const audience = `${urlObj.protocol}//${urlObj.host}`;
+          const jwt = await createVapidJwt(audience);
+          const encryptedBody = await encryptAes128Gcm(payloadJson, sub.p256dh, sub.auth);
+
+          const response = await fetch(sub.endpoint, {
+            method: 'POST',
+            headers: {
+              TTL: '86400',
+              Urgency: 'normal',
+              'Content-Encoding': 'aes128gcm',
+              'Content-Type': 'application/octet-stream',
+              Authorization: `vapid t=${jwt}, k=${VAPID_PUBLIC_KEY}`
+            },
+            body: encryptedBody as unknown as BodyInit
+          });
+
+          if (response.status === 404 || response.status === 410) {
+            deadSubIds.push(sub.id);
+          }
+        } catch (e) {
+          console.warn(`Error enviando push a usuario ${sub.id}:`, e);
+        }
+      })
+    );
+
+    if (deadSubIds.length > 0) {
+      await supabase.from('push_subscriptions').delete().in('id', deadSubIds);
+    }
+  } catch (err) {
+    console.warn('Error en broadcastPushToAll:', err);
+  }
+}
