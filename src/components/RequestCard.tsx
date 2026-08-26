@@ -63,6 +63,12 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   const [copiedLoc, setCopiedLoc] = useState(false);
 
   const isDirectUsd = request.currency === 'USD' || request.bcv_rate === 0;
+  const displayUsd =
+    request.amount_usd > 0
+      ? request.amount_usd
+      : request.amount_bs > 0 && request.bcv_rate > 0
+      ? Number((request.amount_bs / request.bcv_rate).toFixed(2))
+      : 0;
   const canDelete =
     request.status !== 'realizado' &&
     currentUser.role === 'admin';
@@ -112,7 +118,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
 
     // Agregar Monto a Transferir
     if (request.currency === 'USD' || isDirectUsd) {
-      textToCopy += `\nMonto: $${request.amount_usd.toFixed(2)} USD`;
+      textToCopy += `\nMonto: $${displayUsd.toFixed(2)} USD`;
     } else {
       textToCopy += `\nMonto a Transferir: Bs. ${formatBS(request.amount_bs || 0)}`;
     }
@@ -423,7 +429,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
           <div>
             <span className="text-[10px] uppercase font-bold text-slate-400 block">Monto en USD</span>
             <span className="text-base sm:text-lg font-black text-slate-900 leading-tight">
-              {formatUSD(request.amount_usd)}
+              {formatUSD(displayUsd)}
             </span>
           </div>
 

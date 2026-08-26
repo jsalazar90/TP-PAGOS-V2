@@ -144,6 +144,12 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
     );
 
   const isDirectUsd = request.currency === 'USD' || request.bcv_rate === 0;
+  const displayUsd =
+    request.amount_usd > 0
+      ? request.amount_usd
+      : request.amount_bs > 0 && request.bcv_rate > 0
+      ? Number((request.amount_bs / request.bcv_rate).toFixed(2))
+      : 0;
   const category = request.category || 'hospedaje';
 
   const handleCopyLocator = () => {
@@ -191,7 +197,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
 
     // Agregar Monto a Transferir al texto copiado
     if (request.currency === 'USD' || isDirectUsd) {
-      textToCopy += `\nMonto: $${request.amount_usd.toFixed(2)} USD`;
+      textToCopy += `\nMonto: $${displayUsd.toFixed(2)} USD`;
     } else {
       textToCopy += `\nMonto a Transferir: Bs. ${formatBS(request.amount_bs || 0)}`;
     }
@@ -560,7 +566,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                 Monto Divisas
               </span>
               <span className="text-base sm:text-lg font-black text-emerald-600">
-                {formatUSD(request.amount_usd)}
+                {formatUSD(displayUsd)}
               </span>
             </div>
             <div className="text-right border-l border-teal-200 pl-3">

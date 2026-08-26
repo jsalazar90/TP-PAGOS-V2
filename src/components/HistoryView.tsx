@@ -108,16 +108,57 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     return filteredHistory.slice(startIndex, startIndex + pageSize);
   }, [filteredHistory, startIndex, pageSize]);
 
-  const totalUSD = useMemo(() => {
+  // Total Dólares equivalentes de pagos pagados en Bolívares mediante tasa
+  const totalUsdFromBs = useMemo(() => {
     return filteredHistory.reduce((acc, r) => {
-      if (r.status === 'anulado') return acc; // Saldo en 0
+      if (r.status === 'anulado') return acc;
+      const isDirectUsd =
+        r.currency === 'USD' ||
+        r.bank_details?.payment_method === 'binance' ||
+        r.bank_details?.payment_method === 'zelle_usd' ||
+        r.bank_details?.payment_method === 'efectivo_usd' ||
+        !r.bcv_rate ||
+        r.bcv_rate === 0;
+      if (isDirectUsd) return acc;
+      const usdVal =
+        r.amount_usd > 0
+          ? r.amount_usd
+          : r.amount_bs > 0 && r.bcv_rate > 0
+          ? r.amount_bs / r.bcv_rate
+          : 0;
+      return acc + usdVal;
+    }, 0);
+  }, [filteredHistory]);
+
+  // Total Dólares pagados directamente mediante transacciones en USD
+  const totalDirectUsd = useMemo(() => {
+    return filteredHistory.reduce((acc, r) => {
+      if (r.status === 'anulado') return acc;
+      const isDirectUsd =
+        r.currency === 'USD' ||
+        r.bank_details?.payment_method === 'binance' ||
+        r.bank_details?.payment_method === 'zelle_usd' ||
+        r.bank_details?.payment_method === 'efectivo_usd' ||
+        !r.bcv_rate ||
+        r.bcv_rate === 0;
+      if (!isDirectUsd) return acc;
       return acc + (r.amount_usd || 0);
     }, 0);
   }, [filteredHistory]);
 
+  const totalUSD = useMemo(() => {
+    return totalUsdFromBs + totalDirectUsd;
+  }, [totalUsdFromBs, totalDirectUsd]);
+
   const totalBS = useMemo(() => {
     return filteredHistory.reduce((acc, r) => {
       if (r.status === 'anulado') return acc; // Saldo en 0
+      const isDirectUsd =
+        r.currency === 'USD' &&
+        (r.bank_details?.payment_method === 'binance' ||
+          r.bank_details?.payment_method === 'zelle_usd' ||
+          r.bank_details?.payment_method === 'efectivo_usd');
+      if (isDirectUsd && (!r.amount_bs || r.amount_bs === 0)) return acc;
       const bs =
         r.amount_bs ||
         (r.currency === 'USD' || !r.bcv_rate ? 0 : (r.amount_usd || 0) * (r.bcv_rate || 0));
@@ -172,61 +213,85 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       {/* Vista interactiva para Pantalla */}
       <div className="space-y-4 pb-20 md:pb-8 print:hidden">
       {/* Header Banner */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
-            <History className="w-5 h-5 text-emerald-600" />
-            <span>Historial y Archivo de Pagos</span>
-            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {historyRequests.length} realizados
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4">
+        <div className="shrink-0 max-w-md">
+          <div className="flex items-center gap-2 mb-1">
+            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
+              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
+              <span>{historyRequests.length} Solicitudes Realizadas</span>
             </span>
+          </div>
+          <h1 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+            <History className="w-5 h-5 text-emerald-600 shrink-0" />
+            <span>Historial de Pagos</span>
           </h1>
-          <p className="text-xs text-slate-500 mt-0.5">
+          <p className="text-xs text-slate-500 mt-0.5 leading-normal">
             Registro contable de pagos liquidados con comprobantes bancarios verificados.
           </p>
         </div>
 
         {/* Stats Summary & Export (Solo para Administradores) */}
         {currentUser?.role === 'admin' && (
-          <div className="flex items-center gap-3 flex-wrap sm:flex-nowrap">
-            <div className="grid grid-cols-2 gap-3 bg-slate-50 p-2.5 sm:px-4 rounded-2xl border border-slate-200 text-xs shrink-0">
-              <div>
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">
-                  Total Pagado ($)
+          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap 2xl:flex-nowrap justify-start 2xl:justify-end shrink-0">
+            {/* 3 Metric Boxes: 1. Transacciones USD, 2. Total Pagado USD (Bs a Tasa), 3. Total Pagado Bs */}
+            <div className="grid grid-cols-3 gap-2 sm:gap-3 bg-slate-50 p-2 sm:p-2.5 rounded-2xl border border-slate-200 text-xs shrink-0">
+              <div className="px-1 sm:px-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
+                  Transacciones USD ($)
                 </span>
-                <span className="text-emerald-700 font-black text-sm sm:text-base">
-                  {formatUSD(totalUSD)}
+                <span className="text-indigo-700 font-black text-xs sm:text-sm md:text-base leading-tight block">
+                  {formatUSD(totalDirectUsd)}
+                </span>
+                <span className="text-[9px] text-slate-400 font-medium block whitespace-nowrap">
+                  Directo en USD
                 </span>
               </div>
-              <div className="border-l border-slate-200 pl-3">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block">
+              <div className="border-l border-slate-200 pl-2 sm:pl-3 px-1 sm:px-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
+                  Total Pagado ($)
+                </span>
+                <span className="text-emerald-700 font-black text-xs sm:text-sm md:text-base leading-tight block">
+                  {formatUSD(totalUsdFromBs)}
+                </span>
+                <span className="text-[9px] text-slate-400 font-medium block whitespace-nowrap">
+                  Pagado en Bs. a Tasa
+                </span>
+              </div>
+              <div className="border-l border-slate-200 pl-2 sm:pl-3 px-1 sm:px-2">
+                <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
                   Total Pagado (Bs)
                 </span>
-                <span className="text-[#00b4a2] font-black text-sm sm:text-base">
+                <span className="text-[#00b4a2] font-black text-xs sm:text-sm md:text-base leading-tight block">
                   Bs. {formatBS(totalBS)}
+                </span>
+                <span className="text-[9px] text-slate-400 font-medium block whitespace-nowrap">
+                  Transferencias y PM
                 </span>
               </div>
             </div>
 
-            <button
-              onClick={() => exportRequestsToCSV(filteredHistory, 'TP_PAGOS_HISTORIAL')}
-              disabled={filteredHistory.length === 0}
-              className="active-press flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors shrink-0"
-              title="Descargar listado en formato Excel / CSV"
-            >
-              <Download className="w-4 h-4" />
-              <span>Exportar Excel</span>
-            </button>
+            {/* Action Buttons (Apilados verticalmente uno arriba del otro) */}
+            <div className="flex flex-col gap-1.5 shrink-0 justify-center">
+              <button
+                onClick={() => exportRequestsToCSV(filteredHistory, 'TP_PAGOS_HISTORIAL')}
+                disabled={filteredHistory.length === 0}
+                className="active-press flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors shrink-0 whitespace-nowrap"
+                title="Descargar listado en formato Excel / CSV"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Exportar Excel</span>
+              </button>
 
-            <button
-              onClick={() => window.print()}
-              disabled={filteredHistory.length === 0}
-              className="active-press flex items-center gap-1.5 px-3.5 py-2.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors shrink-0"
-              title="Imprimir reporte contable organizado"
-            >
-              <Printer className="w-4 h-4" />
-              <span>Imprimir Reporte</span>
-            </button>
+              <button
+                onClick={() => window.print()}
+                disabled={filteredHistory.length === 0}
+                className="active-press flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors shrink-0 whitespace-nowrap"
+                title="Imprimir reporte contable organizado"
+              >
+                <Printer className="w-3.5 h-3.5" />
+                <span>Imprimir Reporte</span>
+              </button>
+            </div>
           </div>
         )}
       </div>

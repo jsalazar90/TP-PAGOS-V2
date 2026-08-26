@@ -580,24 +580,32 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const parsedRoute = getValue(['Ruta', 'Origen - Destino', 'Trayecto']);
     const parsedExpenseConcept = getValue(['Concepto', 'Detalle Gasto', 'Justificación']);
 
-    const rawBs = getValue(['Monto BS', 'Monto en BS', 'Monto Bolivares', 'Monto Bolívares', 'Monto en Bolívares', 'Monto Local', 'BS', 'Bs.']);
+    const rawBs = getValue(['Monto BS', 'Monto en BS', 'Monto Bolivares', 'Monto Bolívares', 'Monto en Bolívares', 'Monto Local', 'Monto a Transferir', 'Monto Transferir', 'BS', 'Bs.']);
     const numBsParsed = rawBs ? parseAmount(rawBs) : NaN;
 
-    const rawUsd = getValue(['Monto USD', 'Monto en USD', 'Monto Divisas', 'Monto en Divisas', 'Monto ($)', 'Monto', 'USD', '\\$']);
-    let numUsd = rawUsd ? parseAmount(rawUsd) : currentForm.amount_usd;
+    const rawUsd = getValue(['Monto USD', 'Monto en USD', 'Monto Divisas', 'Monto en Divisas', 'Monto ($)', 'USD', '\\$']);
+    const numUsdParsed = rawUsd ? parseAmount(rawUsd) : NaN;
 
     const rawBcv = getValue(['Tasa BCV', 'Tasa de Cambio', 'Tasa', 'BCV']);
-    let numBcv = rawBcv ? parseAmount(rawBcv) : currentForm.bcv_rate;
+    const numBcvParsed = rawBcv ? parseAmount(rawBcv) : NaN;
 
+    let numUsd = !isNaN(numUsdParsed) ? numUsdParsed : NaN;
     let finalBs = !isNaN(numBsParsed) ? numBsParsed : NaN;
+    let numBcv = !isNaN(numBcvParsed) ? numBcvParsed : (!isNaN(currentForm.bcv_rate) && currentForm.bcv_rate > 0 ? currentForm.bcv_rate : NaN);
 
-    if (!isNaN(finalBs) && !isNaN(numBcv) && (isNaN(numUsd) || numUsd === 0) && numBcv > 0) {
+    // Derivación matemática precisa entre montos
+    if (!isNaN(finalBs) && finalBs > 0 && !isNaN(numBcv) && numBcv > 0 && (isNaN(numUsd) || numUsd <= 0)) {
       numUsd = Number((finalBs / numBcv).toFixed(2));
-    } else if (!isNaN(numUsd) && !isNaN(numBcv) && isNaN(finalBs)) {
+    } else if (!isNaN(numUsd) && numUsd > 0 && !isNaN(numBcv) && numBcv > 0 && (isNaN(finalBs) || finalBs <= 0)) {
       finalBs = Number((numUsd * numBcv).toFixed(2));
-    } else if (!isNaN(numUsd) && !isNaN(finalBs) && (isNaN(numBcv) || numBcv === 0) && numUsd > 0) {
+    } else if (!isNaN(numUsd) && numUsd > 0 && !isNaN(finalBs) && finalBs > 0 && (isNaN(numBcv) || numBcv <= 0)) {
       numBcv = Number((finalBs / numUsd).toFixed(4));
     }
+
+    // Fallbacks finales
+    if (isNaN(numUsd)) numUsd = currentForm.amount_usd || 0;
+    if (isNaN(finalBs)) finalBs = currentForm.amount_bs || 0;
+    if (isNaN(numBcv)) numBcv = currentForm.bcv_rate || 0;
 
     const parsedBeneficiary = getValue([
       'Beneficiario / Titular Cuenta',
@@ -1007,9 +1015,10 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       }
     }
 
-    // Validar Montos en Bolívares o Divisas
-    const numUsd = Number(formData.amount_usd) || 0;
-    const numBs = Number(formData.amount_bs) || 0;
+    // Validar Montos en Bolívares o Divisas con recálculo bidireccional automático
+    let numUsd = Number(formData.amount_usd) || 0;
+    let numBs = Number(formData.amount_bs) || 0;
+    let numBcv = Number(formData.bcv_rate) || 0;
 
     if (currency === 'USD') {
       if (numUsd <= 0) {
@@ -1017,8 +1026,27 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         return;
       }
     } else {
-      if (numBs <= 0 && numUsd <= 0) {
-        setErrorMsg('⚠️ Por favor coloca el monto a pagar en Bolívares o USD con su tasa de cambio.');
+      // Moneda en Bolívares (Transferencia o Pago Móvil)
+      if (numBcv <= 0) {
+        setErrorMsg('⚠️ Falta la Tasa de Cambio (BCV): Por favor indica la tasa para calcular la conversión.');
+        return;
+      }
+
+      if (numUsd <= 0 && numBs > 0) {
+        numUsd = Number((numBs / numBcv).toFixed(2));
+        setFormData(prev => ({ ...prev, amount_usd: numUsd }));
+      } else if (numBs <= 0 && numUsd > 0) {
+        numBs = Number((numUsd * numBcv).toFixed(2));
+        setFormData(prev => ({ ...prev, amount_bs: numBs }));
+      }
+
+      if (numUsd <= 0) {
+        setErrorMsg('⚠️ El monto en divisas no puede ser $0.00. Ingresa un monto en USD o en Bolívares válido con su tasa.');
+        return;
+      }
+
+      if (numBs <= 0) {
+        setErrorMsg('⚠️ El monto en bolívares no puede ser Bs. 0.00. Ingresa un monto en USD o en Bolívares válido.');
         return;
       }
     }
@@ -1076,6 +1104,18 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const fullGuestCis = isGastos ? '' : guestList.map(g => g.ci.trim()).filter(Boolean).join(' / ');
     const effectiveGuestList = isGastos ? [] : guestList;
 
+    let finalUsd = Number(formData.amount_usd) || 0;
+    let finalRate = currency === 'USD' ? 0 : Number(formData.bcv_rate) || 0;
+    let finalBs = currency === 'USD' ? 0 : Number(formData.amount_bs) || 0;
+
+    if (currency === 'VES' && finalRate > 0) {
+      if (finalUsd <= 0 && finalBs > 0) {
+        finalUsd = Number((finalBs / finalRate).toFixed(2));
+      } else if (finalBs <= 0 && finalUsd > 0) {
+        finalBs = Number((finalUsd * finalRate).toFixed(2));
+      }
+    }
+
     try {
       setLoading(true);
       await onSubmit({
@@ -1097,9 +1137,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         airline: formData.airline,
         expense_concept: formData.expense_concept,
         currency,
-        amount_usd: Number(formData.amount_usd),
-        bcv_rate: currency === 'USD' ? 0 : Number(formData.bcv_rate),
-        amount_bs: currency === 'USD' ? 0 : Number(formData.amount_bs || (formData.amount_usd * formData.bcv_rate)),
+        amount_usd: finalUsd,
+        bcv_rate: finalRate,
+        amount_bs: finalBs,
         status: isUrgent ? 'urgente' : 'en_proceso',
         is_urgent: isUrgent,
         bank_details: {
@@ -1774,7 +1814,13 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                         Monto Base Ref. ($)
                       </span>
                       <span className="text-lg font-black text-slate-800">
-                        {formatUSD(formData.amount_usd)}
+                        {formatUSD(
+                          formData.amount_usd > 0
+                            ? formData.amount_usd
+                            : formData.amount_bs > 0 && formData.bcv_rate > 0
+                            ? Number((formData.amount_bs / formData.bcv_rate).toFixed(2))
+                            : 0
+                        )}
                       </span>
                     </div>
                     <div>
@@ -2275,12 +2321,13 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   <input
                     type="number"
                     step="0.01"
-                    value={formData.amount_usd}
+                    value={formData.amount_usd || ''}
                     onChange={(e) => {
                       const usd = parseFloat(e.target.value) || 0;
-                      const bs = formData.bcv_rate > 0 ? Number((usd * formData.bcv_rate).toFixed(2)) : formData.amount_bs;
+                      const bs = formData.bcv_rate > 0 && usd > 0 ? Number((usd * formData.bcv_rate).toFixed(2)) : (usd === 0 && formData.bcv_rate > 0 ? 0 : formData.amount_bs);
                       setFormData({ ...formData, amount_usd: usd, amount_bs: bs });
                     }}
+                    placeholder="0.00"
                     className="w-full bg-white border border-teal-300 rounded-xl px-2.5 py-1.5 text-emerald-600 font-bold"
                   />
                 </div>
@@ -2289,12 +2336,21 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   <input
                     type="number"
                     step="0.0001"
-                    value={formData.bcv_rate}
+                    value={formData.bcv_rate || ''}
                     onChange={(e) => {
                       const rate = parseFloat(e.target.value) || 0;
-                      const bs = rate > 0 && formData.amount_usd > 0 ? Number((formData.amount_usd * rate).toFixed(2)) : formData.amount_bs;
-                      setFormData({ ...formData, bcv_rate: rate, amount_bs: bs });
+                      let usd = formData.amount_usd;
+                      let bs = formData.amount_bs;
+                      if (rate > 0) {
+                        if (usd > 0) {
+                          bs = Number((usd * rate).toFixed(2));
+                        } else if (bs > 0) {
+                          usd = Number((bs / rate).toFixed(2));
+                        }
+                      }
+                      setFormData({ ...formData, bcv_rate: rate, amount_usd: usd, amount_bs: bs });
                     }}
+                    placeholder="0.0000"
                     className="w-full bg-white border border-slate-300 rounded-xl px-2.5 py-1.5 font-bold"
                   />
                 </div>
@@ -2303,13 +2359,14 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   <input
                     type="number"
                     step="0.01"
-                    value={formData.amount_bs}
+                    value={formData.amount_bs || ''}
                     onChange={(e) => {
                       const bs = parseFloat(e.target.value) || 0;
-                      const usd = formData.bcv_rate > 0 ? Number((bs / formData.bcv_rate).toFixed(2)) : formData.amount_usd;
+                      const usd = formData.bcv_rate > 0 && bs > 0 ? Number((bs / formData.bcv_rate).toFixed(2)) : (bs === 0 && formData.bcv_rate > 0 ? 0 : formData.amount_usd);
                       setFormData({ ...formData, amount_bs: bs, amount_usd: usd });
                     }}
-                    className="w-full bg-white border border-teal-300 rounded-xl px-2.5 py-1.5 text-[#009b8b] font-bold"
+                    placeholder="0.00"
+                    className="w-full bg-white border border-teal-300 rounded-xl px-2.5 py-1.5 text-[#00b4a2] font-bold"
                   />
                 </div>
               </div>

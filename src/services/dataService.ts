@@ -210,16 +210,36 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
         console.warn('Supabase payment_requests query error, using local fallback:', error.message);
         list = getLocalRequests();
       } else {
-        list = (data || []).map((item: any) => ({
-          ...item,
-          origin_bank: item.origin_bank || '',
-          creator_name:
-            item.creator_name ||
-            item.profiles?.full_name ||
-            item.profiles?.username ||
-            userMap.get(item.created_by) ||
-            (_currentUser?.id === item.created_by ? _currentUser?.full_name : 'Usuario')
-        }));
+        list = (data || []).map((item: any) => {
+          let itemUsd = Number(item.amount_usd) || 0;
+          const itemBs = Number(item.amount_bs) || 0;
+          const itemBcv = Number(item.bcv_rate) || 0;
+
+          // Auto-reparar registros existentes con USD en 0 en Supabase
+          if (itemUsd <= 0 && itemBs > 0 && itemBcv > 0) {
+            itemUsd = Number((itemBs / itemBcv).toFixed(2));
+            supabase
+              .from('payment_requests')
+              .update({ amount_usd: itemUsd })
+              .eq('id', item.id)
+              .then(({ error: updateErr }) => {
+                if (updateErr) console.warn('Aviso de auto-reparación Supabase:', updateErr.message);
+              })
+              .catch(() => {});
+          }
+
+          return {
+            ...item,
+            amount_usd: itemUsd,
+            origin_bank: item.origin_bank || '',
+            creator_name:
+              item.creator_name ||
+              item.profiles?.full_name ||
+              item.profiles?.username ||
+              userMap.get(item.created_by) ||
+              (_currentUser?.id === item.created_by ? _currentUser?.full_name : 'Usuario')
+          };
+        });
         // Keep local cache synced with remote active items
         setLocalRequests(list);
       }
@@ -238,9 +258,21 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
   return list
     .map(req => {
       const isDirectUsd = req.currency === 'USD' || req.bcv_rate === 0;
+      let effectiveUsd = Number(req.amount_usd) || 0;
+      let effectiveBs = Number(req.amount_bs) || 0;
+      const bcvRate = isDirectUsd ? 0 : Number(req.bcv_rate) || 0;
+
+      if (!isDirectUsd && bcvRate > 0) {
+        if (effectiveUsd <= 0 && effectiveBs > 0) {
+          effectiveUsd = Number((effectiveBs / bcvRate).toFixed(2));
+        } else if (effectiveBs <= 0 && effectiveUsd > 0) {
+          effectiveBs = Number((effectiveUsd * bcvRate).toFixed(2));
+        }
+      }
+
       const computedBs = isDirectUsd
         ? 0
-        : Number(((req.amount_usd || 0) * (req.bcv_rate || 0)).toFixed(2));
+        : Number(((effectiveUsd || 0) * (bcvRate || 0)).toFixed(2));
       const creatorName =
         req.creator_name ||
         userMap.get(req.created_by) ||
@@ -248,7 +280,8 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
       return {
         ...req,
         creator_name: creatorName,
-        amount_bs: req.amount_bs || computedBs
+        amount_usd: effectiveUsd,
+        amount_bs: effectiveBs || computedBs
       };
     })
     .sort((a, b) => {
@@ -256,6 +289,50 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
       if (a.status !== 'urgente' && b.status === 'urgente') return 1;
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
+}
+
+export async function repairZeroUsdRequests(): Promise<{ fixedCount: number }> {
+  let fixedCount = 0;
+  const requests = getLocalRequests();
+  const updatedLocal = requests.map(r => {
+    if ((!r.amount_usd || r.amount_usd <= 0) && r.amount_bs > 0 && r.bcv_rate > 0) {
+      fixedCount++;
+      return {
+        ...r,
+        amount_usd: Number((r.amount_bs / r.bcv_rate).toFixed(2))
+      };
+    }
+    return r;
+  });
+  if (fixedCount > 0) {
+    setLocalRequests(updatedLocal);
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('payment_requests')
+        .select('id, amount_usd, amount_bs, bcv_rate')
+        .or('amount_usd.is.null,amount_usd.eq.0');
+
+      if (!error && data && data.length > 0) {
+        for (const item of data) {
+          if (item.amount_bs > 0 && item.bcv_rate > 0) {
+            const calculated = Number((item.amount_bs / item.bcv_rate).toFixed(2));
+            await supabase
+              .from('payment_requests')
+              .update({ amount_usd: calculated })
+              .eq('id', item.id);
+            fixedCount++;
+          }
+        }
+      }
+    } catch (e) {
+      console.warn('repairZeroUsdRequests Supabase warning:', e);
+    }
+  }
+
+  return { fixedCount };
 }
 
 function isValidUUID(str?: string): boolean {
@@ -431,12 +508,23 @@ export async function createPaymentRequest(
   }
 
   const isDirectUsd = input.currency === 'USD' || input.bcv_rate === 0;
-  const amountBs =
+  let effectiveUsd = Number(input.amount_usd) || 0;
+  const bcvRate = isDirectUsd ? 0 : Number(input.bcv_rate) || 0;
+  let amountBs =
     input.amount_bs !== undefined && input.amount_bs > 0
       ? Number(input.amount_bs.toFixed(2))
       : isDirectUsd
       ? 0
-      : Number((input.amount_usd * input.bcv_rate).toFixed(2));
+      : Number((effectiveUsd * bcvRate).toFixed(2));
+
+  if (!isDirectUsd && bcvRate > 0) {
+    if (effectiveUsd <= 0 && amountBs > 0) {
+      effectiveUsd = Number((amountBs / bcvRate).toFixed(2));
+    } else if (amountBs <= 0 && effectiveUsd > 0) {
+      amountBs = Number((effectiveUsd * bcvRate).toFixed(2));
+    }
+  }
+
   const effectiveCurrency = input.currency || (isDirectUsd ? 'USD' : 'VES');
   const initialStatus = input.status || (input.is_urgent ? 'urgente' : 'en_proceso');
   const creatorFullName = currentUser.full_name || currentUser.username;
@@ -463,8 +551,8 @@ export async function createPaymentRequest(
         airline: input.airline,
         flight_route: input.flight_route,
         currency: effectiveCurrency,
-        amount_usd: input.amount_usd,
-        bcv_rate: isDirectUsd ? 0 : input.bcv_rate,
+        amount_usd: effectiveUsd,
+        bcv_rate: bcvRate,
         amount_bs: amountBs,
         bank_details: input.bank_details,
         status: initialStatus,
@@ -535,8 +623,8 @@ export async function createPaymentRequest(
     airline: input.airline,
     flight_route: input.flight_route,
     currency: effectiveCurrency,
-    amount_usd: input.amount_usd,
-    bcv_rate: isDirectUsd ? 0 : input.bcv_rate,
+    amount_usd: effectiveUsd,
+    bcv_rate: bcvRate,
     amount_bs: amountBs,
     bank_details: input.bank_details,
     status: initialStatus,
@@ -991,12 +1079,23 @@ export async function updatePaymentRequest(
   }
 
   const isDirectUsd = input.currency === 'USD' || input.bcv_rate === 0;
-  const amountBs =
+  let effectiveUsd = Number(input.amount_usd) || 0;
+  const bcvRate = isDirectUsd ? 0 : Number(input.bcv_rate) || 0;
+  let amountBs =
     input.amount_bs !== undefined && input.amount_bs > 0
       ? Number(input.amount_bs.toFixed(2))
       : isDirectUsd
       ? 0
-      : Number((input.amount_usd * input.bcv_rate).toFixed(2));
+      : Number((effectiveUsd * bcvRate).toFixed(2));
+
+  if (!isDirectUsd && bcvRate > 0) {
+    if (effectiveUsd <= 0 && amountBs > 0) {
+      effectiveUsd = Number((amountBs / bcvRate).toFixed(2));
+    } else if (amountBs <= 0 && effectiveUsd > 0) {
+      amountBs = Number((effectiveUsd * bcvRate).toFixed(2));
+    }
+  }
+
   const effectiveCurrency = input.currency || (isDirectUsd ? 'USD' : 'VES');
   const updatedStatus = input.status || (input.is_urgent ? 'urgente' : 'en_proceso');
 
@@ -1021,8 +1120,8 @@ export async function updatePaymentRequest(
         airline: input.airline,
         flight_route: input.flight_route,
         currency: effectiveCurrency,
-        amount_usd: input.amount_usd,
-        bcv_rate: isDirectUsd ? 0 : input.bcv_rate,
+        amount_usd: effectiveUsd,
+        bcv_rate: bcvRate,
         amount_bs: amountBs,
         bank_details: input.bank_details,
         status: updatedStatus,
@@ -1077,8 +1176,8 @@ export async function updatePaymentRequest(
     airline: input.airline,
     flight_route: input.flight_route,
     currency: effectiveCurrency,
-    amount_usd: input.amount_usd,
-    bcv_rate: isDirectUsd ? 0 : input.bcv_rate,
+    amount_usd: effectiveUsd,
+    bcv_rate: bcvRate,
     amount_bs: amountBs,
     bank_details: input.bank_details,
     status: updatedStatus,
