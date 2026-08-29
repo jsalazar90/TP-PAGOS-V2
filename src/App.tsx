@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PaymentRequest, UserProfile, RequestStatus, CreatePaymentRequestInput, Beneficiary } from './types';
+import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary } from './types';
 import {
   fetchPaymentRequests,
   createPaymentRequest,
@@ -16,6 +16,7 @@ import {
   createNewUser,
   toggleUserActiveStatus,
   updateUserPassword,
+  updateUserRole,
   fetchBeneficiaries,
   createBeneficiary,
   updateBeneficiary,
@@ -625,6 +626,31 @@ export function App() {
     }
   };
 
+  // Update user role handler
+  const handleUpdateUserRole = async (userId: string, newRole: UserRole) => {
+    try {
+      const updated = await updateUserRole(userId, newRole);
+      setUsersList(prev => prev.map(u => (u.id === userId ? updated : u)));
+      if (currentUser?.id === userId) {
+        setCurrentUser(updated);
+        localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(updated));
+      }
+      showToast(`Rol actualizado a "${newRole.toUpperCase()}" para "${updated.full_name}".`, 'success');
+
+      logAuditEvent({
+        action_type: 'create_user',
+        user: currentUser,
+        target_id: updated.username,
+        target_title: updated.full_name,
+        details: `El administrador ${currentUser?.full_name || 'Admin'} modificó el rol del usuario "${updated.full_name}" a ${newRole.toUpperCase()}.`,
+        metadata: { username: updated.username, new_role: newRole }
+      }).catch(console.warn);
+    } catch (e: any) {
+      showToast(e.message || 'Error al cambiar el rol del usuario', 'error');
+      throw e;
+    }
+  };
+
   // Request Modification handler
   const handleRequestModification = (request: PaymentRequest) => {
     setModificationModalRequest(request);
@@ -867,6 +893,7 @@ export function App() {
                 onCreateUser={handleCreateUser}
                 onToggleUserActive={handleToggleUserActive}
                 onUpdatePassword={handleUpdateUserPassword}
+                onUpdateRole={handleUpdateUserRole}
               />
             )}
           </>

@@ -4,6 +4,7 @@ import {
   PaymentRequest,
   RequestStatus,
   UserProfile,
+  UserRole,
   Beneficiary
 } from '../types';
 import { INITIAL_REQUESTS, INITIAL_USERS, INITIAL_BENEFICIARIES } from './mockData';
@@ -201,10 +202,16 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from('payment_requests')
         .select('*, profiles:created_by(full_name, username)')
         .order('created_at', { ascending: false });
+
+      if (_currentUser && _currentUser.role === 'operador') {
+        query = query.eq('created_by', _currentUser.id);
+      }
+
+      const { data, error } = await query;
 
       if (error) {
         console.warn('Supabase payment_requests query error, using local fallback:', error.message);
@@ -257,6 +264,11 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
 
   // Filter out any permanently deleted requests
   list = list.filter(item => !deletedIds.has(item.id));
+
+  // RESTRICTION: Users with 'operador' role can only see their own requests
+  if (_currentUser && _currentUser.role === 'operador') {
+    list = list.filter(item => item.created_by === _currentUser.id);
+  }
 
   return list
     .map(req => {
@@ -899,6 +911,60 @@ export async function updateUserPassword(
       }
     } catch (e) {
       console.warn('Supabase updateUserPassword fallback to local:', e);
+    }
+  }
+
+  users[index] = updatedUser;
+  setLocalUsers(users);
+  return updatedUser;
+}
+
+export async function updateUserRole(
+  userId: string,
+  newRole: UserRole
+): Promise<UserProfile> {
+  const users = getLocalUsers();
+  const index = users.findIndex(u => u.id === userId);
+  if (index === -1) {
+    throw new Error('Usuario no encontrado');
+  }
+
+  const updatedUser: UserProfile = {
+    ...users[index],
+    role: newRole
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .update({ role: newRole })
+        .eq('id', userId)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Supabase updateUserRole error:', error);
+        if (
+          error.message?.includes('invalid input value for enum') ||
+          error.message?.includes('user_role') ||
+          error.code === '22P02'
+        ) {
+          throw new Error(
+            `El valor '${newRole}' aún no existe en el enum 'user_role' de tu Supabase. Ejecuta en tu SQL Editor: ALTER TYPE user_role ADD VALUE '${newRole}';`
+          );
+        }
+        throw new Error(error.message);
+      }
+
+      if (data) {
+        users[index] = { ...users[index], ...data, role: newRole };
+        setLocalUsers(users);
+        return users[index];
+      }
+    } catch (e: any) {
+      console.warn('Supabase updateUserRole fallback to local:', e);
+      throw e;
     }
   }
 

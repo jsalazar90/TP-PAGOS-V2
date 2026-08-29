@@ -234,6 +234,8 @@ export const Dashboard: React.FC<DashboardProps> = ({
           <p className="text-xs text-slate-500 mt-0.5">
             {currentUser.role === 'admin'
               ? 'Administra, procesa y liquida las órdenes de pago activas.'
+              : currentUser.role === 'operador'
+              ? 'Monitorea tus solicitudes de pago activas y su estatus.'
               : 'Monitorea el estado y avance de tus solicitudes de pago.'}
           </p>
         </div>

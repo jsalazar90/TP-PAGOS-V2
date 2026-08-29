@@ -192,7 +192,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               )}
             </div>
           )}
-          {currentUser.role === 'solicitante' && onCancelModification && (
+          {currentUser.role !== 'admin' && onCancelModification && (
             <div className="flex items-center justify-between text-[11px] text-amber-800 pt-0.5">
               <span>El administrador fue notificado para realizar los cambios.</span>
               <button
@@ -252,7 +252,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               )}
             </div>
           )}
-          {currentUser.role === 'solicitante' && onCancelCancellation && (
+          {currentUser.role !== 'admin' && onCancelCancellation && (
             <div className="flex items-center justify-between text-[11px] text-rose-800 pt-0.5">
               <span>El administrador fue notificado para anular este pago.</span>
               <button
@@ -479,7 +479,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               </button>
             )}
 
-            {currentUser.role === 'solicitante' && request.status !== 'realizado' && request.status !== 'anulado' && (
+            {currentUser.role !== 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && (
               <>
                 <button
                   onClick={() => onRequestModification && onRequestModification(request)}

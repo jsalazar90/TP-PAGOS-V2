@@ -950,7 +950,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             </button>
           )}
 
-          {currentUser?.role === 'solicitante' && request.status !== 'realizado' && request.status !== 'anulado' && onRequestModification && (
+          {currentUser?.role !== 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && onRequestModification && (
             <button
               type="button"
               onClick={() => {
@@ -968,7 +968,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             </button>
           )}
 
-          {currentUser?.role === 'solicitante' && request.status !== 'realizado' && request.status !== 'anulado' && onRequestCancellation && (
+          {currentUser?.role !== 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && onRequestCancellation && (
             <button
               type="button"
               onClick={() => {

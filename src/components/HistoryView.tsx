@@ -213,7 +213,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       {/* Vista interactiva para Pantalla */}
       <div className="space-y-4 pb-20 md:pb-8 print:hidden">
       {/* Header Banner */}
-      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-4">
+      <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 sm:gap-4 overflow-hidden">
         <div className="shrink-0 max-w-md">
           <div className="flex items-center gap-2 mb-1">
             <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
@@ -226,15 +226,17 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             <span>Historial de Pagos</span>
           </h1>
           <p className="text-xs text-slate-500 mt-0.5 leading-normal">
-            Registro contable de pagos liquidados con comprobantes bancarios verificados.
+            {currentUser?.role === 'operador'
+              ? 'Historial de tus solicitudes de pago liquidadas con comprobantes bancarios de recepción.'
+              : 'Registro contable de pagos liquidados con comprobantes bancarios verificados.'}
           </p>
         </div>
 
         {/* Stats Summary & Export (Solo para Administradores) */}
         {currentUser?.role === 'admin' && (
-          <div className="flex items-center gap-2.5 sm:gap-3 flex-wrap 2xl:flex-nowrap justify-start 2xl:justify-end shrink-0">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full 2xl:w-auto justify-start 2xl:justify-end">
             {/* 3 Metric Boxes: 1. Transacciones USD, 2. Total Pagado USD (Bs a Tasa), 3. Total Pagado Bs */}
-            <div className="grid grid-cols-3 gap-2 sm:gap-3 bg-slate-50 p-2 sm:p-2.5 rounded-2xl border border-slate-200 text-xs shrink-0">
+            <div className="w-full sm:w-auto grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-200 text-xs">
               <div className="px-1 sm:px-2">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
                   Transacciones USD ($)
@@ -257,11 +259,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   Pagado en Bs. a Tasa
                 </span>
               </div>
-              <div className="border-l border-slate-200 pl-2 sm:pl-3 px-1 sm:px-2">
+              <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 pl-1 sm:pl-3 px-1 sm:px-2">
                 <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
                   Total Pagado (Bs)
                 </span>
-                <span className="text-[#00b4a2] font-black text-xs sm:text-sm md:text-base leading-tight block">
+                <span className="text-[#00b4a2] font-black text-xs sm:text-sm md:text-base leading-tight block break-words">
                   Bs. {formatBS(totalBS)}
                 </span>
                 <span className="text-[9px] text-slate-400 font-medium block whitespace-nowrap">
@@ -270,12 +272,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               </div>
             </div>
 
-            {/* Action Buttons (Apilados verticalmente uno arriba del otro) */}
-            <div className="flex flex-col gap-1.5 shrink-0 justify-center">
+            {/* Action Buttons */}
+            <div className="grid grid-cols-2 sm:flex sm:flex-col gap-2 sm:gap-1.5 w-full sm:w-auto shrink-0 justify-center">
               <button
                 onClick={() => exportRequestsToCSV(filteredHistory, 'TP_PAGOS_HISTORIAL')}
                 disabled={filteredHistory.length === 0}
-                className="active-press flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors shrink-0 whitespace-nowrap"
+                className="active-press flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors whitespace-nowrap"
                 title="Descargar listado en formato Excel / CSV"
               >
                 <Download className="w-3.5 h-3.5" />
@@ -285,7 +287,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               <button
                 onClick={() => window.print()}
                 disabled={filteredHistory.length === 0}
-                className="active-press flex items-center justify-center gap-1.5 px-3 py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors shrink-0 whitespace-nowrap"
+                className="active-press flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors whitespace-nowrap"
                 title="Imprimir reporte contable organizado"
               >
                 <Printer className="w-3.5 h-3.5" />

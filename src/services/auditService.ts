@@ -89,21 +89,32 @@ export async function logAuditEvent(entry: {
   // 2. Guardar en Supabase si está disponible
   if (isSupabaseConfigured && supabase) {
     try {
-      await supabase.from('audit_logs').insert([
-        {
-          id: newLog.id,
-          action_type: newLog.action_type,
-          user_id: newLog.user_id,
-          username: newLog.username,
-          user_role: newLog.user_role,
-          target_id: newLog.target_id,
-          target_title: newLog.target_title,
-          details: newLog.details,
-          metadata: newLog.metadata,
-          user_agent: newLog.user_agent,
-          created_at: newLog.created_at
-        }
-      ]);
+      const isValidUUID = (str?: string) =>
+        str ? /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(str) : false;
+
+      const payload: any = {
+        action_type: newLog.action_type,
+        username: newLog.username,
+        user_role: newLog.user_role,
+        target_id: newLog.target_id,
+        target_title: newLog.target_title,
+        details: newLog.details,
+        metadata: newLog.metadata,
+        user_agent: newLog.user_agent,
+        created_at: newLog.created_at
+      };
+
+      if (isValidUUID(newLog.id)) {
+        payload.id = newLog.id;
+      }
+      if (isValidUUID(newLog.user_id)) {
+        payload.user_id = newLog.user_id;
+      }
+
+      const { error } = await supabase.from('audit_logs').insert([payload]);
+      if (error) {
+        console.warn('Supabase audit log insert notice:', error.message);
+      }
     } catch (e) {
       console.warn('Could not insert audit log to Supabase, saved locally:', e);
     }

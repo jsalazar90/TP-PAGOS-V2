@@ -12,7 +12,8 @@ import {
   Eye,
   EyeOff,
   Lock,
-  KeyRound
+  KeyRound,
+  UserCog
 } from 'lucide-react';
 
 interface UserManagementViewProps {
@@ -21,6 +22,7 @@ interface UserManagementViewProps {
   onCreateUser: (userData: Omit<UserProfile, 'id' | 'created_at'>) => Promise<void>;
   onToggleUserActive: (userId: string) => Promise<void>;
   onUpdatePassword: (userId: string, newPassword: string) => Promise<void>;
+  onUpdateRole?: (userId: string, newRole: UserRole) => Promise<void>;
 }
 
 export const UserManagementView: React.FC<UserManagementViewProps> = ({
@@ -29,6 +31,7 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   onCreateUser,
   onToggleUserActive,
   onUpdatePassword,
+  onUpdateRole,
 }) => {
   const visibleUsers = users.filter(u => (u.username || '').toLowerCase() !== 'jhoansg');
   const [showModal, setShowModal] = useState(false);
@@ -46,6 +49,10 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
   const [newPassword, setNewPassword] = useState('');
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showNewPassword, setShowNewPassword] = useState(false);
+
+  // Role Change Modal State
+  const [roleModalUser, setRoleModalUser] = useState<UserProfile | null>(null);
+  const [selectedNewRole, setSelectedNewRole] = useState<UserRole>('solicitante');
 
   if (currentUser.role !== 'admin') {
     return (
@@ -125,6 +132,24 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
     }
   };
 
+  const handleSaveNewRole = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setErrorMsg('');
+
+    if (!roleModalUser || !onUpdateRole) return;
+
+    try {
+      setLoading(true);
+      await onUpdateRole(roleModalUser.id, selectedNewRole);
+      setSuccessMsg(`Rol actualizado con éxito a "${selectedNewRole.toUpperCase()}" para @${roleModalUser.username}.`);
+      setRoleModalUser(null);
+    } catch (err: any) {
+      setErrorMsg(err.message || 'Error al actualizar el rol');
+    } finally {
+      setLoading(false);
+    }
+  };
+
   return (
     <div className="space-y-3.5 pb-16 md:pb-6">
       {/* Header Banner */}
@@ -188,12 +213,18 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                   className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full font-semibold text-[11px] ${
                     u.role === 'admin'
                       ? 'bg-purple-50 text-purple-700 border border-purple-200'
+                      : u.role === 'operador'
+                      ? 'bg-teal-50 text-teal-700 border border-teal-200'
                       : 'bg-indigo-50 text-indigo-700 border border-indigo-200'
                   }`}
                 >
                   {u.role === 'admin' ? (
                     <>
                       <ShieldCheck className="w-3 h-3" /> Administrador
+                    </>
+                  ) : u.role === 'operador' ? (
+                    <>
+                      <UserCog className="w-3 h-3" /> Operador
                     </>
                   ) : (
                     <>
@@ -213,6 +244,21 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
             </div>
 
             <div className="mt-3 pt-2 border-t border-slate-100 flex items-center justify-between gap-1.5 flex-wrap">
+              {onUpdateRole && (
+                <button
+                  onClick={() => {
+                    setRoleModalUser(u);
+                    setSelectedNewRole(u.role);
+                    setErrorMsg('');
+                  }}
+                  className="active-press px-2.5 py-1 rounded-lg text-[11px] font-bold flex items-center gap-1 bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border border-indigo-200 transition-colors shadow-2xs"
+                  title="Cambiar rol o permisos de este usuario"
+                >
+                  <UserCog className="w-3 h-3 text-indigo-600" />
+                  <span>Cambiar Rol</span>
+                </button>
+              )}
+
               <button
                 onClick={() => {
                   setPasswordModalUser(u);
@@ -336,7 +382,8 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                   onChange={(e) => setRole(e.target.value as UserRole)}
                   className="w-full bg-slate-50 border border-slate-200 rounded-lg px-2.5 py-1.5 text-slate-900 focus:bg-white focus:outline-none focus:border-indigo-500 font-medium"
                 >
-                  <option value="solicitante">Solicitante (Crear y consultar solicitudes)</option>
+                  <option value="solicitante">Solicitante (Crear y consultar solicitudes generales)</option>
+                  <option value="operador">Operador (Limitado: solo sus propias solicitudes y pagos recibidos)</option>
                   <option value="admin">Administrador (Acceso total, gestión de estados e historial)</option>
                 </select>
               </div>
@@ -446,6 +493,80 @@ export const UserManagementView: React.FC<UserManagementViewProps> = ({
                 >
                   <KeyRound className="w-3.5 h-3.5" />
                   <span>{loading ? 'Guardando...' : 'Actualizar Contraseña'}</span>
+                </button>
+              </div>
+            </form>
+          </div>
+        </div>
+      )}
+
+      {/* Modal for Changing User Role */}
+      {roleModalUser && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-sm animate-fade-in">
+          <div className="bg-white w-full max-w-sm rounded-2xl border border-slate-200 p-4 sm:p-5 shadow-modal space-y-4 text-slate-800">
+            <div className="flex items-center justify-between border-b border-slate-100 pb-2.5">
+              <div className="flex items-center gap-2">
+                <div className="p-1.5 rounded-lg bg-indigo-100 text-indigo-700">
+                  <UserCog className="w-4 h-4" />
+                </div>
+                <div>
+                  <h3 className="font-bold text-slate-900 text-sm">Modificar Rol de Usuario</h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Usuario: <strong className="text-slate-800">@{roleModalUser.username}</strong>
+                  </p>
+                </div>
+              </div>
+              <button
+                onClick={() => setRoleModalUser(null)}
+                aria-label="Cerrar modal"
+                className="p-1 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            {errorMsg && (
+              <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+                {errorMsg}
+              </div>
+            )}
+
+            <form onSubmit={handleSaveNewRole} className="space-y-3 text-xs">
+              <div>
+                <label className="block text-slate-700 font-bold mb-1">Seleccionar Nuevo Rol *</label>
+                <select
+                  aria-label="Nuevo rol"
+                  value={selectedNewRole}
+                  onChange={(e) => setSelectedNewRole(e.target.value as UserRole)}
+                  className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-2 text-slate-900 font-medium focus:bg-white focus:outline-none focus:border-indigo-500"
+                >
+                  <option value="solicitante">Solicitante (Crear y consultar solicitudes generales)</option>
+                  <option value="operador">Operador (Limitado: solo sus propias solicitudes y pagos recibidos)</option>
+                  <option value="admin">Administrador (Acceso total, gestión de estados e historial)</option>
+                </select>
+              </div>
+
+              {roleModalUser.id === currentUser.id && selectedNewRole !== 'admin' && (
+                <div className="p-2.5 rounded-xl bg-amber-50 border border-amber-200 text-amber-800 text-[11px] font-semibold">
+                  ⚠️ Atención: Si cambias tu propio rol a no-administrador, perderás el acceso a este panel de administración.
+                </div>
+              )}
+
+              <div className="pt-2 flex items-center justify-end gap-2">
+                <button
+                  type="button"
+                  onClick={() => setRoleModalUser(null)}
+                  className="px-3.5 py-1.5 rounded-xl text-slate-600 hover:bg-slate-100 font-semibold"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="submit"
+                  disabled={loading || selectedNewRole === roleModalUser.role}
+                  className="active-press bg-[#00b4a2] hover:bg-[#009b8b] text-white px-4 py-2 rounded-xl font-bold flex items-center gap-1.5 shadow-2xs disabled:opacity-50"
+                >
+                  <UserCog className="w-3.5 h-3.5" />
+                  <span>{loading ? 'Guardando...' : 'Actualizar Rol'}</span>
                 </button>
               </div>
             </form>

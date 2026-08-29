@@ -12,7 +12,8 @@ import {
   Bell,
   BellRing,
   BellOff,
-  Building2
+  Building2,
+  UserCog
 } from 'lucide-react';
 import { notificationService } from '../services/notificationService';
 
@@ -163,13 +164,15 @@ export const Navbar: React.FC<NavbarProps> = ({
             <div className="hidden lg:flex items-center gap-2 bg-slate-100/80 px-3 py-1 rounded-xl border border-slate-200">
               {currentUser.role === 'admin' ? (
                 <ShieldCheck className="w-4 h-4 text-teal-600" />
+              ) : currentUser.role === 'operador' ? (
+                <UserCog className="w-4 h-4 text-teal-600" />
               ) : (
                 <UserCheck className="w-4 h-4 text-teal-600" />
               )}
               <div className="text-left text-xs">
                 <p className="font-bold text-slate-800 leading-tight">{currentUser.full_name}</p>
                 <p className="text-[10px] text-slate-500 font-medium capitalize">
-                  {currentUser.role === 'admin' ? 'Administrador' : 'Solicitante'}
+                  {currentUser.role === 'admin' ? 'Administrador' : currentUser.role === 'operador' ? 'Operador' : 'Solicitante'}
                 </p>
               </div>
             </div>

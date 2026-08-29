@@ -30,6 +30,16 @@ export const INITIAL_USERS: UserProfile[] = [
     password: '1234',
     is_active: true,
     created_at: new Date().toISOString()
+  },
+  {
+    id: 'usr-op-1',
+    username: 'operador',
+    email: 'operador@tppagos.com',
+    full_name: 'Operador de Turno',
+    role: 'operador',
+    password: '1234',
+    is_active: true,
+    created_at: new Date().toISOString()
   }
 ];
 
