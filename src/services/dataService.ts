@@ -194,10 +194,45 @@ function setLocalBeneficiaries(bens: Beneficiary[]) {
   localStorage.setItem(BENEFICIARIES_STORAGE_KEY, JSON.stringify(bens.map(normalizeBeneficiary)));
 }
 
+export function normalizePaymentRequest(
+  item: any,
+  userMap?: Map<string, string>,
+  _currentUser?: UserProfile | null
+): PaymentRequest {
+  let effectiveUsd = Number(item.amount_usd) || 0;
+  let effectiveBs = Number(item.amount_bs) || 0;
+  const bcvRate = item.currency === 'USD' || Number(item.bcv_rate) === 0 ? 0 : Number(item.bcv_rate) || 0;
+  const isDirectUsd = item.currency === 'USD' || bcvRate === 0;
+
+  if (!isDirectUsd && bcvRate > 0) {
+    if (effectiveUsd <= 0 && effectiveBs > 0) {
+      effectiveUsd = Number((effectiveBs / bcvRate).toFixed(2));
+    } else if (effectiveBs <= 0 && effectiveUsd > 0) {
+      effectiveBs = Number((effectiveUsd * bcvRate).toFixed(2));
+    }
+  }
+
+  const computedBs = isDirectUsd
+    ? (effectiveBs || 0)
+    : Number(((effectiveUsd || 0) * (bcvRate || 0)).toFixed(2));
+
+  return {
+    ...item,
+    amount_usd: effectiveUsd,
+    amount_bs: computedBs,
+    bcv_rate: bcvRate,
+    origin_bank: item.origin_bank || '',
+    creator_name:
+      item.creator_name ||
+      item.profiles?.full_name ||
+      item.profiles?.username ||
+      (userMap ? userMap.get(item.created_by) : undefined) ||
+      (_currentUser?.id === item.created_by ? _currentUser?.full_name : 'Usuario')
+  };
+}
+
 export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<PaymentRequest[]> {
   let list: PaymentRequest[] = [];
-  const users = await fetchUsers();
-  const userMap = new Map(users.map(u => [u.id, u.full_name || u.username]));
   const deletedIds = getDeletedRequestIds();
 
   if (isSupabaseConfigured && supabase) {
@@ -217,39 +252,7 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
         console.warn('Supabase payment_requests query error, using local fallback:', error.message);
         list = getLocalRequests();
       } else {
-        const client = supabase;
-        list = (data || []).map((item: any) => {
-          let itemUsd = Number(item.amount_usd) || 0;
-          const itemBs = Number(item.amount_bs) || 0;
-          const itemBcv = Number(item.bcv_rate) || 0;
-
-          // Auto-reparar registros existentes con USD en 0 en Supabase
-          if (itemUsd <= 0 && itemBs > 0 && itemBcv > 0 && client) {
-            itemUsd = Number((itemBs / itemBcv).toFixed(2));
-            client
-              .from('payment_requests')
-              .update({ amount_usd: itemUsd })
-              .eq('id', item.id)
-              .then(
-                () => {},
-                (updateErr: any) => {
-                  if (updateErr) console.warn('Aviso de auto-reparación Supabase:', updateErr.message);
-                }
-              );
-          }
-
-          return {
-            ...item,
-            amount_usd: itemUsd,
-            origin_bank: item.origin_bank || '',
-            creator_name:
-              item.creator_name ||
-              item.profiles?.full_name ||
-              item.profiles?.username ||
-              userMap.get(item.created_by) ||
-              (_currentUser?.id === item.created_by ? _currentUser?.full_name : 'Usuario')
-          };
-        });
+        list = (data || []).map((item: any) => normalizePaymentRequest(item, undefined, _currentUser));
         // Keep local cache synced with remote active items
         setLocalRequests(list);
       }
@@ -259,7 +262,7 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
     }
   } else {
     // Local fallback - returns all requests for all users
-    list = getLocalRequests();
+    list = getLocalRequests().map(item => normalizePaymentRequest(item, undefined, _currentUser));
   }
 
   // Filter out any permanently deleted requests
@@ -270,40 +273,11 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
     list = list.filter(item => item.created_by === _currentUser.id);
   }
 
-  return list
-    .map(req => {
-      const isDirectUsd = req.currency === 'USD' || req.bcv_rate === 0;
-      let effectiveUsd = Number(req.amount_usd) || 0;
-      let effectiveBs = Number(req.amount_bs) || 0;
-      const bcvRate = isDirectUsd ? 0 : Number(req.bcv_rate) || 0;
-
-      if (!isDirectUsd && bcvRate > 0) {
-        if (effectiveUsd <= 0 && effectiveBs > 0) {
-          effectiveUsd = Number((effectiveBs / bcvRate).toFixed(2));
-        } else if (effectiveBs <= 0 && effectiveUsd > 0) {
-          effectiveBs = Number((effectiveUsd * bcvRate).toFixed(2));
-        }
-      }
-
-      const computedBs = isDirectUsd
-        ? 0
-        : Number(((effectiveUsd || 0) * (bcvRate || 0)).toFixed(2));
-      const creatorName =
-        req.creator_name ||
-        userMap.get(req.created_by) ||
-        (_currentUser?.id === req.created_by ? _currentUser?.full_name : 'Usuario');
-      return {
-        ...req,
-        creator_name: creatorName,
-        amount_usd: effectiveUsd,
-        amount_bs: effectiveBs || computedBs
-      };
-    })
-    .sort((a, b) => {
-      if (a.status === 'urgente' && b.status !== 'urgente') return -1;
-      if (a.status !== 'urgente' && b.status === 'urgente') return 1;
-      return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-    });
+  return list.sort((a, b) => {
+    if (a.status === 'urgente' && b.status !== 'urgente') return -1;
+    if (a.status !== 'urgente' && b.status === 'urgente') return 1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
 }
 
 export async function repairZeroUsdRequests(): Promise<{ fixedCount: number }> {
@@ -740,8 +714,22 @@ export async function updateRequestStatus(
   return updatedReq;
 }
 
-// User Management Services
-export async function fetchUsers(): Promise<UserProfile[]> {
+// User Management Services (with in-memory cache to save egress)
+let cachedUsers: UserProfile[] | null = null;
+let lastUsersFetch = 0;
+const USERS_CACHE_TTL = 180000; // 3 minutos
+
+export function invalidateUsersCache() {
+  cachedUsers = null;
+  lastUsersFetch = 0;
+}
+
+export async function fetchUsers(forceRefresh = false): Promise<UserProfile[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedUsers && (now - lastUsersFetch < USERS_CACHE_TTL)) {
+    return cachedUsers;
+  }
+
   const localUsers = getLocalUsers();
   const localPassMap = new Map(
     localUsers.map(u => [String(u?.username || u?.email || '').toLowerCase(), u.password])
@@ -751,7 +739,7 @@ export async function fetchUsers(): Promise<UserProfile[]> {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, username, email, full_name, role, is_active, created_at')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -781,8 +769,12 @@ export async function fetchUsers(): Promise<UserProfile[]> {
         });
 
         setLocalUsers(enriched);
+        cachedUsers = enriched;
+        lastUsersFetch = Date.now();
         return enriched;
       }
+      cachedUsers = localUsers;
+      lastUsersFetch = Date.now();
       return localUsers;
     } catch (e) {
       console.warn('Supabase fetchUsers exception, fallback to local users:', e);
@@ -843,10 +835,12 @@ export async function createNewUser(
   };
   const updated = [newUser, ...users.filter(u => u.id !== newUser.id)];
   setLocalUsers(updated);
+  invalidateUsersCache();
   return newUser;
 }
 
 export async function toggleUserActiveStatus(userId: string): Promise<UserProfile> {
+  invalidateUsersCache();
   const users = getLocalUsers();
   const index = users.findIndex(u => u.id === userId);
   const currentStatus = index !== -1 ? users[index].is_active : true;
@@ -884,6 +878,7 @@ export async function updateUserPassword(
   userId: string,
   newPassword: string
 ): Promise<UserProfile> {
+  invalidateUsersCache();
   const users = getLocalUsers();
   const index = users.findIndex(u => u.id === userId);
   if (index === -1) {
@@ -923,6 +918,7 @@ export async function updateUserRole(
   userId: string,
   newRole: UserRole
 ): Promise<UserProfile> {
+  invalidateUsersCache();
   const users = getLocalUsers();
   const index = users.findIndex(u => u.id === userId);
   if (index === -1) {
@@ -974,10 +970,24 @@ export async function updateUserRole(
 }
 
 // ==========================================
-// BENEFICIARY DIRECTORY SERVICES
+// BENEFICIARY DIRECTORY SERVICES (with cache)
 // ==========================================
 
-export async function fetchBeneficiaries(): Promise<Beneficiary[]> {
+let cachedBeneficiaries: Beneficiary[] | null = null;
+let lastBeneficiariesFetch = 0;
+const BENEFICIARIES_CACHE_TTL = 180000; // 3 minutos
+
+export function invalidateBeneficiariesCache() {
+  cachedBeneficiaries = null;
+  lastBeneficiariesFetch = 0;
+}
+
+export async function fetchBeneficiaries(forceRefresh = false): Promise<Beneficiary[]> {
+  const now = Date.now();
+  if (!forceRefresh && cachedBeneficiaries && (now - lastBeneficiariesFetch < BENEFICIARIES_CACHE_TTL)) {
+    return cachedBeneficiaries;
+  }
+
   const deletedIds = getDeletedBeneficiaryIds();
   const localList = getLocalBeneficiaries();
 
@@ -998,8 +1008,12 @@ export async function fetchBeneficiaries(): Promise<Beneficiary[]> {
           .map(normalizeBeneficiary)
           .filter(b => !deletedIds.includes(b.id));
         setLocalBeneficiaries(enriched);
+        cachedBeneficiaries = enriched;
+        lastBeneficiariesFetch = Date.now();
         return enriched;
       }
+      cachedBeneficiaries = localList;
+      lastBeneficiariesFetch = Date.now();
       return localList;
     } catch (e) {
       console.warn('Supabase fetchBeneficiaries exception, using local:', e);
@@ -1007,12 +1021,15 @@ export async function fetchBeneficiaries(): Promise<Beneficiary[]> {
     }
   }
 
+  cachedBeneficiaries = localList;
+  lastBeneficiariesFetch = Date.now();
   return localList;
 }
 
 export async function createBeneficiary(
   data: Omit<Beneficiary, 'id' | 'created_at' | 'updated_at'>
 ): Promise<Beneficiary> {
+  invalidateBeneficiariesCache();
   const generatedId =
     typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
@@ -1071,6 +1088,7 @@ export async function updateBeneficiary(
   id: string,
   data: Partial<Beneficiary>
 ): Promise<Beneficiary> {
+  invalidateBeneficiariesCache();
   const local = getLocalBeneficiaries();
   const index = local.findIndex(b => b.id === id);
   if (index === -1) throw new Error('Beneficiario no encontrado');
@@ -1118,6 +1136,7 @@ export async function updateBeneficiary(
 }
 
 export async function deleteBeneficiary(id: string): Promise<void> {
+  invalidateBeneficiariesCache();
   addDeletedBeneficiaryId(id);
   const local = getLocalBeneficiaries();
   const filtered = local.filter(b => b.id !== id);

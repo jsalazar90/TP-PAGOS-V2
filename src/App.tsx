@@ -2,6 +2,7 @@ import { useState, useEffect } from 'react';
 import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary } from './types';
 import {
   fetchPaymentRequests,
+  normalizePaymentRequest,
   createPaymentRequest,
   updatePaymentRequest,
   deletePaymentRequest,
@@ -153,7 +154,7 @@ export function App() {
     loadInitialData();
   }, []);
 
-  // Realtime Supabase Subscription & Visibility Sync
+  // Realtime Supabase Subscription & State Synchronization (Zero Polling, Minimal Egress)
   useEffect(() => {
     if (!currentUser) return;
 
@@ -172,42 +173,60 @@ export function App() {
                 setRequests(prev => prev.filter(r => r.id !== deletedId));
               }
             } else if (payload.eventType === 'INSERT') {
-              const newReq = payload.new;
+              const newRaw = payload.new;
+              if (!newRaw) return;
+
+              // RESTRICTION: Operador solo recibe sus propias solicitudes
+              if (currentUser.role === 'operador' && newRaw.created_by !== currentUser.id) {
+                return;
+              }
+
+              const normalized = normalizePaymentRequest(newRaw, undefined, currentUser);
+
               if (currentUser.role === 'admin') {
-                const isUrgent = newReq?.status === 'urgente';
+                const isUrgent = normalized.status === 'urgente';
                 const notifTitle = isUrgent
-                  ? `🔥 NUEVA SOLICITUD URGENTE #${newReq?.locator || ''}`
-                  : `🔔 Nueva Solicitud de Pago #${newReq?.locator || ''}`;
-                const notifBody = `${newReq?.title || 'Servicio'} • Cliente: ${newReq?.client || 'N/A'} • Monto: $${newReq?.amount_usd || 0} USD`;
+                  ? `🔥 NUEVA SOLICITUD URGENTE #${normalized.locator || ''}`
+                  : `🔔 Nueva Solicitud de Pago #${normalized.locator || ''}`;
+                const notifBody = `${normalized.title || 'Servicio'} • Cliente: ${normalized.client || 'N/A'} • Monto: $${normalized.amount_usd || 0} USD`;
 
                 notificationService.sendNotification(notifTitle, {
                   body: notifBody,
                   soundType: isUrgent ? 'urgent' : 'new_request',
-                  tag: `new-req-${newReq?.id}`
+                  tag: `new-req-${normalized.id}`
                 });
 
                 showToast(notifTitle, isUrgent ? 'error' : 'success');
               }
-              fetchPaymentRequests(currentUser).then(data => {
-                setRequests(data);
-              });
+
+              // Actualizar estado local directamente (SIN descargar toda la BD)
+              setRequests(prev => [normalized, ...prev.filter(r => r.id !== normalized.id)]);
             } else if (payload.eventType === 'UPDATE') {
-              const updatedReq = payload.new;
+              const updatedRaw = payload.new;
               const prevReq = payload.old;
+              if (!updatedRaw) return;
+
+              // RESTRICTION: Operador solo procesa sus propias solicitudes
+              if (currentUser.role === 'operador' && updatedRaw.created_by !== currentUser.id) {
+                setRequests(prev => prev.filter(r => r.id !== updatedRaw.id));
+                return;
+              }
+
+              const normalized = normalizePaymentRequest(updatedRaw, undefined, currentUser);
 
               // 1. Alerta de Modificación Solicitada (para Administradores)
               if (
-                updatedReq?.modification_requested &&
+                normalized.modification_requested &&
                 !prevReq?.modification_requested &&
                 currentUser.role === 'admin'
               ) {
-                const modTitle = `⚠️ Modificación Solicitada #${updatedReq?.locator || ''}`;
-                const modBody = `${updatedReq?.modification_requested_by || 'Solicitante'}: ${updatedReq?.modification_reason || 'Revisar detalles requeridos'}`;
+                const modTitle = `⚠️ Modificación Solicitada #${normalized.locator || ''}`;
+                const modBody = `${normalized.modification_requested_by || 'Solicitante'}: ${normalized.modification_reason || 'Revisar detalles requeridos'}`;
 
                 notificationService.sendNotification(modTitle, {
                   body: modBody,
                   soundType: 'modification',
-                  tag: `mod-req-${updatedReq?.id}`
+                  tag: `mod-req-${normalized.id}`
                 });
 
                 showToast(modTitle, 'error');
@@ -215,100 +234,85 @@ export function App() {
 
               // 2. Alerta de Solicitud Pagada / Liquidada (Para todos los usuarios y solicitantes)
               if (
-                updatedReq?.status === 'realizado' &&
+                normalized.status === 'realizado' &&
                 prevReq?.status !== 'realizado'
               ) {
-                const isOwner = currentUser.id === updatedReq?.created_by || currentUser.username === updatedReq?.created_by;
-                const paidTitle = `✅ ¡Solicitud Pagada #${updatedReq?.locator || ''}!`;
-                const paidBody = `${updatedReq?.title || 'Servicio'} • Cliente: ${updatedReq?.client || 'N/A'} • Monto: $${updatedReq?.amount_usd || 0} USD ha sido liquidada con éxito.`;
+                const isOwner = currentUser.id === normalized.created_by || currentUser.username === normalized.created_by;
+                const paidTitle = `✅ ¡Solicitud Pagada #${normalized.locator || ''}!`;
+                const paidBody = `${normalized.title || 'Servicio'} • Cliente: ${normalized.client || 'N/A'} • Monto: $${normalized.amount_usd || 0} USD ha sido liquidada con éxito.`;
 
                 notificationService.sendNotification(paidTitle, {
                   body: paidBody,
                   soundType: 'paid',
-                  tag: `paid-req-${updatedReq?.id}`
+                  tag: `paid-req-${normalized.id}`
                 });
 
                 showToast(
                   isOwner
-                    ? `🎉 ¡Tu solicitud #${updatedReq?.locator || ''} ha sido PAGADA con éxito!`
-                    : `✅ Solicitud #${updatedReq?.locator || ''} marcada como PAGADA`,
+                    ? `🎉 ¡Tu solicitud #${normalized.locator || ''} ha sido PAGADA con éxito!`
+                    : `✅ Solicitud #${normalized.locator || ''} marcada como PAGADA`,
                   'success'
                 );
               }
 
               // 3. Alerta de Solicitud Anulada
               if (
-                updatedReq?.status === 'anulado' &&
+                normalized.status === 'anulado' &&
                 prevReq?.status !== 'anulado'
               ) {
-                const cancelTitle = `❌ Solicitud Anulada #${updatedReq?.locator || ''}`;
-                const cancelBody = `${updatedReq?.title || 'Servicio'} • Cliente: ${updatedReq?.client || 'N/A'} ha sido anulada.`;
+                const cancelTitle = `❌ Solicitud Anulada #${normalized.locator || ''}`;
+                const cancelBody = `${normalized.title || 'Servicio'} • Cliente: ${normalized.client || 'N/A'} ha sido anulada.`;
 
                 notificationService.sendNotification(cancelTitle, {
                   body: cancelBody,
                   soundType: 'modification',
-                  tag: `cancel-req-${updatedReq?.id}`
+                  tag: `cancel-req-${normalized.id}`
                 });
 
                 showToast(cancelTitle, 'error');
               }
 
-              fetchPaymentRequests(currentUser).then(data => {
-                setRequests(data);
-              });
-            } else {
-              fetchPaymentRequests(currentUser).then(data => {
-                setRequests(data);
-              });
+              // Actualizar estado local directamente (SIN descargar toda la BD)
+              setRequests(prev =>
+                prev.map(r => (r.id === normalized.id ? { ...r, ...normalized } : r))
+              );
+
+              // Si está abierto el modal de detalles de esta solicitud, actualizarlo
+              setSelectedRequestForDetail(prev =>
+                prev && prev.id === normalized.id ? { ...prev, ...normalized } : prev
+              );
             }
           }
         )
         .on(
           'postgres_changes',
           { event: '*', schema: 'public', table: 'beneficiaries' },
-          () => {
-            fetchBeneficiaries().then(bens => {
-              setBeneficiariesList(bens);
-            });
+          (payload: any) => {
+            if (payload.eventType === 'DELETE') {
+              const deletedId = payload.old?.id;
+              if (deletedId) {
+                setBeneficiariesList(prev => prev.filter(b => b.id !== deletedId));
+              }
+            } else if (payload.eventType === 'INSERT') {
+              if (payload.new) {
+                setBeneficiariesList(prev => [payload.new, ...prev.filter(b => b.id !== payload.new.id)]);
+              }
+            } else if (payload.eventType === 'UPDATE') {
+              if (payload.new) {
+                setBeneficiariesList(prev =>
+                  prev.map(b => (b.id === payload.new.id ? { ...b, ...payload.new } : b))
+                );
+              }
+            }
           }
         )
         .subscribe();
     }
 
-    // Auto sync on tab focus or screen unlock
-    const handleSync = () => {
-      if (document.visibilityState === 'visible' && currentUser) {
-        fetchPaymentRequests(currentUser).then(data => {
-          setRequests(data);
-        });
-        fetchBeneficiaries().then(bens => {
-          setBeneficiariesList(bens);
-        });
-      }
-    };
-
-    window.addEventListener('focus', handleSync);
-    document.addEventListener('visibilitychange', handleSync);
-
-    // Heartbeat poll every 20 seconds as fallback
-    const interval = setInterval(() => {
-      if (document.visibilityState === 'visible' && currentUser) {
-        fetchPaymentRequests(currentUser).then(data => {
-          setRequests(data);
-        });
-        fetchBeneficiaries().then(bens => {
-          setBeneficiariesList(bens);
-        });
-      }
-    }, 20000);
-
     return () => {
       if (channel && supabase) {
         supabase.removeChannel(channel);
       }
-      window.removeEventListener('focus', handleSync);
-      document.removeEventListener('visibilitychange', handleSync);
-      clearInterval(interval);
     };
   }, [currentUser]);
 
