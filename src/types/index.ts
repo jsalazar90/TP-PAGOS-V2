@@ -56,6 +56,12 @@ export interface Beneficiary {
   updated_at?: string;
 }
 
+export interface AttachedFile {
+  url: string;
+  fileName: string;
+  uploaded_at?: string;
+}
+
 export interface PaymentRequest {
   id: string;
   request_number: number;
@@ -84,8 +90,10 @@ export interface PaymentRequest {
   status: RequestStatus;
   support_file_url?: string;
   support_file_name?: string;
+  support_files?: AttachedFile[];
   receipt_file_url?: string;
   receipt_file_name?: string;
+  receipt_files?: AttachedFile[];
   origin_bank?: string;
   modification_requested?: boolean;
   modification_reason?: string;
@@ -125,6 +133,7 @@ export interface CreatePaymentRequestInput {
   amount_bs?: number;
   bank_details: BankDetails;
   support_file?: File | null;
+  support_files?: File[];
   status?: RequestStatus;
   is_urgent?: boolean;
   modification_requested?: boolean;

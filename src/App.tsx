@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary } from './types';
+import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary, AttachedFile } from './types';
 import {
   fetchPaymentRequests,
   normalizePaymentRequest,
@@ -538,11 +538,11 @@ export function App() {
   const handleConfirmStatusChange = async (
     requestId: string,
     newStatus: RequestStatus,
-    receiptFile?: File | null,
+    receiptFiles?: (File | AttachedFile)[] | File | null,
     originBank?: string
   ) => {
     try {
-      const updatedReq = await updateRequestStatus(requestId, newStatus, receiptFile, originBank);
+      const updatedReq = await updateRequestStatus(requestId, newStatus, receiptFiles, originBank);
       setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
       
       const statusLabels: Record<RequestStatus, string> = {
@@ -559,7 +559,7 @@ export function App() {
         user: currentUser,
         target_id: updatedReq.locator,
         target_title: updatedReq.title,
-        details: `Estado de la solicitud #${updatedReq.locator} cambiado a "${statusLabels[newStatus]}" por ${currentUser?.full_name || 'Admin'}.${originBank ? ` Banco Emisor: ${originBank}.` : ''}${receiptFile ? ' Con comprobante adjunto cargado.' : ''}`,
+        details: `Estado de la solicitud #${updatedReq.locator} cambiado a "${statusLabels[newStatus]}" por ${currentUser?.full_name || 'Admin'}.${originBank ? ` Banco Emisor: ${originBank}.` : ''}${receiptFiles ? ' Con comprobante(s) adjunto(s).' : ''}`,
         metadata: { locator: updatedReq.locator, new_status: newStatus, origin_bank: originBank }
       }).catch(console.warn);
     } catch (err: any) {

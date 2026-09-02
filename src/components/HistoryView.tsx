@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentRequest, UserProfile } from '../types';
 import { StatusBadge } from './StatusBadge';
-import { exportRequestsToCSV } from '../services/dataService';
+import { exportRequestsToCSV, getRequestReceiptFiles } from '../services/dataService';
 import {
   History,
   Search,
@@ -560,20 +560,37 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     <span>Ver Ficha</span>
                   </button>
 
-                  {req.receipt_file_url ? (
-                    <a
-                      href={req.receipt_file_url}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="active-press px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 border border-emerald-200"
-                    >
-                      <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
-                      <span>Comprobante</span>
-                      <Download className="w-3 h-3" />
-                    </a>
-                  ) : (
-                    <span className="text-[10px] text-slate-400 font-medium">Sin adjunto</span>
-                  )}
+                  {(() => {
+                    const receipts = getRequestReceiptFiles(req);
+                    if (receipts.length === 0) {
+                      return <span className="text-[10px] text-slate-400 font-medium">Sin adjunto</span>;
+                    }
+                    if (receipts.length === 1) {
+                      return (
+                        <a
+                          href={receipts[0].url}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="active-press px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 border border-emerald-200"
+                          title={receipts[0].fileName}
+                        >
+                          <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
+                          <span>Comprobante</span>
+                          <Download className="w-3 h-3" />
+                        </a>
+                      );
+                    }
+                    return (
+                      <button
+                        onClick={() => onOpenDetails(req)}
+                        className="active-press px-3 py-1.5 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-800 font-bold text-xs flex items-center gap-1.5 border border-emerald-200"
+                        title="Ver todos los comprobantes adjuntos"
+                      >
+                        <FileCheck className="w-3.5 h-3.5 text-emerald-600" />
+                        <span>{receipts.length} Comprobantes</span>
+                      </button>
+                    );
+                  })()}
                 </div>
               </div>
             );

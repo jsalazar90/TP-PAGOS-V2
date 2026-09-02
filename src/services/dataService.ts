@@ -5,7 +5,8 @@ import {
   RequestStatus,
   UserProfile,
   UserRole,
-  Beneficiary
+  Beneficiary,
+  AttachedFile
 } from '../types';
 import { INITIAL_REQUESTS, INITIAL_USERS, INITIAL_BENEFICIARIES } from './mockData';
 import { uploadAttachment } from './storage';
@@ -194,6 +195,36 @@ function setLocalBeneficiaries(bens: Beneficiary[]) {
   localStorage.setItem(BENEFICIARIES_STORAGE_KEY, JSON.stringify(bens.map(normalizeBeneficiary)));
 }
 
+export function getRequestReceiptFiles(r?: PaymentRequest | null): AttachedFile[] {
+  if (!r) return [];
+  if (Array.isArray(r.receipt_files) && r.receipt_files.length > 0) {
+    return r.receipt_files;
+  }
+  if (r.receipt_file_url) {
+    return [{
+      url: r.receipt_file_url,
+      fileName: r.receipt_file_name || 'Comprobante de Pago',
+      uploaded_at: r.updated_at || r.created_at
+    }];
+  }
+  return [];
+}
+
+export function getRequestSupportFiles(r?: PaymentRequest | null): AttachedFile[] {
+  if (!r) return [];
+  if (Array.isArray(r.support_files) && r.support_files.length > 0) {
+    return r.support_files;
+  }
+  if (r.support_file_url) {
+    return [{
+      url: r.support_file_url,
+      fileName: r.support_file_name || 'Soporte de Reserva',
+      uploaded_at: r.created_at
+    }];
+  }
+  return [];
+}
+
 export function normalizePaymentRequest(
   item: any,
   userMap?: Map<string, string>,
@@ -216,12 +247,54 @@ export function normalizePaymentRequest(
     ? (effectiveBs || 0)
     : Number(((effectiveUsd || 0) * (bcvRate || 0)).toFixed(2));
 
+  // Parse receipt_files if stored as string or array
+  let parsedReceiptFiles: AttachedFile[] = [];
+  if (Array.isArray(item.receipt_files)) {
+    parsedReceiptFiles = item.receipt_files;
+  } else if (typeof item.receipt_files === 'string' && item.receipt_files.startsWith('[')) {
+    try {
+      parsedReceiptFiles = JSON.parse(item.receipt_files);
+    } catch (e) {
+      parsedReceiptFiles = [];
+    }
+  } else if (item.receipt_file_url) {
+    parsedReceiptFiles = [{
+      url: item.receipt_file_url,
+      fileName: item.receipt_file_name || 'Comprobante de Pago',
+      uploaded_at: item.updated_at || item.created_at
+    }];
+  }
+
+  // Parse support_files if stored as string or array
+  let parsedSupportFiles: AttachedFile[] = [];
+  if (Array.isArray(item.support_files)) {
+    parsedSupportFiles = item.support_files;
+  } else if (typeof item.support_files === 'string' && item.support_files.startsWith('[')) {
+    try {
+      parsedSupportFiles = JSON.parse(item.support_files);
+    } catch (e) {
+      parsedSupportFiles = [];
+    }
+  } else if (item.support_file_url) {
+    parsedSupportFiles = [{
+      url: item.support_file_url,
+      fileName: item.support_file_name || 'Soporte de Reserva',
+      uploaded_at: item.created_at
+    }];
+  }
+
   return {
     ...item,
     amount_usd: effectiveUsd,
     amount_bs: computedBs,
     bcv_rate: bcvRate,
     origin_bank: item.origin_bank || '',
+    support_files: parsedSupportFiles,
+    receipt_files: parsedReceiptFiles,
+    receipt_file_url: item.receipt_file_url || (parsedReceiptFiles.length > 0 ? parsedReceiptFiles[0].url : undefined),
+    receipt_file_name: item.receipt_file_name || (parsedReceiptFiles.length > 0 ? parsedReceiptFiles[0].fileName : undefined),
+    support_file_url: item.support_file_url || (parsedSupportFiles.length > 0 ? parsedSupportFiles[0].url : undefined),
+    support_file_name: item.support_file_name || (parsedSupportFiles.length > 0 ? parsedSupportFiles[0].fileName : undefined),
     creator_name:
       item.creator_name ||
       item.profiles?.full_name ||
@@ -487,14 +560,30 @@ export async function createPaymentRequest(
   input: CreatePaymentRequestInput,
   currentUser: UserProfile
 ): Promise<PaymentRequest> {
-  let supportUrl: string | undefined;
-  let supportFileName: string | undefined;
+  let uploadedSupports: AttachedFile[] = [];
 
-  if (input.support_file) {
+  if (input.support_files && input.support_files.length > 0) {
+    uploadedSupports = await Promise.all(
+      input.support_files.map(async (f) => {
+        const uploadRes = await uploadAttachment(f);
+        return {
+          url: uploadRes.url,
+          fileName: uploadRes.fileName,
+          uploaded_at: new Date().toISOString()
+        };
+      })
+    );
+  } else if (input.support_file) {
     const uploadRes = await uploadAttachment(input.support_file);
-    supportUrl = uploadRes.url;
-    supportFileName = uploadRes.fileName;
+    uploadedSupports = [{
+      url: uploadRes.url,
+      fileName: uploadRes.fileName,
+      uploaded_at: new Date().toISOString()
+    }];
   }
+
+  const primarySupportUrl = uploadedSupports.length > 0 ? uploadedSupports[0].url : undefined;
+  const primarySupportFileName = uploadedSupports.length > 0 ? uploadedSupports[0].fileName : undefined;
 
   const isDirectUsd = input.currency === 'USD' || input.bcv_rate === 0;
   let effectiveUsd = Number(input.amount_usd) || 0;
@@ -545,8 +634,9 @@ export async function createPaymentRequest(
         amount_bs: amountBs,
         bank_details: input.bank_details,
         status: initialStatus,
-        support_file_url: supportUrl,
-        support_file_name: supportFileName
+        support_file_url: primarySupportUrl,
+        support_file_name: primarySupportFileName,
+        support_files: uploadedSupports.length > 0 ? uploadedSupports : null
       };
 
       if (isValidUUID(validProfile.id)) {
@@ -574,6 +664,7 @@ export async function createPaymentRequest(
         guest_list: input.guest_list,
         airline: input.airline,
         flight_route: input.flight_route,
+        support_files: uploadedSupports,
         creator_name:
           data.creator_name ||
           data.profiles?.full_name ||
@@ -617,8 +708,9 @@ export async function createPaymentRequest(
     amount_bs: amountBs,
     bank_details: input.bank_details,
     status: initialStatus,
-    support_file_url: supportUrl,
-    support_file_name: supportFileName,
+    support_file_url: primarySupportUrl,
+    support_file_name: primarySupportFileName,
+    support_files: uploadedSupports,
     created_by: currentUser.id,
     creator_name: creatorFullName,
     created_at: new Date().toISOString(),
@@ -633,27 +725,44 @@ export async function createPaymentRequest(
 export async function updateRequestStatus(
   requestId: string,
   newStatus: RequestStatus,
-  receiptFile?: File | null,
+  receiptFilesInput?: (File | AttachedFile)[] | File | null,
   originBank?: string
 ): Promise<PaymentRequest> {
-  let receiptUrl: string | undefined;
-  let receiptFileName: string | undefined;
+  const existing = getLocalRequests().find(r => r.id === requestId);
+  let finalReceiptFiles: AttachedFile[] = [];
 
   if (newStatus === 'realizado') {
-    if (!receiptFile) {
-      // Check if existing record already has receipt
-      const existing = getLocalRequests().find(r => r.id === requestId);
-      if (!existing?.receipt_file_url) {
+    if (!receiptFilesInput || (Array.isArray(receiptFilesInput) && receiptFilesInput.length === 0)) {
+      // Check if existing record already has receipts
+      const currentReceipts = getRequestReceiptFiles(existing);
+      if (currentReceipts.length === 0) {
         throw new Error(
-          'Es obligatorio adjuntar el comprobante o soporte de pago al cambiar el estado a "Realizado".'
+          'Es obligatorio adjuntar al menos un comprobante o captura de pago al cambiar el estado a "Realizado".'
         );
       }
+      finalReceiptFiles = currentReceipts;
     } else {
-      const uploadRes = await uploadAttachment(receiptFile);
-      receiptUrl = uploadRes.url;
-      receiptFileName = uploadRes.fileName;
+      const filesArray = Array.isArray(receiptFilesInput) ? receiptFilesInput : [receiptFilesInput];
+      finalReceiptFiles = await Promise.all(
+        filesArray.map(async (item) => {
+          if (item instanceof File) {
+            const uploadRes = await uploadAttachment(item);
+            return {
+              url: uploadRes.url,
+              fileName: uploadRes.fileName,
+              uploaded_at: new Date().toISOString()
+            };
+          } else if (item && typeof item === 'object' && 'url' in item) {
+            return item as AttachedFile;
+          }
+          throw new Error('Archivo de comprobante no válido');
+        })
+      );
     }
   }
+
+  const primaryReceiptUrl = finalReceiptFiles.length > 0 ? finalReceiptFiles[0].url : undefined;
+  const primaryReceiptFileName = finalReceiptFiles.length > 0 ? finalReceiptFiles[0].fileName : undefined;
 
   if (isSupabaseConfigured && supabase) {
     try {
@@ -661,9 +770,10 @@ export async function updateRequestStatus(
         status: newStatus,
         updated_at: new Date().toISOString()
       };
-      if (receiptUrl) {
-        updateData.receipt_file_url = receiptUrl;
-        updateData.receipt_file_name = receiptFileName;
+      if (finalReceiptFiles.length > 0) {
+        updateData.receipt_files = finalReceiptFiles;
+        updateData.receipt_file_url = primaryReceiptUrl;
+        updateData.receipt_file_name = primaryReceiptFileName;
       }
       if (originBank !== undefined) {
         updateData.origin_bank = originBank;
@@ -684,12 +794,14 @@ export async function updateRequestStatus(
           }).catch(e => console.warn('Push broadcast payment realized error:', e));
         }
 
-        return {
-          ...data,
-          origin_bank: data.origin_bank || originBank || '',
-          creator_name:
-            data.creator_name || data.profiles?.full_name || data.profiles?.username || 'Usuario'
-        };
+        const normalized = normalizePaymentRequest(data);
+        const local = getLocalRequests();
+        const idx = local.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          local[idx] = normalized;
+          setLocalRequests(local);
+        }
+        return normalized;
       }
     } catch (e) {
       console.warn('Supabase updateRequestStatus fallback to local:', e);
@@ -705,7 +817,11 @@ export async function updateRequestStatus(
     ...requests[index],
     status: newStatus,
     updated_at: new Date().toISOString(),
-    ...(receiptUrl ? { receipt_file_url: receiptUrl, receipt_file_name: receiptFileName } : {}),
+    ...(finalReceiptFiles.length > 0 ? {
+      receipt_files: finalReceiptFiles,
+      receipt_file_url: primaryReceiptUrl,
+      receipt_file_name: primaryReceiptFileName
+    } : {}),
     ...(originBank !== undefined ? { origin_bank: originBank } : {})
   };
 
@@ -1670,21 +1786,35 @@ export async function updateRequestSupportFile(
   const uploadRes = await uploadAttachment(file);
   const supportUrl = uploadRes.url;
   const supportFileName = uploadRes.fileName;
+  const newAttachedFile: AttachedFile = {
+    url: supportUrl,
+    fileName: supportFileName,
+    uploaded_at: new Date().toISOString()
+  };
+
+  const requests = getLocalRequests();
+  const existing = requests.find(r => r.id === requestId);
+  const currentSupports = getRequestSupportFiles(existing);
+  const updatedSupports = [newAttachedFile, ...currentSupports.filter(f => f.url !== supportUrl)];
 
   if (isSupabaseConfigured && supabase) {
     try {
       const data = await resilientSupabaseUpdate(requestId, {
         support_file_url: supportUrl,
         support_file_name: supportFileName,
+        support_files: updatedSupports,
         updated_at: new Date().toISOString()
       });
 
       if (data) {
-        return {
-          ...data,
-          creator_name:
-            data.creator_name || data.profiles?.full_name || data.profiles?.username || currentUser.full_name
-        };
+        const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        const local = getLocalRequests();
+        const idx = local.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          local[idx] = normalized;
+          setLocalRequests(local);
+        }
+        return normalized;
       }
     } catch (e) {
       console.warn('Supabase updateRequestSupportFile fallback to local:', e);
@@ -1692,7 +1822,6 @@ export async function updateRequestSupportFile(
   }
 
   // Local fallback
-  const requests = getLocalRequests();
   const index = requests.findIndex(r => r.id === requestId);
   if (index === -1) throw new Error('Solicitud no encontrada');
 
@@ -1700,6 +1829,67 @@ export async function updateRequestSupportFile(
     ...requests[index],
     support_file_url: supportUrl,
     support_file_name: supportFileName,
+    support_files: updatedSupports,
+    updated_at: new Date().toISOString()
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
+export async function addRequestSupportFile(
+  requestId: string,
+  file: File,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  return updateRequestSupportFile(requestId, file, currentUser);
+}
+
+export async function deleteRequestSupportFile(
+  requestId: string,
+  fileUrl: string,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  const requests = getLocalRequests();
+  const existing = requests.find(r => r.id === requestId);
+  if (!existing) throw new Error('Solicitud no encontrada');
+
+  const currentSupports = getRequestSupportFiles(existing);
+  const updatedSupports = currentSupports.filter(f => f.url !== fileUrl);
+  const primarySupportUrl = updatedSupports.length > 0 ? updatedSupports[0].url : null;
+  const primarySupportFileName = updatedSupports.length > 0 ? updatedSupports[0].fileName : null;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const data = await resilientSupabaseUpdate(requestId, {
+        support_file_url: primarySupportUrl,
+        support_file_name: primarySupportFileName,
+        support_files: updatedSupports.length > 0 ? updatedSupports : null,
+        updated_at: new Date().toISOString()
+      });
+
+      if (data) {
+        const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        const local = getLocalRequests();
+        const idx = local.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          local[idx] = normalized;
+          setLocalRequests(local);
+        }
+        return normalized;
+      }
+    } catch (e) {
+      console.warn('Supabase deleteRequestSupportFile fallback to local:', e);
+    }
+  }
+
+  const index = requests.findIndex(r => r.id === requestId);
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    support_file_url: primarySupportUrl || undefined,
+    support_file_name: primarySupportFileName || undefined,
+    support_files: updatedSupports,
     updated_at: new Date().toISOString()
   };
 
@@ -1716,21 +1906,35 @@ export async function updateRequestReceiptFile(
   const uploadRes = await uploadAttachment(file);
   const receiptUrl = uploadRes.url;
   const receiptFileName = uploadRes.fileName;
+  const newAttachedFile: AttachedFile = {
+    url: receiptUrl,
+    fileName: receiptFileName,
+    uploaded_at: new Date().toISOString()
+  };
+
+  const requests = getLocalRequests();
+  const existing = requests.find(r => r.id === requestId);
+  const currentReceipts = getRequestReceiptFiles(existing);
+  const updatedReceipts = [newAttachedFile, ...currentReceipts.filter(f => f.url !== receiptUrl)];
 
   if (isSupabaseConfigured && supabase) {
     try {
       const data = await resilientSupabaseUpdate(requestId, {
         receipt_file_url: receiptUrl,
         receipt_file_name: receiptFileName,
+        receipt_files: updatedReceipts,
         updated_at: new Date().toISOString()
       });
 
       if (data) {
-        return {
-          ...data,
-          creator_name:
-            data.creator_name || data.profiles?.full_name || data.profiles?.username || currentUser.full_name
-        };
+        const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        const local = getLocalRequests();
+        const idx = local.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          local[idx] = normalized;
+          setLocalRequests(local);
+        }
+        return normalized;
       }
     } catch (e) {
       console.warn('Supabase updateRequestReceiptFile fallback to local:', e);
@@ -1738,7 +1942,6 @@ export async function updateRequestReceiptFile(
   }
 
   // Local fallback
-  const requests = getLocalRequests();
   const index = requests.findIndex(r => r.id === requestId);
   if (index === -1) throw new Error('Solicitud no encontrada');
 
@@ -1746,6 +1949,67 @@ export async function updateRequestReceiptFile(
     ...requests[index],
     receipt_file_url: receiptUrl,
     receipt_file_name: receiptFileName,
+    receipt_files: updatedReceipts,
+    updated_at: new Date().toISOString()
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
+export async function addRequestReceiptFile(
+  requestId: string,
+  file: File,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  return updateRequestReceiptFile(requestId, file, currentUser);
+}
+
+export async function deleteRequestReceiptFile(
+  requestId: string,
+  fileUrl: string,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  const requests = getLocalRequests();
+  const existing = requests.find(r => r.id === requestId);
+  if (!existing) throw new Error('Solicitud no encontrada');
+
+  const currentReceipts = getRequestReceiptFiles(existing);
+  const updatedReceipts = currentReceipts.filter(f => f.url !== fileUrl);
+  const primaryReceiptUrl = updatedReceipts.length > 0 ? updatedReceipts[0].url : null;
+  const primaryReceiptFileName = updatedReceipts.length > 0 ? updatedReceipts[0].fileName : null;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const data = await resilientSupabaseUpdate(requestId, {
+        receipt_file_url: primaryReceiptUrl,
+        receipt_file_name: primaryReceiptFileName,
+        receipt_files: updatedReceipts.length > 0 ? updatedReceipts : null,
+        updated_at: new Date().toISOString()
+      });
+
+      if (data) {
+        const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        const local = getLocalRequests();
+        const idx = local.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          local[idx] = normalized;
+          setLocalRequests(local);
+        }
+        return normalized;
+      }
+    } catch (e) {
+      console.warn('Supabase deleteRequestReceiptFile fallback to local:', e);
+    }
+  }
+
+  const index = requests.findIndex(r => r.id === requestId);
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    receipt_file_url: primaryReceiptUrl || undefined,
+    receipt_file_name: primaryReceiptFileName || undefined,
+    receipt_files: updatedReceipts,
     updated_at: new Date().toISOString()
   };
 
