@@ -66,10 +66,29 @@ function getLocalRequests(): PaymentRequest[] {
   }
 }
 
-function setLocalRequests(requests: PaymentRequest[]) {
+export function setLocalRequests(requests: PaymentRequest[]) {
   const deletedIds = getDeletedRequestIds();
   const filtered = requests.filter(r => !deletedIds.has(r.id));
   localStorage.setItem(REQUESTS_STORAGE_KEY, JSON.stringify(filtered));
+}
+
+export function saveRealtimeRequestToLocal(action: 'upsert' | 'delete', itemOrId: PaymentRequest | string) {
+  try {
+    const local = getLocalRequests();
+    if (action === 'delete') {
+      setLocalRequests(local.filter(r => r.id !== itemOrId));
+    } else {
+      const item = itemOrId as PaymentRequest;
+      const exists = local.some(r => r.id === item.id);
+      if (exists) {
+        setLocalRequests(local.map(r => r.id === item.id ? { ...r, ...item } : r));
+      } else {
+        setLocalRequests([item, ...local]);
+      }
+    }
+  } catch (e) {
+    console.warn('saveRealtimeRequestToLocal error:', e);
+  }
 }
 
 // Initial local storage setup
@@ -304,12 +323,71 @@ export function normalizePaymentRequest(
   };
 }
 
-export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<PaymentRequest[]> {
-  let list: PaymentRequest[] = [];
+export function getCachedPaymentRequests(_currentUser?: UserProfile | null): PaymentRequest[] {
   const deletedIds = getDeletedRequestIds();
+  let list = getLocalRequests().map(item => normalizePaymentRequest(item, undefined, _currentUser));
+
+  list = list.filter(item => !deletedIds.has(item.id));
+
+  if (_currentUser && _currentUser.role === 'operador') {
+    list = list.filter(item => item.created_by === _currentUser.id);
+  }
+
+  return list.sort((a, b) => {
+    if (a.status === 'urgente' && b.status !== 'urgente') return -1;
+    if (a.status !== 'urgente' && b.status === 'urgente') return 1;
+    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
+  });
+}
+
+export async function fetchPaymentRequests(
+  _currentUser?: UserProfile,
+  forceRefresh = false
+): Promise<PaymentRequest[]> {
+  const localRequests = getLocalRequests();
 
   if (isSupabaseConfigured && supabase) {
     try {
+      // 🚀 OPTIMIZACIÓN DE EGRESS / ANCHO DE BANDA:
+      // Si no es un refresco forzado y ya hay datos en caché local,
+      // realizamos Delta Sync (consultar SOLAMENTE lo que cambió o se creó recientemente)
+      if (!forceRefresh && localRequests.length > 0) {
+        let latestTimestamp = '1970-01-01T00:00:00.000Z';
+        for (const r of localRequests) {
+          const t = r.updated_at || r.created_at;
+          if (t && t > latestTimestamp) latestTimestamp = t;
+        }
+
+        let deltaQuery = supabase
+          .from('payment_requests')
+          .select('*, profiles:created_by(full_name, username)')
+          .or(`updated_at.gt.${latestTimestamp},created_at.gt.${latestTimestamp}`)
+          .order('created_at', { ascending: false });
+
+        if (_currentUser && _currentUser.role === 'operador') {
+          deltaQuery = deltaQuery.eq('created_by', _currentUser.id);
+        }
+
+        const { data: deltaData, error: deltaError } = await deltaQuery;
+
+        if (!deltaError) {
+          if (deltaData && deltaData.length > 0) {
+            const deltaMap = new Map(
+              deltaData.map((item: any) => [item.id, normalizePaymentRequest(item, undefined, _currentUser)])
+            );
+            const merged = [
+              ...Array.from(deltaMap.values()),
+              ...localRequests.filter(r => !deltaMap.has(r.id))
+            ];
+            setLocalRequests(merged);
+          }
+          // Retornar lista combinada sin haber descargado toda la base de datos
+          return getCachedPaymentRequests(_currentUser);
+        }
+        console.warn('Delta sync fallback to full query:', deltaError.message);
+      }
+
+      // Si es primera carga (caché vacía) o el usuario presionó "Refrescar" explícitamente:
       let query = supabase
         .from('payment_requests')
         .select('*, profiles:created_by(full_name, username)')
@@ -323,34 +401,16 @@ export async function fetchPaymentRequests(_currentUser?: UserProfile): Promise<
 
       if (error) {
         console.warn('Supabase payment_requests query error, using local fallback:', error.message);
-        list = getLocalRequests();
-      } else {
-        list = (data || []).map((item: any) => normalizePaymentRequest(item, undefined, _currentUser));
-        // Keep local cache synced with remote active items
+      } else if (data) {
+        const list = (data || []).map((item: any) => normalizePaymentRequest(item, undefined, _currentUser));
         setLocalRequests(list);
       }
     } catch (e) {
       console.warn('Supabase fetch failed, fallback to local storage:', e);
-      list = getLocalRequests();
     }
-  } else {
-    // Local fallback - returns all requests for all users
-    list = getLocalRequests().map(item => normalizePaymentRequest(item, undefined, _currentUser));
   }
 
-  // Filter out any permanently deleted requests
-  list = list.filter(item => !deletedIds.has(item.id));
-
-  // RESTRICTION: Users with 'operador' role can only see their own requests
-  if (_currentUser && _currentUser.role === 'operador') {
-    list = list.filter(item => item.created_by === _currentUser.id);
-  }
-
-  return list.sort((a, b) => {
-    if (a.status === 'urgente' && b.status !== 'urgente') return -1;
-    if (a.status !== 'urgente' && b.status === 'urgente') return 1;
-    return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
-  });
+  return getCachedPaymentRequests(_currentUser);
 }
 
 export async function repairZeroUsdRequests(): Promise<{ fixedCount: number }> {
