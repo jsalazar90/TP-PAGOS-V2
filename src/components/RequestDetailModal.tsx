@@ -24,6 +24,7 @@ import {
   Pencil,
   Edit3,
   Clock,
+  CheckCircle2,
   Eye,
   Ban,
   Plus
@@ -428,6 +429,18 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                 <span className="font-semibold text-slate-700 flex items-center gap-1">
                   <Clock className="w-3 h-3 text-slate-400" />
                   {new Date(request.created_at).toLocaleDateString()} {new Date(request.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                </span>
+              </div>
+            )}
+            {request.status === 'realizado' && (request.paid_at || request.receipt_files?.[0]?.uploaded_at) && (
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                <span className="text-emerald-700 font-medium flex items-center gap-1">
+                  <CheckCircle2 className="w-3 h-3 text-emerald-600" />
+                  Fecha de Liquidación:
+                </span>
+                <span className="font-semibold text-emerald-700">
+                  {new Date(request.paid_at || request.receipt_files?.[0]?.uploaded_at || request.created_at).toLocaleDateString()}{' '}
+                  {new Date(request.paid_at || request.receipt_files?.[0]?.uploaded_at || request.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
               </div>
             )}

@@ -21,7 +21,8 @@ import {
   ChevronsRight,
   Printer,
   XCircle,
-  X
+  X,
+  Clock
 } from 'lucide-react';
 
 interface HistoryViewProps {
@@ -38,12 +39,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
-  // Predeterminado el filtro de este mes
-  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('month');
+  // Predeterminado: mostrar todas las solicitudes
+  const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
 
   // Paginación
   const [currentPage, setCurrentPage] = useState<number>(1);
-  const [pageSize, setPageSize] = useState<number>(10);
+  const [pageSize, setPageSize] = useState<number>(20);
 
   const historyRequests = useMemo(() => {
     return requests.filter(r => r.status === 'realizado' || r.status === 'anulado');
@@ -57,7 +58,8 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
     return historyRequests
       .filter(r => {
-        const itemTime = new Date(r.updated_at || r.created_at).getTime();
+        // Usar la fecha real de liquidación (paid_at) o creación para el filtrado temporal
+        const itemTime = new Date(r.paid_at || r.receipt_files?.[0]?.uploaded_at || r.created_at || r.updated_at).getTime();
 
         // Filtro por rango manual Desde - Hasta
         if (startDate) {
@@ -91,7 +93,11 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         }
         return true;
       })
-      .sort((a, b) => new Date(b.updated_at || b.created_at).getTime() - new Date(a.updated_at || a.created_at).getTime());
+      .sort((a, b) => {
+        const timeB = new Date(b.paid_at || b.receipt_files?.[0]?.uploaded_at || b.created_at || b.updated_at).getTime();
+        const timeA = new Date(a.paid_at || a.receipt_files?.[0]?.uploaded_at || a.created_at || a.updated_at).getTime();
+        return timeB - timeA;
+      });
   }, [historyRequests, dateFilter, startDate, endDate, searchQuery]);
 
   // Reset page to 1 when filters or search change
@@ -354,7 +360,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                 onClick={() => {
                   setStartDate('');
                   setEndDate('');
-                  setDateFilter('month');
+                  setDateFilter('all');
                 }}
                 className="p-1.5 text-slate-400 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-xl border border-slate-200 transition-colors"
                 title="Limpiar rango de fechas"
@@ -501,6 +507,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                         Destino: {req.bank_details.bank}
                       </span>
                     )}
+                    <span className="text-slate-500 font-medium flex items-center gap-1">
+                      <Clock className="w-3 h-3 text-slate-400" /> Emitida: {new Date(req.created_at).toLocaleDateString()}
+                    </span>
                     {req.status === 'anulado' ? (
                       <span className="text-slate-600 font-bold flex items-center gap-1">
                         <XCircle className="w-3 h-3 text-slate-500" /> Anulado el{' '}
@@ -509,7 +518,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                     ) : (
                       <span className="text-emerald-700 font-bold flex items-center gap-1">
                         <CheckCircle2 className="w-3 h-3 text-emerald-600" /> Liquidado el{' '}
-                        {new Date(req.updated_at || req.created_at).toLocaleDateString()} {new Date(req.updated_at || req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                        {new Date(req.paid_at || req.receipt_files?.[0]?.uploaded_at || req.created_at).toLocaleDateString()} {new Date(req.paid_at || req.receipt_files?.[0]?.uploaded_at || req.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                       </span>
                     )}
                   </div>
@@ -610,11 +619,10 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                   onChange={(e) => setPageSize(Number(e.target.value))}
                   className="bg-slate-50 border border-slate-300 rounded-lg px-2 py-1 text-xs font-bold text-slate-700 focus:outline-none focus:border-[#00b4a2] cursor-pointer"
                 >
-                  <option value={5}>5</option>
                   <option value={10}>10</option>
-                  <option value={15}>15</option>
                   <option value={20}>20</option>
                   <option value={50}>50</option>
+                  <option value={100}>100</option>
                 </select>
               </div>
             </div>
@@ -866,7 +874,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                           )}
                         </td>
                         <td className="py-1 px-1.5 text-slate-800 border-r border-slate-200 whitespace-nowrap text-[7.5pt]">
-                          {new Date(req.updated_at || req.created_at).toLocaleDateString()}
+                          {new Date(req.paid_at || req.receipt_files?.[0]?.uploaded_at || req.created_at).toLocaleDateString()}
                         </td>
                         <td className="py-1 px-1.5 border-r border-slate-200 max-w-[110px]">
                           <strong className="block text-slate-950 leading-tight text-[8pt] truncate">

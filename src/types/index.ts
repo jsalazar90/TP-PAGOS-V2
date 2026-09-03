@@ -105,6 +105,7 @@ export interface PaymentRequest {
   cancellation_requested_by?: string;
   created_by: string;
   creator_name?: string;
+  paid_at?: string;
   created_at: string;
   updated_at: string;
 }
@@ -136,6 +137,7 @@ export interface CreatePaymentRequestInput {
   support_files?: File[];
   status?: RequestStatus;
   is_urgent?: boolean;
+  paid_at?: string;
   modification_requested?: boolean;
   modification_reason?: string;
   modification_requested_at?: string;

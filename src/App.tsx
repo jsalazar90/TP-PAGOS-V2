@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary, AttachedFile } from './types';
 import {
   fetchPaymentRequests,
+  getCachedPaymentRequests,
+  saveRealtimeRequestToLocal,
   normalizePaymentRequest,
   createPaymentRequest,
   updatePaymentRequest,
@@ -60,8 +62,25 @@ export function App() {
   });
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [beneficiariesList, setBeneficiariesList] = useState<Beneficiary[]>([]);
-  const [requests, setRequests] = useState<PaymentRequest[]>([]);
-  const [loading, setLoading] = useState(true);
+  // Carga instantánea (0 segundos): se inicializa inmediatamente con los datos guardados en memoria local
+  const [requests, setRequests] = useState<PaymentRequest[]>(() => {
+    const savedUserJson = localStorage.getItem(SESSION_STORAGE_KEY);
+    if (savedUserJson) {
+      try {
+        const u = JSON.parse(savedUserJson);
+        return getCachedPaymentRequests(u);
+      } catch (e) {
+        return getCachedPaymentRequests();
+      }
+    }
+    return getCachedPaymentRequests();
+  });
+  // Si ya tenemos sesión y solicitudes en caché, no bloqueamos la interfaz con pantalla de carga
+  const [loading, setLoading] = useState<boolean>(() => {
+    const savedUser = localStorage.getItem(SESSION_STORAGE_KEY);
+    const cachedReqs = localStorage.getItem('jt_pagos_requests_v1');
+    return !(savedUser && cachedReqs);
+  });
   const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'beneficiaries' | 'users'>('dashboard');
   const [isBeneficiaryModalOpen, setIsBeneficiaryModalOpen] = useState(false);
   const [editingBeneficiary, setEditingBeneficiary] = useState<Beneficiary | null>(null);
@@ -119,7 +138,9 @@ export function App() {
   useEffect(() => {
     const loadInitialData = async () => {
       try {
-        setLoading(true);
+        if (requests.length === 0) {
+          setLoading(true);
+        }
         const uList = await fetchUsers();
         setUsersList(uList);
 
@@ -131,11 +152,12 @@ export function App() {
             if (matchedUser && matchedUser.is_active) {
               setCurrentUser(matchedUser);
               localStorage.setItem(SESSION_STORAGE_KEY, JSON.stringify(matchedUser));
-              const data = await fetchPaymentRequests(matchedUser);
+              // Sincronización delta eficiente: solo trae registros nuevos si los hubo
+              const data = await fetchPaymentRequests(matchedUser, false);
               setRequests(data);
             } else if (!matchedUser && savedUser) {
               setCurrentUser(savedUser);
-              const data = await fetchPaymentRequests(savedUser);
+              const data = await fetchPaymentRequests(savedUser, false);
               setRequests(data);
             } else {
               setCurrentUser(null);
@@ -170,6 +192,7 @@ export function App() {
             if (payload.eventType === 'DELETE') {
               const deletedId = payload.old?.id;
               if (deletedId) {
+                saveRealtimeRequestToLocal('delete', deletedId);
                 setRequests(prev => prev.filter(r => r.id !== deletedId));
               }
             } else if (payload.eventType === 'INSERT') {
@@ -182,6 +205,7 @@ export function App() {
               }
 
               const normalized = normalizePaymentRequest(newRaw, undefined, currentUser);
+              saveRealtimeRequestToLocal('upsert', normalized);
 
               if (currentUser.role === 'admin') {
                 const isUrgent = normalized.status === 'urgente';
@@ -213,6 +237,7 @@ export function App() {
               }
 
               const normalized = normalizePaymentRequest(updatedRaw, undefined, currentUser);
+              saveRealtimeRequestToLocal('upsert', normalized);
 
               // 1. Alerta de Modificación Solicitada (para Administradores)
               if (
@@ -375,18 +400,21 @@ export function App() {
     };
   }, [currentUser, requests]);
 
-  // Fetch payment requests and beneficiaries when currentUser changes
-  const loadRequests = async (user: UserProfile) => {
+  // Fetch payment requests and beneficiaries when currentUser changes or user refreshes
+  const loadRequests = async (user: UserProfile, forceRefresh = false) => {
     try {
-      setLoading(true);
+      if (forceRefresh) setLoading(true);
       const [data, bens] = await Promise.all([
-        fetchPaymentRequests(user),
-        fetchBeneficiaries()
+        fetchPaymentRequests(user, forceRefresh),
+        fetchBeneficiaries(forceRefresh)
       ]);
       setRequests(data);
       setBeneficiariesList(bens);
+      if (forceRefresh) {
+        showToast('Datos sincronizados con la base de datos', 'success');
+      }
     } catch (err: any) {
-      showToast(`Error al cargar solicitudes: ${err.message}`, 'error');
+      showToast(`Error al sincronizar solicitudes: ${err.message}`, 'error');
     } finally {
       setLoading(false);
     }
@@ -869,7 +897,7 @@ export function App() {
                 onCancelModification={handleCancelModification}
                 onRequestCancellation={handleRequestCancellation}
                 onCancelCancellation={handleCancelCancellation}
-                onRefresh={() => loadRequests(currentUser)}
+                onRefresh={() => loadRequests(currentUser, true)}
               />
             )}
 
