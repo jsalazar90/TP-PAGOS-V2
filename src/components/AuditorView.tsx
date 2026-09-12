@@ -24,7 +24,8 @@ import {
   KeyRound,
   AlertTriangle,
   Ban,
-  X
+  X,
+  RotateCcw
 } from 'lucide-react';
 
 interface AuditorViewProps {
@@ -85,7 +86,7 @@ export const AuditorView: React.FC<AuditorViewProps> = ({
 
       // Filtro por tipo de acción
       if (selectedAction !== 'all') {
-        if (selectedAction === 'requests' && !['create_request', 'update_request'].includes(log.action_type)) return false;
+        if (selectedAction === 'requests' && !['create_request', 'update_request', 'restore_request'].includes(log.action_type)) return false;
         if (selectedAction === 'modifications' && !['request_modification', 'cancel_modification'].includes(log.action_type)) return false;
         if (selectedAction === 'status' && log.action_type !== 'status_change') return false;
         if (selectedAction === 'deletes' && log.action_type !== 'delete_request') return false;
@@ -168,6 +169,12 @@ export const AuditorView: React.FC<AuditorViewProps> = ({
         return (
           <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-blue-50 text-blue-800 border border-blue-200 flex items-center gap-1">
             <CheckCircle2 className="w-3 h-3 text-blue-600" /> Cambio de Estado / Pago
+          </span>
+        );
+      case 'restore_request':
+        return (
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-sky-50 text-sky-800 border border-sky-200 flex items-center gap-1">
+            <RotateCcw className="w-3 h-3 text-sky-600" /> Solicitud Restaurada
           </span>
         );
       case 'delete_request':

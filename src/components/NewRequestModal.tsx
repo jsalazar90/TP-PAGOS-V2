@@ -889,7 +889,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       hotel_name: finalHotel,
       locator: parsedLocator || currentForm.locator,
       location: parsedLocation || currentForm.location,
-      room_type: isViaticos || isGastos ? 'N/A' : (parsedRoomType || currentForm.room_type),
+      room_type: isViaticos || isGastos ? 'N/A' : (isTraslado || isVuelos ? (parsedRoomType && !parsedRoomType.toUpperCase().includes('HABITACION') ? parsedRoomType : '') : (parsedRoomType || currentForm.room_type)),
       people_count: parsedPeople ? parseInt(parsedPeople) || currentForm.people_count : (parsedGuests.length > 0 ? parsedGuests.length : currentForm.people_count),
       nights_dates: parsedNightsDates || currentForm.nights_dates,
       additionals: parsedAdditionals || currentForm.additionals,
@@ -1128,7 +1128,11 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         guest_list: effectiveGuestList,
         locator: formData.locator || String(Math.floor(10000000 + Math.random() * 90000000)),
         location: (formData.location || 'VENEZUELA').toUpperCase(),
-        room_type: isGastos || category === 'viaticos' ? 'N/A' : (formData.room_type || 'HABITACION SENCILLA'),
+        room_type: category === 'hospedaje'
+          ? (formData.room_type || 'HABITACION SENCILLA')
+          : category === 'traslado' || category === 'vuelos'
+          ? (formData.room_type && !formData.room_type.toUpperCase().includes('HABITACION') ? formData.room_type : '')
+          : 'N/A',
         people_count: isGastos ? 1 : (guestList.length > 0 ? guestList.length : Number(formData.people_count)),
         additionals: formData.additionals,
         nights_dates: formData.nights_dates || (isGastos ? new Date().toLocaleDateString() : 'N/A'),
@@ -1764,7 +1768,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                           <Calendar className="w-3 h-3 text-slate-400" /> {formData.nights_dates || 'Pendiente'}
                         </span>
                       </div>
-                      {category !== 'viaticos' && (
+                      {category !== 'viaticos' && formData.room_type && (category === 'hospedaje' || !formData.room_type.toUpperCase().includes('HABITACION')) && (
                         <div>
                           <span className="text-slate-400 block text-[10px] font-semibold">
                             {category === 'traslado' ? 'Tipo Vehículo' : category === 'vuelos' ? 'Clase' : 'Habitación'}

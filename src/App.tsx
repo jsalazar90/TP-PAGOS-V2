@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary, AttachedFile } from './types';
+import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary, AttachedFile, JtRate } from './types';
 import {
   fetchPaymentRequests,
   getCachedPaymentRequests,
@@ -15,6 +15,7 @@ import {
   cancelModificationRequest,
   requestCancellation,
   cancelCancellationRequest,
+  restorePaymentRequest,
   fetchUsers,
   createNewUser,
   toggleUserActiveStatus,
@@ -23,7 +24,10 @@ import {
   fetchBeneficiaries,
   createBeneficiary,
   updateBeneficiary,
-  deleteBeneficiary
+  deleteBeneficiary,
+  fetchJtRates,
+  saveJtRate,
+  getLocalJtRates
 } from './services/dataService';
 import { isSupabaseConfigured, supabase } from './services/supabase';
 import { Navbar } from './components/Navbar';
@@ -38,7 +42,9 @@ import { StatusChangeModal } from './components/StatusChangeModal';
 import { RequestDetailModal } from './components/RequestDetailModal';
 import { ModificationRequestModal } from './components/ModificationRequestModal';
 import { CancellationRequestModal } from './components/CancellationRequestModal';
+import { RestoreRequestModal } from './components/RestoreRequestModal';
 import { NotificationDiagnosticsModal } from './components/NotificationDiagnosticsModal';
+import { JtRateModal } from './components/JtRateModal';
 import { AuditorLoginView } from './components/AuditorLoginView';
 import { AuditorView } from './components/AuditorView';
 import { logAuditEvent } from './services/auditService';
@@ -92,7 +98,10 @@ export function App() {
   const [selectedRequestForDetail, setSelectedRequestForDetail] = useState<PaymentRequest | null>(null);
   const [modificationModalRequest, setModificationModalRequest] = useState<PaymentRequest | null>(null);
   const [cancellationModalRequest, setCancellationModalRequest] = useState<PaymentRequest | null>(null);
+  const [restoreModalRequest, setRestoreModalRequest] = useState<PaymentRequest | null>(null);
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
+  const [jtRates, setJtRates] = useState<JtRate[]>(() => getLocalJtRates());
+  const [isJtRateModalOpen, setIsJtRateModalOpen] = useState(false);
 
   // Auditor Module State (/auditor)
   const [isAuditorRoute, setIsAuditorRoute] = useState<boolean>(() => {
@@ -143,6 +152,8 @@ export function App() {
         }
         const uList = await fetchUsers();
         setUsersList(uList);
+
+        fetchJtRates().then(rates => setJtRates(rates)).catch(() => {});
 
         const savedUserJson = localStorage.getItem(SESSION_STORAGE_KEY);
         if (savedUserJson) {
@@ -787,6 +798,35 @@ export function App() {
     }
   };
 
+  // Restore Request handler (Only for anuladas)
+  const handleOpenRestore = (request: PaymentRequest) => {
+    setRestoreModalRequest(request);
+  };
+
+  const handleConfirmRestore = async (request: PaymentRequest, reason: string) => {
+    if (!currentUser) return;
+    try {
+      const updated = await restorePaymentRequest(request.id, reason, currentUser);
+      setRequests(prev => prev.map(r => r.id === request.id ? updated : r));
+      if (selectedRequestForDetail?.id === request.id) {
+        setSelectedRequestForDetail(updated);
+      }
+      showToast(`Solicitud #${updated.locator} restaurada con éxito a la Bandeja de Entrada`, 'success');
+
+      logAuditEvent({
+        action_type: 'restore_request',
+        user: currentUser,
+        target_id: updated.locator,
+        target_title: updated.title,
+        details: `El usuario ${currentUser.full_name} (${currentUser.role}) restauró la solicitud #${updated.locator} a Bandeja de Entrada. Motivo: "${reason}".`,
+        metadata: { locator: updated.locator, client: updated.client, reason }
+      }).catch(console.warn);
+    } catch (err: any) {
+      showToast(`Error al restaurar: ${err.message}`, 'error');
+      throw err;
+    }
+  };
+
   // Update Support File handler
   const handleUpdateSupportFile = async (requestId: string, file: File) => {
     if (!currentUser) return;
@@ -801,6 +841,26 @@ export function App() {
       showToast(`Error al actualizar soporte: ${err.message}`, 'error');
       throw err;
     }
+  };
+
+  // JT Rate Handler
+  const handleSaveJtRate = async (dateStr: string, rate: number) => {
+    const res = await saveJtRate(dateStr, rate, currentUser);
+    setJtRates(prev => {
+      const idx = prev.findIndex(r => r.rate_date === dateStr);
+      if (idx !== -1) {
+        const copy = [...prev];
+        copy[idx] = res.rate;
+        return copy.sort((a, b) => b.rate_date.localeCompare(a.rate_date));
+      }
+      return [res.rate, ...prev].sort((a, b) => b.rate_date.localeCompare(a.rate_date));
+    });
+    showToast(
+      res.isUpdate
+        ? `Tasa JT actualizada a Bs. ${rate.toFixed(4)} para la fecha ${dateStr}`
+        : `Tasa JT registrada exitosamente (Bs. ${rate.toFixed(4)})`,
+      'success'
+    );
   };
 
   // Update Receipt File handler
@@ -905,7 +965,10 @@ export function App() {
               <HistoryView
                 requests={requests}
                 currentUser={currentUser}
+                jtRates={jtRates}
                 onOpenDetails={(req) => setSelectedRequestForDetail(req)}
+                onRestoreRequest={handleOpenRestore}
+                onOpenJtRateModal={() => setIsJtRateModalOpen(true)}
               />
             )}
 
@@ -981,6 +1044,7 @@ export function App() {
         onCancelModification={handleCancelModification}
         onRequestCancellation={handleRequestCancellation}
         onCancelCancellation={handleCancelCancellation}
+        onRestoreRequest={handleOpenRestore}
         onUpdateSupportFile={handleUpdateSupportFile}
         onUpdateReceiptFile={handleUpdateReceiptFile}
       />
@@ -999,6 +1063,13 @@ export function App() {
         onConfirm={handleConfirmCancellation}
       />
 
+      <RestoreRequestModal
+        request={restoreModalRequest}
+        isOpen={Boolean(restoreModalRequest)}
+        onClose={() => setRestoreModalRequest(null)}
+        onConfirm={handleConfirmRestore}
+      />
+
       <BeneficiaryModal
         isOpen={isBeneficiaryModalOpen}
         editingBeneficiary={editingBeneficiary}
@@ -1013,6 +1084,13 @@ export function App() {
         isOpen={isDiagnosticsOpen}
         onClose={() => setIsDiagnosticsOpen(false)}
         currentUser={currentUser}
+      />
+
+      <JtRateModal
+        isOpen={isJtRateModalOpen}
+        onClose={() => setIsJtRateModalOpen(false)}
+        jtRates={jtRates}
+        onSaveRate={handleSaveJtRate}
       />
     </div>
   );

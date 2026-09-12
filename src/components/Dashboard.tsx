@@ -14,7 +14,8 @@ import {
   Wallet,
   Download,
   X,
-  Building2
+  Building2,
+  Ban
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -48,7 +49,7 @@ export const Dashboard: React.FC<DashboardProps> = ({
   onRequestCancellation,
   onCancelCancellation,
 }) => {
-  const [activeFilter, setActiveFilter] = useState<'all' | 'en_proceso' | 'urgente'>('all');
+  const [activeFilter, setActiveFilter] = useState<'all' | 'en_proceso' | 'urgente' | 'cancellation_requested'>('all');
   const [selectedCategory, setSelectedCategory] = useState<ServiceCategory | 'all'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [sortBy, setSortBy] = useState<'recent' | 'amount_desc' | 'urgent_first'>('urgent_first');
@@ -62,7 +63,11 @@ export const Dashboard: React.FC<DashboardProps> = ({
   const filteredRequests = useMemo(() => {
     return activeRequests
       .filter(r => {
-        if (activeFilter !== 'all' && r.status !== activeFilter) return false;
+        if (activeFilter === 'cancellation_requested') {
+          if (!r.cancellation_requested) return false;
+        } else if (activeFilter !== 'all' && r.status !== activeFilter) {
+          return false;
+        }
         if (selectedCategory !== 'all' && (r.category || 'hospedaje') !== selectedCategory) return false;
 
         if (searchQuery.trim()) {
@@ -209,12 +214,23 @@ export const Dashboard: React.FC<DashboardProps> = ({
               <p className="text-[10px] font-semibold text-blue-600">Gestión Activa</p>
             </div>
             {summary.countCancellationRequested > 0 && (
-              <div className="bg-rose-50 border border-rose-200 px-2 py-1 rounded-xl text-right">
-                <p className="text-xs font-black text-rose-700">
+              <button
+                type="button"
+                onClick={() => setActiveFilter(activeFilter === 'cancellation_requested' ? 'all' : 'cancellation_requested')}
+                className={`px-2 py-1 rounded-xl text-right transition-all cursor-pointer border ${
+                  activeFilter === 'cancellation_requested'
+                    ? 'bg-rose-600 text-white border-rose-700 shadow-2xs'
+                    : 'bg-rose-50 hover:bg-rose-100 border-rose-200'
+                }`}
+                title="Ver solicitudes con anulación pedida"
+              >
+                <p className={`text-xs font-black ${activeFilter === 'cancellation_requested' ? 'text-white' : 'text-rose-700'}`}>
                   {summary.countCancellationRequested}
                 </p>
-                <p className="text-[9px] font-bold text-rose-600">🚫 Anulación Pedida</p>
-              </div>
+                <p className={`text-[9px] font-bold ${activeFilter === 'cancellation_requested' ? 'text-rose-100' : 'text-rose-600'}`}>
+                  🚫 Anulación Pedida
+                </p>
+              </button>
             )}
           </div>
           <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-blue-400 to-teal-300" />
@@ -383,6 +399,25 @@ export const Dashboard: React.FC<DashboardProps> = ({
                 {summary.countEnProceso}
               </span>
             </button>
+
+            {summary.countCancellationRequested > 0 && (
+              <button
+                onClick={() => setActiveFilter(activeFilter === 'cancellation_requested' ? 'all' : 'cancellation_requested')}
+                className={`px-3 py-1.5 rounded-xl font-bold transition-all flex items-center gap-1.5 ${
+                  activeFilter === 'cancellation_requested'
+                    ? 'bg-rose-700 text-white shadow-2xs'
+                    : 'text-rose-700 hover:bg-rose-50 border border-rose-200'
+                }`}
+              >
+                <Ban className="w-3.5 h-3.5" />
+                <span>Anulación Pedida</span>
+                <span className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
+                  activeFilter === 'cancellation_requested' ? 'bg-rose-900 text-white' : 'bg-rose-100 text-rose-800'
+                }`}>
+                  {summary.countCancellationRequested}
+                </span>
+              </button>
+            )}
           </div>
 
           {/* Reset Filters Shortcut */}

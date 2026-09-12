@@ -62,6 +62,15 @@ export interface AttachedFile {
   uploaded_at?: string;
 }
 
+export interface JtRate {
+  id: string;
+  rate_date: string; // YYYY-MM-DD
+  rate: number;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface PaymentRequest {
   id: string;
   request_number: number;
@@ -103,6 +112,13 @@ export interface PaymentRequest {
   cancellation_reason?: string;
   cancellation_requested_at?: string;
   cancellation_requested_by?: string;
+  restored_by?: string;
+  restored_by_name?: string;
+  restored_at?: string;
+  restored_reason?: string;
+  last_modified_by?: string;
+  last_modified_by_name?: string;
+  last_modified_at?: string;
   created_by: string;
   creator_name?: string;
   paid_at?: string;
@@ -146,6 +162,13 @@ export interface CreatePaymentRequestInput {
   cancellation_reason?: string;
   cancellation_requested_at?: string;
   cancellation_requested_by?: string;
+  restored_by?: string;
+  restored_by_name?: string;
+  restored_at?: string;
+  restored_reason?: string;
+  last_modified_by?: string;
+  last_modified_by_name?: string;
+  last_modified_at?: string;
 }
 
 export interface FilterState {
@@ -168,3 +191,13 @@ export interface FinancialSummary {
   countCancellationRequested: number;
   countTotal: number;
 }
+
+export interface JtRate {
+  id: string;
+  rate_date: string; // YYYY-MM-DD
+  rate: number;
+  created_by?: string;
+  created_at: string;
+  updated_at: string;
+}
+

@@ -14,6 +14,7 @@ export type AuditActionType =
   | 'cancel_cancellation'
   | 'update_request'
   | 'status_change'
+  | 'restore_request'
   | 'delete_request'
   | 'create_beneficiary'
   | 'update_beneficiary'
@@ -175,6 +176,7 @@ export function exportAuditLogsToCSV(logs: AuditLogEntry[]) {
     cancel_cancellation: 'Descarte de Anulación',
     update_request: 'Modificación de Solicitud',
     status_change: 'Cambio de Estado / Pago',
+    restore_request: 'Restauración de Solicitud',
     delete_request: 'Eliminación de Solicitud',
     create_beneficiary: 'Creación de Beneficiario',
     update_beneficiary: 'Edición de Beneficiario',

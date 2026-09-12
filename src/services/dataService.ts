@@ -6,7 +6,8 @@ import {
   UserProfile,
   UserRole,
   Beneficiary,
-  AttachedFile
+  AttachedFile,
+  JtRate
 } from '../types';
 import { INITIAL_REQUESTS, INITIAL_USERS, INITIAL_BENEFICIARIES } from './mockData';
 import { uploadAttachment } from './storage';
@@ -302,8 +303,15 @@ export function normalizePaymentRequest(
     }];
   }
 
+  let sanitizedRoomType = item.room_type || '';
+  const itemCategory = item.category || 'hospedaje';
+  if (itemCategory !== 'hospedaje' && sanitizedRoomType.toUpperCase().includes('HABITACION')) {
+    sanitizedRoomType = '';
+  }
+
   return {
     ...item,
+    room_type: sanitizedRoomType,
     amount_usd: effectiveUsd,
     amount_bs: computedBs,
     bcv_rate: bcvRate,
@@ -320,7 +328,22 @@ export function normalizePaymentRequest(
       item.profiles?.full_name ||
       item.profiles?.username ||
       (userMap ? userMap.get(item.created_by) : undefined) ||
-      (_currentUser?.id === item.created_by ? _currentUser?.full_name : 'Usuario')
+      (_currentUser?.id === item.created_by ? _currentUser?.full_name : 'Usuario'),
+    restored_by: item.restored_by || item.bank_details?._restored_by,
+    restored_by_name:
+      item.restored_by_name ||
+      item.bank_details?._restored_by_name ||
+      ((item.restored_by || item.bank_details?._restored_by) && userMap ? userMap.get(item.restored_by || item.bank_details?._restored_by) : undefined) ||
+      (_currentUser?.id === (item.restored_by || item.bank_details?._restored_by) ? _currentUser?.full_name : (item.restored_by_name || item.bank_details?._restored_by_name)),
+    restored_at: item.restored_at || item.bank_details?._restored_at,
+    restored_reason: item.restored_reason || item.bank_details?._restored_reason,
+    last_modified_by: item.last_modified_by || item.bank_details?._last_modified_by,
+    last_modified_by_name:
+      item.last_modified_by_name ||
+      item.bank_details?._last_modified_by_name ||
+      ((item.last_modified_by || item.bank_details?._last_modified_by) && userMap ? userMap.get(item.last_modified_by || item.bank_details?._last_modified_by) : undefined) ||
+      (_currentUser?.id === (item.last_modified_by || item.bank_details?._last_modified_by) ? _currentUser?.full_name : (item.last_modified_by_name || item.bank_details?._last_modified_by_name)),
+    last_modified_at: item.last_modified_at || item.bank_details?._last_modified_at
   };
 }
 
@@ -556,12 +579,30 @@ async function resilientSupabaseInsert(record: any, retryCount = 0): Promise<any
   return data;
 }
 
+const KNOWN_UNSUPPORTED_COLUMNS = new Set<string>([
+  'restored_at',
+  'restored_by',
+  'restored_by_name',
+  'restored_reason',
+  'last_modified_by',
+  'last_modified_by_name',
+  'last_modified_at'
+]);
+
 async function resilientSupabaseUpdate(requestId: string, payload: any, retryCount = 0): Promise<any> {
   if (!supabase) throw new Error('Supabase client not available');
 
+  // Filtrar columnas no existentes antes de enviar la petición para evitar errores 400 Bad Request
+  const sanitizedPayload: any = {};
+  for (const key of Object.keys(payload)) {
+    if (!KNOWN_UNSUPPORTED_COLUMNS.has(key)) {
+      sanitizedPayload[key] = payload[key];
+    }
+  }
+
   let { data, error } = await supabase
     .from('payment_requests')
-    .update(payload)
+    .update(sanitizedPayload)
     .eq('id', requestId)
     .select('*, profiles:created_by(full_name, username)')
     .single();
@@ -570,7 +611,7 @@ async function resilientSupabaseUpdate(requestId: string, payload: any, retryCou
     if (error.message?.includes('relationship') || error.message?.includes('profiles') || error.code === 'PGRST200') {
       const retryNoJoin = await supabase
         .from('payment_requests')
-        .update(payload)
+        .update(sanitizedPayload)
         .eq('id', requestId)
         .select('*')
         .single();
@@ -588,6 +629,7 @@ async function resilientSupabaseUpdate(requestId: string, payload: any, retryCou
 
     if (missingColMatch && missingColMatch[1] && retryCount < 6) {
       const missingCol = missingColMatch[1];
+      KNOWN_UNSUPPORTED_COLUMNS.add(missingCol);
       console.warn(
         `[Supabase Notice] La columna '${missingCol}' no existe en la base de datos remota. Reintentando actualización compatible...`
       );
@@ -844,8 +886,9 @@ export async function updateRequestStatus(
       if (originBank !== undefined) {
         updateData.origin_bank = originBank;
       }
-      if (newStatus === 'anulado') {
+      if (newStatus === 'anulado' || newStatus === 'realizado') {
         updateData.cancellation_requested = false;
+        updateData.modification_requested = false;
       }
 
       const data = await resilientSupabaseUpdate(requestId, updateData);
@@ -922,7 +965,7 @@ export async function fetchUsers(forceRefresh = false): Promise<UserProfile[]> {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, email, full_name, role, is_active, created_at')
+        .select('id, username, email, full_name, role, is_active, password, created_at')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -965,6 +1008,101 @@ export async function fetchUsers(forceRefresh = false): Promise<UserProfile[]> {
     }
   }
   return localUsers;
+}
+
+export async function authenticateUser(
+  usernameOrEmail: string,
+  enteredPassword: string
+): Promise<{ success: boolean; user?: UserProfile; error?: string }> {
+  const cleanInput = (usernameOrEmail || '').trim().toLowerCase();
+  const cleanPass = (enteredPassword || '').trim();
+
+  if (!cleanInput || !cleanPass) {
+    return { success: false, error: 'Por favor introduce tu nombre de usuario y contraseña' };
+  }
+
+  // Super Usuario Auditor
+  if (cleanInput === 'jhoansg' && (cleanPass === '1709' || enteredPassword === '1709')) {
+    const superUser: UserProfile = {
+      id: 'super-user-jhoansg',
+      username: 'jhoansg',
+      email: 'jhoansg@tppagos.com',
+      full_name: 'Jhoan SG (Super Auditor)',
+      role: 'admin',
+      is_active: true,
+      created_at: new Date().toISOString()
+    };
+    return { success: true, user: superUser };
+  }
+
+  // 1. Intentar buscar directo en Supabase para obtener credenciales frescas en tiempo real
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('profiles')
+        .select('id, username, email, full_name, role, is_active, password, created_at')
+        .or(`username.ilike.${cleanInput},email.ilike.${cleanInput},email.ilike.${cleanInput}@tppagos.com`)
+        .limit(1);
+
+      if (!error && data && data.length > 0) {
+        const u = data[0];
+        if (!u.is_active) {
+          return { success: false, error: '⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.' };
+        }
+        const dbPass = String(u.password || (u.username === 'admin' ? 'admin' : '1234')).trim();
+        if (cleanPass === dbPass || enteredPassword === u.password) {
+          const matchedUser: UserProfile = {
+            id: u.id,
+            username: u.username,
+            email: u.email,
+            full_name: u.full_name || u.username,
+            role: u.role || 'solicitante',
+            is_active: u.is_active ?? true,
+            password: u.password,
+            created_at: u.created_at || new Date().toISOString()
+          };
+          // Actualizar caché local inmediatamente
+          const local = getLocalUsers();
+          const idx = local.findIndex(l => l.id === u.id || l.username.toLowerCase() === u.username.toLowerCase());
+          if (idx !== -1) {
+            local[idx] = matchedUser;
+          } else {
+            local.push(matchedUser);
+          }
+          setLocalUsers(local);
+          return { success: true, user: matchedUser };
+        } else {
+          return { success: false, error: '⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.' };
+        }
+      }
+    } catch (e) {
+      console.warn('Error verificando usuario en Supabase:', e);
+    }
+  }
+
+  // 2. Fallback a usuarios locales o refrescados
+  const localUsers = await fetchUsers(true);
+  const foundUser = localUsers.find(
+    (u) =>
+      (u.username && u.username.toLowerCase() === cleanInput) ||
+      u.email.toLowerCase() === cleanInput ||
+      u.email.split('@')[0].toLowerCase() === cleanInput
+  );
+
+  if (!foundUser) {
+    return { success: false, error: '⚠️ Usuario no encontrado. Por favor verifica tu nombre de usuario o solicita tu registro al Administrador.' };
+  }
+
+  if (!foundUser.is_active) {
+    return { success: false, error: '⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.' };
+  }
+
+  const expectedPassword = String(foundUser.password || (foundUser.username === 'admin' ? 'admin' : '1234')).trim();
+  if (cleanPass !== expectedPassword && enteredPassword !== foundUser.password) {
+    return { success: false, error: '⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.' };
+  }
+
+  return { success: true, user: foundUser };
 }
 
 export async function createNewUser(
@@ -1411,6 +1549,9 @@ export async function updatePaymentRequest(
         modification_reason: input.modification_reason ?? null,
         modification_requested_at: input.modification_requested_at ?? null,
         modification_requested_by: input.modification_requested_by ?? null,
+        last_modified_by: currentUser.id,
+        last_modified_by_name: currentUser.full_name || currentUser.username,
+        last_modified_at: new Date().toISOString(),
         updated_at: new Date().toISOString()
       };
 
@@ -1420,6 +1561,9 @@ export async function updatePaymentRequest(
         return {
           ...data,
           guest_list: input.guest_list,
+          last_modified_by: currentUser.id,
+          last_modified_by_name: currentUser.full_name || currentUser.username,
+          last_modified_at: updateRecord.last_modified_at,
           creator_name:
             data.creator_name ||
             data.profiles?.full_name ||
@@ -1436,6 +1580,7 @@ export async function updatePaymentRequest(
   const index = requests.findIndex(r => r.id === requestId);
   if (index === -1) throw new Error('Solicitud no encontrada');
 
+  const nowIso = new Date().toISOString();
   const updatedReq: PaymentRequest = {
     ...requests[index],
     category: input.category || 'hospedaje',
@@ -1467,7 +1612,10 @@ export async function updatePaymentRequest(
     modification_reason: input.modification_reason ?? '',
     modification_requested_at: input.modification_requested_at,
     modification_requested_by: input.modification_requested_by,
-    updated_at: new Date().toISOString()
+    last_modified_by: currentUser.id,
+    last_modified_by_name: currentUser.full_name || currentUser.username,
+    last_modified_at: nowIso,
+    updated_at: nowIso
   };
 
   requests[index] = updatedReq;
@@ -1665,6 +1813,91 @@ export async function cancelCancellationRequest(
   return updatedReq;
 }
 
+export async function restorePaymentRequest(
+  requestId: string,
+  reason: string,
+  currentUser: UserProfile
+): Promise<PaymentRequest> {
+  const requests = getLocalRequests();
+  const existing = requests.find(r => r.id === requestId);
+  if (!existing) throw new Error('Solicitud no encontrada');
+
+  const now = new Date().toISOString();
+  const restorerName = currentUser.full_name || currentUser.username || 'Usuario';
+
+  // Almacenar metadatos dentro de bank_details (JSONB existente) para persistencia garantizada en la nube
+  const updatedBankDetails = {
+    ...(existing.bank_details || {}),
+    _restored_by: currentUser.id,
+    _restored_by_name: restorerName,
+    _restored_at: now,
+    _restored_reason: reason
+  };
+
+  const updatePayload: any = {
+    status: 'en_proceso',
+    cancellation_requested: false,
+    cancellation_reason: null,
+    cancellation_requested_at: null,
+    cancellation_requested_by: null,
+    bank_details: updatedBankDetails,
+    restored_by: currentUser.id,
+    restored_by_name: restorerName,
+    restored_at: now,
+    restored_reason: reason,
+    updated_at: now
+  };
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+      if (data) {
+        const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        normalized.status = 'en_proceso';
+        normalized.cancellation_requested = false;
+        normalized.bank_details = updatedBankDetails;
+        normalized.restored_by = currentUser.id;
+        normalized.restored_by_name = restorerName;
+        normalized.restored_at = now;
+        normalized.restored_reason = reason;
+
+        const local = getLocalRequests();
+        const idx = local.findIndex(r => r.id === requestId);
+        if (idx !== -1) {
+          local[idx] = normalized;
+          setLocalRequests(local);
+        }
+        return normalized;
+      }
+    } catch (e) {
+      console.warn('Supabase restorePaymentRequest fallback to local:', e);
+    }
+  }
+
+  // Local Storage Fallback
+  const index = requests.findIndex(r => r.id === requestId);
+  if (index === -1) throw new Error('Solicitud no encontrada');
+
+  const updatedReq: PaymentRequest = {
+    ...requests[index],
+    status: 'en_proceso',
+    cancellation_requested: false,
+    cancellation_reason: undefined,
+    cancellation_requested_at: undefined,
+    cancellation_requested_by: undefined,
+    bank_details: updatedBankDetails,
+    restored_by: currentUser.id,
+    restored_by_name: restorerName,
+    restored_at: now,
+    restored_reason: reason,
+    updated_at: now
+  };
+
+  requests[index] = updatedReq;
+  setLocalRequests(requests);
+  return updatedReq;
+}
+
 export async function deletePaymentRequest(
   requestId: string,
   currentUser: UserProfile
@@ -1716,7 +1949,7 @@ export function calculateFinancialSummary(requests: PaymentRequest[]): Financial
     const usd = Number(req.amount_usd) || 0;
     const bs = Number(req.amount_bs) || 0;
 
-    if (req.cancellation_requested) {
+    if (req.cancellation_requested && req.status !== 'realizado' && req.status !== 'anulado') {
       countCancellationRequested++;
     }
 
@@ -1868,15 +2101,23 @@ export async function updateRequestSupportFile(
 
   if (isSupabaseConfigured && supabase) {
     try {
+      const modName = currentUser.full_name || currentUser.username || 'Usuario';
+      const nowIso = new Date().toISOString();
       const data = await resilientSupabaseUpdate(requestId, {
         support_file_url: supportUrl,
         support_file_name: supportFileName,
         support_files: updatedSupports,
-        updated_at: new Date().toISOString()
+        last_modified_by: currentUser.id,
+        last_modified_by_name: modName,
+        last_modified_at: nowIso,
+        updated_at: nowIso
       });
 
       if (data) {
         const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        normalized.last_modified_by = currentUser.id;
+        normalized.last_modified_by_name = modName;
+        normalized.last_modified_at = nowIso;
         const local = getLocalRequests();
         const idx = local.findIndex(r => r.id === requestId);
         if (idx !== -1) {
@@ -1894,12 +2135,16 @@ export async function updateRequestSupportFile(
   const index = requests.findIndex(r => r.id === requestId);
   if (index === -1) throw new Error('Solicitud no encontrada');
 
+  const nowIsoSupport = new Date().toISOString();
   const updatedReq: PaymentRequest = {
     ...requests[index],
     support_file_url: supportUrl,
     support_file_name: supportFileName,
     support_files: updatedSupports,
-    updated_at: new Date().toISOString()
+    last_modified_by: currentUser.id,
+    last_modified_by_name: currentUser.full_name || currentUser.username,
+    last_modified_at: nowIsoSupport,
+    updated_at: nowIsoSupport
   };
 
   requests[index] = updatedReq;
@@ -1931,15 +2176,23 @@ export async function deleteRequestSupportFile(
 
   if (isSupabaseConfigured && supabase) {
     try {
+      const modName = currentUser.full_name || currentUser.username || 'Usuario';
+      const nowIso = new Date().toISOString();
       const data = await resilientSupabaseUpdate(requestId, {
         support_file_url: primarySupportUrl,
         support_file_name: primarySupportFileName,
         support_files: updatedSupports.length > 0 ? updatedSupports : null,
-        updated_at: new Date().toISOString()
+        last_modified_by: currentUser.id,
+        last_modified_by_name: modName,
+        last_modified_at: nowIso,
+        updated_at: nowIso
       });
 
       if (data) {
         const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        normalized.last_modified_by = currentUser.id;
+        normalized.last_modified_by_name = modName;
+        normalized.last_modified_at = nowIso;
         const local = getLocalRequests();
         const idx = local.findIndex(r => r.id === requestId);
         if (idx !== -1) {
@@ -1953,16 +2206,20 @@ export async function deleteRequestSupportFile(
     }
   }
 
-  const index = requests.findIndex(r => r.id === requestId);
+  const indexDel = requests.findIndex(r => r.id === requestId);
+  const nowIsoDel = new Date().toISOString();
   const updatedReq: PaymentRequest = {
-    ...requests[index],
+    ...requests[indexDel],
     support_file_url: primarySupportUrl || undefined,
     support_file_name: primarySupportFileName || undefined,
     support_files: updatedSupports,
-    updated_at: new Date().toISOString()
+    last_modified_by: currentUser.id,
+    last_modified_by_name: currentUser.full_name || currentUser.username,
+    last_modified_at: nowIsoDel,
+    updated_at: nowIsoDel
   };
 
-  requests[index] = updatedReq;
+  requests[indexDel] = updatedReq;
   setLocalRequests(requests);
   return updatedReq;
 }
@@ -1988,15 +2245,23 @@ export async function updateRequestReceiptFile(
 
   if (isSupabaseConfigured && supabase) {
     try {
+      const modName = currentUser.full_name || currentUser.username || 'Usuario';
+      const nowIso = new Date().toISOString();
       const data = await resilientSupabaseUpdate(requestId, {
         receipt_file_url: receiptUrl,
         receipt_file_name: receiptFileName,
         receipt_files: updatedReceipts,
-        updated_at: new Date().toISOString()
+        last_modified_by: currentUser.id,
+        last_modified_by_name: modName,
+        last_modified_at: nowIso,
+        updated_at: nowIso
       });
 
       if (data) {
         const normalized = normalizePaymentRequest(data, undefined, currentUser);
+        normalized.last_modified_by = currentUser.id;
+        normalized.last_modified_by_name = modName;
+        normalized.last_modified_at = nowIso;
         const local = getLocalRequests();
         const idx = local.findIndex(r => r.id === requestId);
         if (idx !== -1) {
@@ -2014,12 +2279,16 @@ export async function updateRequestReceiptFile(
   const index = requests.findIndex(r => r.id === requestId);
   if (index === -1) throw new Error('Solicitud no encontrada');
 
+  const nowIsoReceipt = new Date().toISOString();
   const updatedReq: PaymentRequest = {
     ...requests[index],
     receipt_file_url: receiptUrl,
     receipt_file_name: receiptFileName,
     receipt_files: updatedReceipts,
-    updated_at: new Date().toISOString()
+    last_modified_by: currentUser.id,
+    last_modified_by_name: currentUser.full_name || currentUser.username,
+    last_modified_at: nowIsoReceipt,
+    updated_at: nowIsoReceipt
   };
 
   requests[index] = updatedReq;
@@ -2087,3 +2356,390 @@ export async function deleteRequestReceiptFile(
   return updatedReq;
 }
 
+// ==========================================
+// TASA JT MANAGEMENT & DIFFERENTIAL REPORT
+// ==========================================
+
+export const JT_RATES_STORAGE_KEY = 'jt_pagos_jt_rates_v1';
+
+export function getLocalJtRates(): JtRate[] {
+  try {
+    const stored = localStorage.getItem(JT_RATES_STORAGE_KEY);
+    if (!stored) return [];
+    const rates: JtRate[] = JSON.parse(stored);
+    return Array.isArray(rates) ? rates.sort((a, b) => b.rate_date.localeCompare(a.rate_date)) : [];
+  } catch (e) {
+    console.error('Error al leer tasas JT locales:', e);
+    return [];
+  }
+}
+
+export function setLocalJtRates(rates: JtRate[]): void {
+  try {
+    const sorted = [...rates].sort((a, b) => b.rate_date.localeCompare(a.rate_date));
+    localStorage.setItem(JT_RATES_STORAGE_KEY, JSON.stringify(sorted));
+  } catch (e) {
+    console.error('Error al guardar tasas JT locales:', e);
+  }
+}
+
+export async function fetchJtRates(): Promise<JtRate[]> {
+  const localRates = getLocalJtRates();
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const { data, error } = await supabase
+        .from('jt_rates')
+        .select('*')
+        .order('rate_date', { ascending: false });
+
+      if (!error && data) {
+        setLocalJtRates(data as JtRate[]);
+        return data as JtRate[];
+      }
+    } catch (e) {
+      console.warn('Supabase fetchJtRates fallback a local:', e);
+    }
+  }
+  return localRates;
+}
+
+export async function saveJtRate(
+  dateStr: string,
+  rateValue: number,
+  currentUser?: UserProfile | null
+): Promise<{ rate: JtRate; isUpdate: boolean }> {
+  const localRates = getLocalJtRates();
+  const existingIndex = localRates.findIndex(r => r.rate_date === dateStr);
+  const isUpdate = existingIndex !== -1;
+  const nowIso = new Date().toISOString();
+  const creator = currentUser?.full_name || currentUser?.username || 'Administrador';
+
+  let recordToSave: JtRate;
+
+  if (isUpdate) {
+    recordToSave = {
+      ...localRates[existingIndex],
+      rate: rateValue,
+      updated_at: nowIso
+    };
+    localRates[existingIndex] = recordToSave;
+  } else {
+    recordToSave = {
+      id: typeof crypto !== 'undefined' && crypto.randomUUID ? crypto.randomUUID() : `jt_${Date.now()}_${Math.random().toString(36).substring(2, 7)}`,
+      rate_date: dateStr,
+      rate: rateValue,
+      created_by: creator,
+      created_at: nowIso,
+      updated_at: nowIso
+    };
+    localRates.unshift(recordToSave);
+  }
+
+  setLocalJtRates(localRates);
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const payload: any = {
+        rate_date: dateStr,
+        rate: rateValue,
+        updated_at: nowIso
+      };
+
+      if (!isUpdate) {
+        payload.id = recordToSave.id;
+        payload.created_by = creator;
+        payload.created_at = nowIso;
+      }
+
+      const { data, error } = await supabase
+        .from('jt_rates')
+        .upsert(payload, { onConflict: 'rate_date' })
+        .select()
+        .single();
+
+      if (!error && data) {
+        recordToSave = data as JtRate;
+        const updatedLocal = getLocalJtRates().map(r => r.rate_date === dateStr ? recordToSave : r);
+        setLocalJtRates(updatedLocal);
+      }
+    } catch (e) {
+      console.warn('Supabase upsert jt_rates fallback a local:', e);
+    }
+  }
+
+  return { rate: recordToSave, isUpdate };
+}
+
+export function getJtRateForDate(dateStr: string, jtRates: JtRate[]): number {
+  if (!jtRates || jtRates.length === 0 || !dateStr) return 0;
+
+  // Coincidencia exacta única: solo si existe tasa registrada específicamente para esta fecha
+  const exact = jtRates.find(r => r.rate_date === dateStr);
+  if (exact && Number(exact.rate) > 0) return Number(exact.rate);
+
+  return 0;
+}
+
+/**
+ * Redondea un número a una cantidad fija de decimales (por defecto 2)
+ */
+export function roundToDecimals(num: number | undefined | null, decimals = 2): number {
+  if (num === undefined || num === null || isNaN(Number(num))) return 0;
+  const factor = Math.pow(10, decimals);
+  return Math.round((Number(num) + Number.EPSILON) * factor) / factor;
+}
+
+/**
+ * Formatea un número según el estándar hispanohablante/venezolano:
+ * - Separador de miles: '.'
+ * - Separador de decimales: ','
+ * - Redondeo estricto a 2 dígitos decimales
+ * Ejemplos:
+ * 77.995 -> '78,00'
+ * 80 -> '80,00'
+ * 1234.56 -> '1.234,56'
+ */
+export function formatSpanishNumber(val: number | undefined | null, decimals = 2): string {
+  if (val === undefined || val === null || isNaN(Number(val))) {
+    return `0,${'0'.repeat(decimals)}`;
+  }
+  const factor = Math.pow(10, decimals);
+  const rounded = Math.round((Math.abs(Number(val)) + Number.EPSILON) * factor) / factor;
+  const isNeg = Number(val) < 0 && rounded > 0;
+  const fixed = rounded.toFixed(decimals);
+  const [intPart, decPart] = fixed.split('.');
+  const formattedInt = intPart.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return (isNeg ? '-' : '') + (decPart !== undefined ? `${formattedInt},${decPart}` : formattedInt);
+}
+
+/**
+ * Genera y descarga el reporte Excel con el diseño exacto del bosquejo:
+ * "Relacion de Gastos Actualizados a Tasa JT"
+ * Incluye recuadro superior derecho de Ganancia, Perdida, Utilidad
+ * y columnas calculadas de USD Real, Diferencial y Observación.
+ * Todas las columnas numéricas están formateadas con punto '.' como separador de miles,
+ * coma ',' como separador de decimales y redondeo estricto a 2 dígitos decimales.
+ * Si un día no tiene tasa JT creada, se deja en blanco y se coloca la observación:
+ * "Sin tasa JT creada este día".
+ */
+export function exportDifferentialReportToExcel(
+  requests: PaymentRequest[],
+  jtRates: JtRate[],
+  filenamePrefix = 'RELACION_GASTOS_TASA_JT'
+) {
+  const deletedIds = getDeletedRequestIds();
+  // Para este reporte SOLO serán las solicitudes en moneda VES. Cualquier otra moneda estará fuera de este reporte.
+  const validRequests = requests.filter(r => {
+    if (deletedIds.has(r.id)) return false;
+
+    // Descartar si es expresamente USD o métodos directos de divisas sin bolívares
+    const isDirectUsd =
+      r.currency === 'USD' ||
+      Number(r.bcv_rate) === 0 ||
+      (!r.currency && (r.bank_details?.payment_method === 'zelle_usd' || r.bank_details?.payment_method === 'efectivo_usd'));
+
+    if (isDirectUsd) return false;
+
+    const curr = (r.currency || 'VES').toUpperCase();
+    return curr === 'VES';
+  });
+
+  let totalGanancia = 0;
+  let totalPerdida = 0;
+
+  const dataRows = validRequests.map(r => {
+    const isAnulado = r.status === 'anulado';
+    const rawDate = r.paid_at || r.receipt_files?.[0]?.uploaded_at || r.created_at;
+    const dateObj = new Date(rawDate);
+    const dateIso = !isNaN(dateObj.getTime()) ? dateObj.toISOString().split('T')[0] : '';
+    const dateDisplay = !isNaN(dateObj.getTime())
+      ? dateObj.toLocaleDateString('es-VE', { day: '2-digit', month: '2-digit', year: 'numeric' })
+      : '';
+
+    // Valores redondeados a 2 dígitos
+    const montoUsd = isAnulado ? 0 : roundToDecimals(Number(r.amount_usd || 0), 2);
+    const bcvRate = isAnulado ? 0 : roundToDecimals(Number(r.bcv_rate || 0), 2);
+    const montoBs = isAnulado ? 0 : roundToDecimals(Number(r.amount_bs || 0), 2);
+
+    const rawTasaJt = isAnulado ? 0 : getJtRateForDate(dateIso, jtRates);
+    const hasRate = !isAnulado && rawTasaJt > 0;
+    const tasaJt = hasRate ? roundToDecimals(rawTasaJt, 2) : 0;
+
+    let usdReal = 0;
+    let diferencial = 0;
+    let observacion = 'Sin diferencial';
+    let obsClass = 'obs-neutral';
+
+    if (isAnulado) {
+      observacion = 'Anulado';
+      obsClass = 'obs-neutral';
+    } else if (!hasRate) {
+      // No existe tasa creada para este día: se deja en blanco y se coloca la observación solicitada
+      observacion = 'Sin tasa JT creada este día';
+      obsClass = 'obs-sin-tasa';
+    } else {
+      // USD Real: Monto Bs / Tasa JT (ambos redondeados a 2 dígitos)
+      if (tasaJt > 0 && montoBs > 0) {
+        usdReal = roundToDecimals(montoBs / tasaJt, 2);
+      } else {
+        usdReal = montoUsd;
+      }
+
+      // Diferencial: Monto USD - USD Real (redondeado a 2 dígitos)
+      diferencial = roundToDecimals(montoUsd - usdReal, 2);
+
+      if (diferencial > 0.005) {
+        observacion = 'Ganancia cambiaria';
+        obsClass = 'obs-ganancia';
+        totalGanancia += diferencial;
+      } else if (diferencial < -0.005) {
+        observacion = 'Pérdida cambiaria';
+        obsClass = 'obs-perdida';
+        totalPerdida += Math.abs(diferencial);
+      } else {
+        observacion = 'Sin diferencial';
+        obsClass = 'obs-neutral';
+      }
+    }
+
+    return {
+      dateDisplay,
+      requestNumber: r.request_number || '',
+      locator: r.locator || 'S/L',
+      category: (r.category || 'hospedaje').toUpperCase(),
+      montoUsd,
+      bcvRate,
+      montoBs,
+      tasaJt,
+      usdReal,
+      diferencial,
+      observacion,
+      obsClass,
+      hasRate,
+      isAnulado
+    };
+  });
+
+  const roundedGanancia = roundToDecimals(totalGanancia, 2);
+  const roundedPerdida = roundToDecimals(totalPerdida, 2);
+  const roundedUtilidad = roundToDecimals(roundedGanancia - roundedPerdida, 2);
+
+  const rowsHtml = dataRows.length === 0
+    ? `<tr><td colspan="11" class="td-cell td-center" style="padding: 16px; color: #64748b;">No hay solicitudes en moneda VES registradas en el reporte.</td></tr>`
+    : dataRows.map(row => `
+    <tr>
+      <td class="td-cell td-center">${row.dateDisplay}</td>
+      <td class="td-cell td-center" style="font-weight: 600;">${row.requestNumber}</td>
+      <td class="td-cell td-center">${row.locator}</td>
+      <td class="td-cell td-center">${row.category}</td>
+      <td class="td-cell td-num">${formatSpanishNumber(row.montoUsd, 2)}</td>
+      <td class="td-cell td-num">${formatSpanishNumber(row.bcvRate, 2)}</td>
+      <td class="td-cell td-num">${formatSpanishNumber(row.montoBs, 2)}</td>
+      <td class="td-cell td-num">${row.hasRate ? formatSpanishNumber(row.tasaJt, 2) : ''}</td>
+      <td class="td-cell td-num" style="font-weight: 600;">${row.hasRate ? formatSpanishNumber(row.usdReal, 2) : ''}</td>
+      <td class="td-cell td-num" style="font-weight: 700; ${row.diferencial > 0.005 ? 'color: #15803d;' : row.diferencial < -0.005 ? 'color: #b91c1c;' : ''}">${row.hasRate ? formatSpanishNumber(row.diferencial, 2) : ''}</td>
+      <td class="td-cell td-center ${row.obsClass}">${row.observacion}</td>
+    </tr>
+  `).join('');
+
+  const excelHtml = `\uFEFF<!DOCTYPE html>
+<html xmlns:o="urn:schemas-microsoft-com:office:office" xmlns:x="urn:schemas-microsoft-com:office:excel" xmlns="http://www.w3.org/TR/REC-html40">
+<head>
+  <meta http-equiv="Content-Type" content="text/html; charset=utf-8">
+  <!--[if gte mso 9]>
+  <xml>
+    <x:ExcelWorkbook>
+      <x:ExcelWorksheets>
+        <x:ExcelWorksheet>
+          <x:Name>Relacion Gastos Tasa JT</x:Name>
+          <x:WorksheetOptions>
+            <x:DisplayGridlines/>
+          </x:WorksheetOptions>
+        </x:ExcelWorksheet>
+      </x:ExcelWorksheets>
+    </x:ExcelWorkbook>
+  </xml>
+  <![endif]-->
+  <style>
+    body { font-family: Calibri, 'Segoe UI', Arial, sans-serif; font-size: 10pt; color: #1e293b; }
+    table { border-collapse: collapse; width: 100%; }
+    .title { font-size: 15pt; font-weight: bold; text-align: center; height: 38px; vertical-align: middle; color: #0f172a; }
+    .summary-title-cell { font-size: 10pt; font-weight: bold; background-color: #f8fafc; border: 1px solid #cbd5e1; padding: 6px 10px; text-align: left; }
+    .summary-val-ganancia { font-size: 10pt; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px 10px; text-align: right; color: #15803d; background-color: #f0fdf4; mso-number-format: "\\#\\.\\#\\#0\\,00"; }
+    .summary-val-perdida { font-size: 10pt; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px 10px; text-align: right; color: #b91c1c; background-color: #fef2f2; mso-number-format: "\\#\\.\\#\\#0\\,00"; }
+    .summary-val-utilidad { font-size: 11pt; font-weight: bold; border: 1px solid #cbd5e1; padding: 6px 10px; text-align: right; color: #0f172a; background-color: #e2e8f0; mso-number-format: "\\#\\.\\#\\#0\\,00"; }
+    .th-header { background-color: #0f172a; color: #ffffff; font-weight: bold; font-size: 10pt; text-align: center; border: 1px solid #334155; padding: 8px 6px; vertical-align: middle; }
+    .td-cell { font-size: 9.5pt; border: 1px solid #cbd5e1; padding: 6px 8px; vertical-align: middle; }
+    .td-center { text-align: center; }
+    .td-num { text-align: right; mso-number-format: "\\#\\.\\#\\#0\\,00"; }
+    .obs-ganancia { color: #15803d; font-weight: bold; }
+    .obs-perdida { color: #b91c1c; font-weight: bold; }
+    .obs-neutral { color: #64748b; }
+    .obs-sin-tasa { color: #64748b; font-style: italic; }
+  </style>
+</head>
+<body>
+  <table>
+    <!-- Row 1: Titulo centrado -->
+    <tr>
+      <td colspan="11" class="title">Relacion de Gastos Actualizados a Tasa JT</td>
+    </tr>
+
+    <!-- Row 2: Ganancia -->
+    <tr>
+      <td colspan="7"></td>
+      <td class="summary-title-cell">Ganancia</td>
+      <td colspan="3" class="summary-val-ganancia">${formatSpanishNumber(roundedGanancia, 2)}</td>
+    </tr>
+
+    <!-- Row 3: Perdida -->
+    <tr>
+      <td colspan="7"></td>
+      <td class="summary-title-cell">Perdida</td>
+      <td colspan="3" class="summary-val-perdida">${formatSpanishNumber(roundedPerdida, 2)}</td>
+    </tr>
+
+    <!-- Row 4: Utilidad -->
+    <tr>
+      <td colspan="7"></td>
+      <td class="summary-title-cell">Utilidad</td>
+      <td colspan="3" class="summary-val-utilidad">${formatSpanishNumber(roundedUtilidad, 2)}</td>
+    </tr>
+
+    <!-- Row 5: Espacio en blanco -->
+    <tr><td colspan="11" style="height: 14px;"></td></tr>
+
+    <!-- Row 6: Encabezados de tabla según el bosquejo -->
+    <thead>
+      <tr>
+        <th class="th-header" style="width: 120px;">Fecha Liquidación</th>
+        <th class="th-header" style="width: 100px;">N° Solicitud</th>
+        <th class="th-header" style="width: 100px;">Localizador</th>
+        <th class="th-header" style="width: 110px;">Categoría</th>
+        <th class="th-header" style="width: 100px;">Monto USD</th>
+        <th class="th-header" style="width: 90px;">Tasa BCV</th>
+        <th class="th-header" style="width: 110px;">Monto Bs</th>
+        <th class="th-header" style="width: 90px;">Tasa JT</th>
+        <th class="th-header" style="width: 100px;">USD Real</th>
+        <th class="th-header" style="width: 100px;">Diferencial</th>
+        <th class="th-header" style="width: 150px;">observacion</th>
+      </tr>
+    </thead>
+    <tbody>
+      ${rowsHtml}
+    </tbody>
+  </table>
+</body>
+</html>`;
+
+  const blob = new Blob([excelHtml], { type: 'application/vnd.ms-excel;charset=utf-8' });
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  const dateStr = new Date().toISOString().split('T')[0];
+  a.download = `${filenamePrefix}_${dateStr}.xls`;
+  document.body.appendChild(a);
+  a.click();
+  document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}

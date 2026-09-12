@@ -27,7 +27,8 @@ import {
   CheckCircle2,
   Eye,
   Ban,
-  Plus
+  Plus,
+  RotateCcw
 } from 'lucide-react';
 
 interface RequestDetailModalProps {
@@ -40,6 +41,7 @@ interface RequestDetailModalProps {
   onCancelModification?: (request: PaymentRequest) => void;
   onRequestCancellation?: (request: PaymentRequest) => void;
   onCancelCancellation?: (request: PaymentRequest) => void;
+  onRestoreRequest?: (request: PaymentRequest) => void;
   onUpdateSupportFile?: (requestId: string, file: File) => Promise<void>;
   onUpdateReceiptFile?: (requestId: string, file: File) => Promise<void>;
 }
@@ -54,6 +56,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
   onCancelModification,
   onRequestCancellation,
   onCancelCancellation,
+  onRestoreRequest,
   onUpdateSupportFile,
   onUpdateReceiptFile,
 }) => {
@@ -367,6 +370,47 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
           </div>
         )}
 
+        {/* Anulado Status Banner */}
+        {request.status === 'anulado' && (
+          <div className="p-3 bg-rose-50 rounded-2xl border border-rose-300 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="font-bold text-rose-950 flex items-center gap-1.5 text-xs">
+                <Ban className="w-4 h-4 text-rose-600 shrink-0" />
+                <span>🚫 Esta solicitud se encuentra ANULADA</span>
+              </span>
+              <span className="text-[10px] font-bold text-rose-800 bg-rose-200/70 px-2 py-0.5 rounded-lg border border-rose-300">
+                Historial (Saldo $0)
+              </span>
+            </div>
+            {request.cancellation_reason && (
+              <div className="bg-white/90 p-2.5 rounded-xl border border-rose-200 text-xs text-rose-950 font-medium">
+                <strong className="text-rose-800 font-bold block text-[10px] uppercase">
+                  Motivo de Anulación Registrado:
+                </strong>
+                {request.cancellation_reason}
+              </div>
+            )}
+            {onRestoreRequest && (
+              <div className="pt-1 flex items-center justify-between gap-2 border-t border-rose-200/80">
+                <span className="text-[11px] text-rose-800 font-medium">
+                  ¿Deseas reactivar esta solicitud y regresarla a la Bandeja de Entrada?
+                </span>
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onRestoreRequest(request);
+                  }}
+                  className="active-press px-3 py-1.5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-sm transition-all shrink-0"
+                >
+                  <RotateCcw className="w-3.5 h-3.5" />
+                  <span>Restaurar Solicitud</span>
+                </button>
+              </div>
+            )}
+          </div>
+        )}
+
         {/* Modal Body */}
         <div className="overflow-y-auto space-y-3 text-xs text-slate-600 pr-1">
           {/* General Client & Service */}
@@ -442,6 +486,49 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                   {new Date(request.paid_at || request.receipt_files?.[0]?.uploaded_at || request.created_at).toLocaleDateString()}{' '}
                   {new Date(request.paid_at || request.receipt_files?.[0]?.uploaded_at || request.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
+              </div>
+            )}
+
+            {/* Last Modification Audit Info */}
+            {request.last_modified_by_name && (
+              <div className="flex items-center justify-between pt-1 border-t border-slate-200/60 text-[11px]">
+                <span className="text-amber-700 font-semibold flex items-center gap-1">
+                  <Edit3 className="w-3 h-3 text-amber-600" />
+                  Última Modificación por:
+                </span>
+                <span className="font-bold text-slate-800 flex items-center gap-1">
+                  <span>{request.last_modified_by_name}</span>
+                  {request.last_modified_at && (
+                    <span className="text-slate-400 font-normal text-[10px]">
+                      ({new Date(request.last_modified_at).toLocaleDateString()} {new Date(request.last_modified_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })})
+                    </span>
+                  )}
+                </span>
+              </div>
+            )}
+
+            {/* Restored Request Audit Info */}
+            {request.restored_by_name && (
+              <div className="pt-1.5 border-t border-slate-200/60">
+                <div className="p-2.5 bg-sky-50 rounded-xl border border-sky-200 text-xs space-y-1">
+                  <div className="flex items-center justify-between">
+                    <span className="font-bold text-sky-900 flex items-center gap-1.5 text-[11px]">
+                      <RotateCcw className="w-3.5 h-3.5 text-sky-600 shrink-0" />
+                      <span>Restaurada por: <strong className="text-sky-950">{request.restored_by_name}</strong></span>
+                    </span>
+                    {request.restored_at && (
+                      <span className="text-[10px] text-sky-700 font-semibold">
+                        {new Date(request.restored_at).toLocaleDateString()} {new Date(request.restored_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                      </span>
+                    )}
+                  </div>
+                  {request.restored_reason && (
+                    <div className="text-[11px] text-sky-800 bg-white/90 p-2 rounded-lg border border-sky-100 mt-1">
+                      <strong className="text-sky-900 block text-[10px] uppercase">Motivo de Restauración:</strong>
+                      <span className="italic">{request.restored_reason}</span>
+                    </div>
+                  )}
+                </div>
               </div>
             )}
           </div>
@@ -520,7 +607,7 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                     </span>
                   </div>
                 )}
-                {request.room_type && category !== 'viaticos' && (
+                {request.room_type && category !== 'viaticos' && (category === 'hospedaje' || !request.room_type.toUpperCase().includes('HABITACION')) && (
                   <div>
                     <span className="text-slate-400 block text-[10px] font-semibold">
                       {category === 'traslado'
@@ -988,7 +1075,21 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
             Cerrar
           </button>
 
-          {currentUser?.role === 'admin' && request.status !== 'realizado' && onEditRequest && (
+          {request.status === 'anulado' && onRestoreRequest && (
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onRestoreRequest(request);
+              }}
+              className="active-press px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white font-bold text-xs flex items-center gap-1.5 shadow-2xs transition-colors"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Restaurar Solicitud</span>
+            </button>
+          )}
+
+          {currentUser?.role === 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && onEditRequest && (
             <button
               type="button"
               onClick={() => {

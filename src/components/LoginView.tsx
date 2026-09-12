@@ -2,82 +2,53 @@ import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { TPLogo } from './TPLogo';
 import { User, Lock, ArrowRight } from 'lucide-react';
+import { authenticateUser } from '../services/dataService';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserProfile) => void;
   availableUsers: UserProfile[];
 }
 
-export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess, availableUsers }) => {
+export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleStandardLogin = (e: React.FormEvent) => {
+  const handleStandardLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setErrorMsg('');
 
-    if (!username || !password) {
+    if (!username.trim() || !password) {
       setErrorMsg('Por favor introduce tu nombre de usuario y contraseña');
       return;
     }
 
-    const cleanInput = username.trim().toLowerCase();
-
     setLoading(true);
-    setTimeout(() => {
-      // Super Usuario de Auditoría y Seguridad
-      if (cleanInput === 'jhoansg' && password === '1709') {
-        const superUser: UserProfile = {
-          id: 'super-user-jhoansg',
-          username: 'jhoansg',
-          email: 'jhoansg@tppagos.com',
-          full_name: 'Jhoan SG (Super Auditor)',
-          role: 'admin',
-          is_active: true,
-          created_at: new Date().toISOString()
-        };
-        sessionStorage.setItem('tp_super_auditor_user', 'jhoansg');
-        onLoginSuccess(superUser);
-        setLoading(false);
-        return;
-      }
 
-      // Limpiar sesión de auditor si es un usuario estándar
+    try {
+      // Limpiar sesión de auditor previa
       sessionStorage.removeItem('tp_super_auditor_user');
       sessionStorage.removeItem('tp_super_auditor_session');
 
-      const foundUser = availableUsers.find(
-        (u) =>
-          (u.username && u.username.toLowerCase() === cleanInput) ||
-          u.email.toLowerCase() === cleanInput ||
-          u.email.split('@')[0].toLowerCase() === cleanInput
-      );
+      const result = await authenticateUser(username, password);
 
-      if (!foundUser) {
-        setErrorMsg('⚠️ Usuario no encontrado. Por favor verifica tu nombre de usuario o solicita tu registro al Administrador.');
+      if (!result.success || !result.user) {
+        setErrorMsg(result.error || '⚠️ Error al autenticar usuario.');
         setLoading(false);
         return;
       }
 
-      if (!foundUser.is_active) {
-        setErrorMsg('⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.');
-        setLoading(false);
-        return;
+      if (result.user.id === 'super-user-jhoansg') {
+        sessionStorage.setItem('tp_super_auditor_user', 'jhoansg');
       }
 
-      // Validar Contraseña Estricta
-      const userPassword = foundUser.password || (foundUser.username === 'admin' ? 'admin' : '1234');
-      if (password !== userPassword) {
-        setErrorMsg('⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.');
-        setLoading(false);
-        return;
-      }
-
-      onLoginSuccess(foundUser);
+      onLoginSuccess(result.user);
+    } catch (err: any) {
+      setErrorMsg(err.message || '⚠️ Error de conexión al iniciar sesión');
+    } finally {
       setLoading(false);
-    }, 300);
+    }
   };
 
   return (

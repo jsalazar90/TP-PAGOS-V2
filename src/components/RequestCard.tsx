@@ -31,7 +31,8 @@ import {
   Banknote,
   Edit3,
   Clock,
-  Ban
+  Ban,
+  RotateCcw
 } from 'lucide-react';
 
 interface RequestCardProps {
@@ -420,6 +421,24 @@ export const RequestCard: React.FC<RequestCardProps> = ({
                 <span>
                   {new Date(request.created_at).toLocaleDateString()} {new Date(request.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                 </span>
+              </span>
+            )}
+            {request.restored_by_name && (
+              <span
+                className="flex items-center gap-1 font-semibold text-sky-700 bg-sky-50 px-2 py-0.5 rounded-md border border-sky-200 text-[10px]"
+                title={`Restaurada por ${request.restored_by_name}${request.restored_reason ? `: "${request.restored_reason}"` : ''}`}
+              >
+                <RotateCcw className="w-2.5 h-2.5 text-sky-600 shrink-0" />
+                <span>Restaurada</span>
+              </span>
+            )}
+            {request.last_modified_by_name && !request.restored_by_name && (
+              <span
+                className="flex items-center gap-1 font-semibold text-amber-700 bg-amber-50 px-2 py-0.5 rounded-md border border-amber-200 text-[10px]"
+                title={`Última edición por ${request.last_modified_by_name}`}
+              >
+                <Edit3 className="w-2.5 h-2.5 text-amber-600 shrink-0" />
+                <span>Modificada</span>
               </span>
             )}
           </div>

@@ -1,7 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
-import { PaymentRequest, UserProfile } from '../types';
+import { PaymentRequest, UserProfile, JtRate } from '../types';
 import { StatusBadge } from './StatusBadge';
-import { exportRequestsToCSV, getRequestReceiptFiles } from '../services/dataService';
+import { exportRequestsToCSV, exportDifferentialReportToExcel, getRequestReceiptFiles } from '../services/dataService';
 import {
   History,
   Search,
@@ -22,25 +22,38 @@ import {
   Printer,
   XCircle,
   X,
-  Clock
+  Clock,
+  DollarSign,
+  Wallet,
+  RotateCcw,
+  TrendingUp,
+  FileSpreadsheet
 } from 'lucide-react';
 
 interface HistoryViewProps {
   requests: PaymentRequest[];
   currentUser?: UserProfile | null;
+  jtRates?: JtRate[];
   onOpenDetails: (request: PaymentRequest) => void;
+  onRestoreRequest?: (request: PaymentRequest) => void;
+  onOpenJtRateModal?: () => void;
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({
   requests,
   currentUser,
+  jtRates = [],
   onOpenDetails,
+  onRestoreRequest,
+  onOpenJtRateModal,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   // Predeterminado: mostrar todas las solicitudes
   const [dateFilter, setDateFilter] = useState<'all' | 'today' | 'week' | 'month' | 'custom'>('all');
+  // Filtro de estatus: todas, realizada, anulada
+  const [statusFilter, setStatusFilter] = useState<'all' | 'realizado' | 'anulado'>('all');
 
   // Paginación
   const [currentPage, setCurrentPage] = useState<number>(1);
@@ -50,6 +63,14 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     return requests.filter(r => r.status === 'realizado' || r.status === 'anulado');
   }, [requests]);
 
+  const countRealizadas = useMemo(() => {
+    return historyRequests.filter(r => r.status === 'realizado').length;
+  }, [historyRequests]);
+
+  const countAnuladas = useMemo(() => {
+    return historyRequests.filter(r => r.status === 'anulado').length;
+  }, [historyRequests]);
+
   const filteredHistory = useMemo(() => {
     const now = new Date();
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
@@ -58,6 +79,9 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
     return historyRequests
       .filter(r => {
+        // Filtro por estatus (todas / realizada / anulada)
+        if (statusFilter !== 'all' && r.status !== statusFilter) return false;
+
         // Usar la fecha real de liquidación (paid_at) o creación para el filtrado temporal
         const itemTime = new Date(r.paid_at || r.receipt_files?.[0]?.uploaded_at || r.created_at || r.updated_at).getTime();
 
@@ -98,12 +122,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
         const timeA = new Date(a.paid_at || a.receipt_files?.[0]?.uploaded_at || a.created_at || a.updated_at).getTime();
         return timeB - timeA;
       });
-  }, [historyRequests, dateFilter, startDate, endDate, searchQuery]);
+  }, [historyRequests, statusFilter, dateFilter, startDate, endDate, searchQuery]);
 
   // Reset page to 1 when filters or search change
   useEffect(() => {
     setCurrentPage(1);
-  }, [dateFilter, startDate, endDate, searchQuery, pageSize]);
+  }, [statusFilter, dateFilter, startDate, endDate, searchQuery, pageSize]);
 
   // Cálculos de paginación
   const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
@@ -218,97 +242,146 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
     <>
       {/* Vista interactiva para Pantalla */}
       <div className="space-y-4 pb-20 md:pb-8 print:hidden">
+      {/* Financial KPI Cards Grid (Admin) */}
+      {currentUser?.role === 'admin' && (
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3.5">
+          {/* Card 1: Transacciones USD Directo */}
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Transacciones USD ($)
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center">
+                <DollarSign className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <p className="text-xl sm:text-2xl font-black text-indigo-700 leading-tight">
+                {formatUSD(totalDirectUsd)}
+              </p>
+              <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                Directo en USD (Binance, Zelle, Efectivo)
+              </p>
+            </div>
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-indigo-500 to-blue-400" />
+          </div>
+
+          {/* Card 2: Total Pagado USD (Bs a Tasa) */}
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Total Pagado ($)
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <p className="text-xl sm:text-2xl font-black text-emerald-700 leading-tight">
+                {formatUSD(totalUsdFromBs)}
+              </p>
+              <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                Pagado en Bs. a Tasa BCV
+              </p>
+            </div>
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-emerald-500 to-teal-400" />
+          </div>
+
+          {/* Card 3: Total Pagado Bs */}
+          <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs relative overflow-hidden flex flex-col justify-between">
+            <div className="flex items-center justify-between">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500">
+                Total Pagado (Bs.)
+              </span>
+              <div className="w-8 h-8 rounded-xl bg-teal-50 text-[#00b4a2] flex items-center justify-center">
+                <Wallet className="w-4 h-4" />
+              </div>
+            </div>
+            <div className="mt-2">
+              <p className="text-xl sm:text-2xl font-black text-[#00b4a2] leading-tight break-words">
+                Bs. {formatBS(totalBS)}
+              </p>
+              <p className="text-[11px] font-semibold text-slate-400 mt-0.5">
+                Transferencias Bancarias y Pago Móvil
+              </p>
+            </div>
+            <div className="absolute top-0 left-0 right-0 h-1 bg-gradient-to-r from-teal-400 to-emerald-400" />
+          </div>
+        </div>
+      )}
+
       {/* Header Banner */}
-      <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200 shadow-2xs flex flex-col 2xl:flex-row 2xl:items-center justify-between gap-3 sm:gap-4 overflow-hidden">
-        <div className="shrink-0 max-w-md">
-          <div className="flex items-center gap-2 mb-1">
-            <span className="text-[11px] font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 inline-flex items-center gap-1">
-              <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600" />
-              <span>{historyRequests.length} Solicitudes Realizadas</span>
+      <div className="bg-white p-3.5 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+        <div>
+          <div className="flex items-center gap-2 mb-0.5">
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
+              <History className="w-5 h-5 text-emerald-600 shrink-0" />
+              <span>Historial de Pagos</span>
+            </h1>
+            <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
+              {filteredHistory.length} de {historyRequests.length}
             </span>
           </div>
-          <h1 className="text-lg sm:text-xl font-black text-slate-900 flex items-center gap-2">
-            <History className="w-5 h-5 text-emerald-600 shrink-0" />
-            <span>Historial de Pagos</span>
-          </h1>
-          <p className="text-xs text-slate-500 mt-0.5 leading-normal">
+          <p className="text-xs text-slate-500">
             {currentUser?.role === 'operador'
-              ? 'Historial de tus solicitudes de pago liquidadas con comprobantes bancarios de recepción.'
-              : 'Registro contable de pagos liquidados con comprobantes bancarios verificados.'}
+              ? 'Historial de tus solicitudes de pago liquidadas con comprobantes bancarios.'
+              : 'Registro contable de pagos liquidados y anulados con comprobantes bancarios verificados.'}
           </p>
         </div>
 
-        {/* Stats Summary & Export (Solo para Administradores) */}
-        {currentUser?.role === 'admin' && (
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full 2xl:w-auto justify-start 2xl:justify-end">
-            {/* 3 Metric Boxes: 1. Transacciones USD, 2. Total Pagado USD (Bs a Tasa), 3. Total Pagado Bs */}
-            <div className="w-full sm:w-auto grid grid-cols-2 sm:grid-cols-3 gap-2 sm:gap-3 bg-slate-50 p-2.5 rounded-2xl border border-slate-200 text-xs">
-              <div className="px-1 sm:px-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
-                  Transacciones USD ($)
-                </span>
-                <span className="text-indigo-700 font-black text-xs sm:text-sm md:text-base leading-tight block">
-                  {formatUSD(totalDirectUsd)}
-                </span>
-                <span className="text-[9px] text-slate-400 font-medium block whitespace-nowrap">
-                  Directo en USD
-                </span>
-              </div>
-              <div className="border-l border-slate-200 pl-2 sm:pl-3 px-1 sm:px-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
-                  Total Pagado ($)
-                </span>
-                <span className="text-emerald-700 font-black text-xs sm:text-sm md:text-base leading-tight block">
-                  {formatUSD(totalUsdFromBs)}
-                </span>
-                <span className="text-[9px] text-slate-400 font-medium block whitespace-nowrap">
-                  Pagado en Bs. a Tasa
-                </span>
-              </div>
-              <div className="col-span-2 sm:col-span-1 border-t sm:border-t-0 sm:border-l border-slate-200 pt-2 sm:pt-0 pl-1 sm:pl-3 px-1 sm:px-2">
-                <span className="text-[10px] uppercase font-bold text-slate-400 block whitespace-nowrap">
-                  Total Pagado (Bs)
-                </span>
-                <span className="text-[#00b4a2] font-black text-xs sm:text-sm md:text-base leading-tight block break-words">
-                  Bs. {formatBS(totalBS)}
-                </span>
-                <span className="text-[9px] text-slate-400 font-medium block whitespace-nowrap">
-                  Transferencias y PM
-                </span>
-              </div>
-            </div>
-
-            {/* Action Buttons */}
-            <div className="grid grid-cols-2 sm:flex sm:flex-col gap-2 sm:gap-1.5 w-full sm:w-auto shrink-0 justify-center">
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap">
+          {currentUser?.role === 'admin' && (
+            <>
               <button
-                onClick={() => exportRequestsToCSV(filteredHistory, 'TP_PAGOS_HISTORIAL')}
-                disabled={filteredHistory.length === 0}
-                className="active-press flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors whitespace-nowrap"
-                title="Descargar listado en formato Excel / CSV"
+                onClick={onOpenJtRateModal}
+                className="p-2 sm:px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-700 active-press text-white font-bold text-xs shadow-2xs transition-colors flex items-center gap-1.5"
+                title="Configurar y registrar Tasa JT del día"
               >
-                <Download className="w-3.5 h-3.5" />
-                <span>Exportar Excel</span>
+                <TrendingUp className="w-3.5 h-3.5" />
+                <span>Tasa JT</span>
               </button>
 
               <button
-                onClick={() => window.print()}
+                onClick={() => exportDifferentialReportToExcel(filteredHistory, jtRates)}
                 disabled={filteredHistory.length === 0}
-                className="active-press flex items-center justify-center gap-1.5 px-3 py-2 sm:py-1.5 rounded-xl bg-slate-900 hover:bg-slate-800 disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors whitespace-nowrap"
-                title="Imprimir reporte contable organizado"
+                className="p-2 sm:px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active-press disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors flex items-center gap-1.5"
+                title="Descargar reporte contable de diferencial a Tasa JT (Excel)"
               >
-                <Printer className="w-3.5 h-3.5" />
-                <span>Imprimir Reporte</span>
+                <FileSpreadsheet className="w-3.5 h-3.5" />
+                <span>Exportar Diferencial</span>
               </button>
-            </div>
-          </div>
-        )}
+            </>
+          )}
+
+          <button
+            onClick={() => exportRequestsToCSV(filteredHistory, 'TP_PAGOS_HISTORIAL')}
+            disabled={filteredHistory.length === 0}
+            className="p-2 sm:px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active-press disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors flex items-center gap-1.5"
+            title="Descargar listado en formato Excel / CSV"
+          >
+            <Download className="w-3.5 h-3.5" />
+            <span>Exportar Excel</span>
+          </button>
+
+          <button
+            onClick={() => window.print()}
+            disabled={filteredHistory.length === 0}
+            className="p-2 sm:px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active-press disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors flex items-center gap-1.5"
+            title="Imprimir reporte contable organizado"
+          >
+            <Printer className="w-3.5 h-3.5" />
+            <span>Imprimir Reporte</span>
+          </button>
+        </div>
       </div>
 
-      {/* Date Filter Tabs & Search Bar */}
-      <div className="bg-white p-3 sm:p-3.5 rounded-2xl border border-slate-200 shadow-2xs space-y-2.5">
-        <div className="flex flex-col lg:flex-row items-stretch lg:items-center justify-between gap-2.5">
+      {/* Search Bar and Filters */}
+      <div className="bg-white p-3 sm:p-4 rounded-2xl border border-slate-200 shadow-2xs space-y-3">
+        {/* Row 1: Search and Status Filter Pills */}
+        <div className="flex flex-col md:flex-row items-stretch md:items-center justify-between gap-2.5">
           {/* Search Input */}
-          <div className="relative flex-1 min-w-[200px]">
+          <div className="relative flex-1 min-w-[240px]">
             <Search className="w-4 h-4 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
             <input
               type="text"
@@ -327,8 +400,66 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             )}
           </div>
 
-          {/* Date Range: Desde - Hasta */}
-          <div className="flex items-center gap-1.5 flex-wrap sm:flex-nowrap shrink-0">
+          {/* Status Filter Pills: Todas | Realizadas | Anuladas */}
+          <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200 shrink-0 text-xs gap-1">
+            <button
+              type="button"
+              onClick={() => setStatusFilter('all')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'all'
+                  ? 'bg-white text-slate-900 shadow-2xs'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              <span>Todas</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                statusFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'
+              }`}>
+                {historyRequests.length}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('realizado')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'realizado'
+                  ? 'bg-emerald-600 text-white shadow-2xs'
+                  : 'text-emerald-700 hover:bg-emerald-50'
+              }`}
+            >
+              <CheckCircle2 className="w-3.5 h-3.5" />
+              <span>Realizadas</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                statusFilter === 'realizado' ? 'bg-emerald-800 text-white' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {countRealizadas}
+              </span>
+            </button>
+
+            <button
+              type="button"
+              onClick={() => setStatusFilter('anulado')}
+              className={`px-3 py-1.5 rounded-lg font-bold transition-all flex items-center gap-1.5 ${
+                statusFilter === 'anulado'
+                  ? 'bg-rose-600 text-white shadow-2xs'
+                  : 'text-rose-700 hover:bg-rose-50'
+              }`}
+            >
+              <XCircle className="w-3.5 h-3.5" />
+              <span>Anuladas</span>
+              <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
+                statusFilter === 'anulado' ? 'bg-rose-800 text-white' : 'bg-rose-100 text-rose-800'
+              }`}>
+                {countAnuladas}
+              </span>
+            </button>
+          </div>
+        </div>
+
+        {/* Row 2: Date Filters & Quick Presets */}
+        <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 pt-2 border-t border-slate-100">
+          <div className="flex items-center gap-1.5 flex-wrap">
             <div className="flex items-center gap-1 bg-slate-50 px-2.5 py-1.5 rounded-xl border border-slate-200 text-xs">
               <span className="text-[10px] font-bold text-slate-500 uppercase">Desde:</span>
               <input
@@ -370,7 +501,6 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             )}
           </div>
 
-          {/* Quick Date Filters */}
           <div className="flex items-center gap-1 shrink-0 text-xs overflow-x-auto pb-0.5 no-scrollbar">
             <button
               onClick={() => {
@@ -428,6 +558,23 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             >
               Este Mes
             </button>
+
+            {(statusFilter !== 'all' || dateFilter !== 'all' || startDate || endDate || searchQuery) && (
+              <button
+                onClick={() => {
+                  setStatusFilter('all');
+                  setDateFilter('all');
+                  setStartDate('');
+                  setEndDate('');
+                  setSearchQuery('');
+                }}
+                className="text-[11px] font-bold text-slate-500 hover:text-rose-600 hover:bg-rose-50 px-2 py-1 rounded-lg transition-colors ml-1 flex items-center gap-1"
+                title="Restablecer todos los filtros"
+              >
+                <X className="w-3 h-3" />
+                <span>Limpiar</span>
+              </button>
+            )}
           </div>
         </div>
       </div>
@@ -561,13 +708,26 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
 
                 {/* Right Actions */}
                 <div className="flex items-center gap-1.5 shrink-0 md:flex-col md:items-end">
-                  <button
-                    onClick={() => onOpenDetails(req)}
-                    className="active-press px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 border border-slate-200"
-                  >
-                    <Eye className="w-3.5 h-3.5 text-slate-500" />
-                    <span>Ver Ficha</span>
-                  </button>
+                  <div className="flex items-center gap-1.5">
+                    <button
+                      onClick={() => onOpenDetails(req)}
+                      className="active-press px-3 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 border border-slate-200"
+                    >
+                      <Eye className="w-3.5 h-3.5 text-slate-500" />
+                      <span>Ver Ficha</span>
+                    </button>
+
+                    {req.status === 'anulado' && onRestoreRequest && (
+                      <button
+                        onClick={() => onRestoreRequest(req)}
+                        className="active-press px-3 py-1.5 rounded-xl bg-sky-50 hover:bg-sky-100 text-sky-700 hover:text-sky-800 font-bold text-xs flex items-center gap-1.5 border border-sky-200 shadow-2xs transition-all"
+                        title="Restaurar esta solicitud a la Bandeja de Entrada"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-sky-600" />
+                        <span>Restaurar</span>
+                      </button>
+                    )}
+                  </div>
 
                   {(() => {
                     const receipts = getRequestReceiptFiles(req);
