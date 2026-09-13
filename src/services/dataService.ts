@@ -45,6 +45,9 @@ function getLocalRequests(): PaymentRequest[] {
   const deletedIds = getDeletedRequestIds();
   const stored = localStorage.getItem(REQUESTS_STORAGE_KEY);
   if (!stored) {
+    if (isSupabaseConfigured) {
+      return [];
+    }
     const initialized = INITIAL_REQUESTS
       .filter(req => !deletedIds.has(req.id))
       .map(req => ({
@@ -57,13 +60,16 @@ function getLocalRequests(): PaymentRequest[] {
   try {
     const parsed: PaymentRequest[] = JSON.parse(stored);
     return parsed
-      .filter(req => !deletedIds.has(req.id))
+      .filter(req => {
+        if (isSupabaseConfigured && req.id.startsWith('req-')) return false;
+        return !deletedIds.has(req.id);
+      })
       .map(req => ({
         ...req,
         creator_name: req.creator_name || userMap.get(req.created_by) || 'Usuario'
       }));
   } catch (e) {
-    return INITIAL_REQUESTS.filter(req => !deletedIds.has(req.id));
+    return isSupabaseConfigured ? [] : INITIAL_REQUESTS.filter(req => !deletedIds.has(req.id));
   }
 }
 
@@ -372,10 +378,11 @@ export async function fetchPaymentRequests(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      // 🚀 OPTIMIZACIÓN DE EGRESS / ANCHO DE BANDA:
-      // Si no es un refresco forzado y ya hay datos en caché local,
-      // realizamos Delta Sync (consultar SOLAMENTE lo que cambió o se creó recientemente)
-      if (!forceRefresh && localRequests.length > 0) {
+      // 🚀 OPTIMIZACIÓN DE EGRESS CON RECONCILIACIÓN ACTIVA:
+      // Si no es un refresco forzado y ya hay datos válidos en caché local (sin datos mock):
+      const hasValidLocalCache = !forceRefresh && localRequests.length > 0 && localRequests.every(r => !r.id.startsWith('req-'));
+
+      if (hasValidLocalCache) {
         let latestTimestamp = '1970-01-01T00:00:00.000Z';
         for (const r of localRequests) {
           const t = r.updated_at || r.created_at;
@@ -392,26 +399,60 @@ export async function fetchPaymentRequests(
           deltaQuery = deltaQuery.eq('created_by', _currentUser.id);
         }
 
-        const { data: deltaData, error: deltaError } = await deltaQuery;
+        // Consultar únicamente IDs y estados de solicitudes activas para detectar eliminaciones o cambios de estado
+        let activeQuery = supabase
+          .from('payment_requests')
+          .select('id, status')
+          .in('status', ['en_proceso', 'urgente']);
 
-        if (!deltaError) {
-          if (deltaData && deltaData.length > 0) {
-            const deltaMap = new Map(
-              deltaData.map((item: any) => [item.id, normalizePaymentRequest(item, undefined, _currentUser)])
-            );
-            const merged = [
-              ...Array.from(deltaMap.values()),
-              ...localRequests.filter(r => !deltaMap.has(r.id))
-            ];
-            setLocalRequests(merged);
-          }
-          // Retornar lista combinada sin haber descargado toda la base de datos
-          return getCachedPaymentRequests(_currentUser);
+        if (_currentUser && _currentUser.role === 'operador') {
+          activeQuery = activeQuery.eq('created_by', _currentUser.id);
         }
-        console.warn('Delta sync fallback to full query:', deltaError.message);
+
+        const [{ data: deltaData, error: deltaError }, { data: activeData, error: activeError }] = await Promise.all([
+          deltaQuery,
+          activeQuery
+        ]);
+
+        if (!deltaError && !activeError && activeData) {
+          const deltaMap = new Map(
+            (deltaData || []).map((item: any) => [item.id, normalizePaymentRequest(item, undefined, _currentUser)])
+          );
+
+          let merged = [
+            ...Array.from(deltaMap.values()),
+            ...localRequests.filter(r => !deltaMap.has(r.id))
+          ];
+
+          const activeMap = new Map(activeData.map(a => [a.id, a.status]));
+          let needsFullRefresh = false;
+
+          merged = merged.map(r => {
+            const serverStatus = activeMap.get(r.id);
+            if (serverStatus && r.status !== serverStatus) {
+              return { ...r, status: serverStatus };
+            }
+            if (!serverStatus && (r.status === 'en_proceso' || r.status === 'urgente')) {
+              needsFullRefresh = true;
+            }
+            return r;
+          });
+
+          const localIdSet = new Set(merged.map(r => r.id));
+          const hasMissingActive = activeData.some(a => !localIdSet.has(a.id));
+          if (hasMissingActive) {
+            needsFullRefresh = true;
+          }
+
+          if (!needsFullRefresh) {
+            setLocalRequests(merged);
+            return getCachedPaymentRequests(_currentUser);
+          }
+        }
+        console.warn('Delta sync detectó desfase con el servidor, ejecutando reconciliación completa...');
       }
 
-      // Si es primera carga (caché vacía) o el usuario presionó "Refrescar" explícitamente:
+      // Consulta completa de Supabase (fuente de verdad definitiva)
       let query = supabase
         .from('payment_requests')
         .select('*, profiles:created_by(full_name, username)')
@@ -776,11 +817,12 @@ export async function createPaymentRequest(
           creatorFullName
       };
     } catch (supabaseErr: any) {
-      console.warn('Could not insert to Supabase, saving locally:', supabaseErr.message);
+      console.error('Error insertando solicitud en Supabase:', supabaseErr);
+      throw new Error(`No se pudo guardar la solicitud en el servidor: ${supabaseErr.message || supabaseErr}. Por favor verifica tu conexión e intenta de nuevo.`);
     }
   }
 
-  // Local Storage Fallback
+  // Local Storage Fallback SOLO si Supabase no está configurado (modo sin backend)
   const requests = getLocalRequests();
   const nextReqNum =
     (requests.length > 0 ? Math.max(...requests.map(r => r.request_number)) : 10) + 1;
@@ -912,12 +954,13 @@ export async function updateRequestStatus(
         }
         return normalized;
       }
-    } catch (e) {
-      console.warn('Supabase updateRequestStatus fallback to local:', e);
+    } catch (e: any) {
+      console.error('Supabase updateRequestStatus error:', e);
+      throw new Error(`No se pudo actualizar el estado en el servidor: ${e.message || e}. Por favor intenta de nuevo.`);
     }
   }
 
-  // Local fallback
+  // Local fallback SOLO si Supabase no está configurado (modo sin backend)
   const requests = getLocalRequests();
   const index = requests.findIndex(r => r.id === requestId);
   if (index === -1) throw new Error('Solicitud no encontrada');
@@ -1571,12 +1614,13 @@ export async function updatePaymentRequest(
             currentUser.full_name
         };
       }
-    } catch (e) {
-      console.warn('Supabase updatePaymentRequest fallback to local:', e);
+    } catch (e: any) {
+      console.error('Supabase updatePaymentRequest error:', e);
+      throw new Error(`No se pudo actualizar la solicitud en el servidor: ${e.message || e}. Por favor intenta de nuevo.`);
     }
   }
 
-  // Local Storage Fallback
+  // Local Storage Fallback SOLO si Supabase no está configurado (modo sin backend)
   const index = requests.findIndex(r => r.id === requestId);
   if (index === -1) throw new Error('Solicitud no encontrada');
 
@@ -1913,24 +1957,25 @@ export async function deletePaymentRequest(
     throw new Error('No se pueden eliminar solicitudes que ya están en estado Realizado.');
   }
 
-  // 1. Mark as permanently deleted in local blacklist
-  addDeletedRequestId(requestId);
-
-  // 2. Remove from local storage array
-  const filtered = requests.filter(r => r.id !== requestId);
-  setLocalRequests(filtered);
-
-  // 3. Delete from Supabase if configured
+  // 1. Delete from Supabase if configured
   if (isSupabaseConfigured && supabase) {
     try {
       const { error } = await supabase.from('payment_requests').delete().eq('id', requestId);
       if (error) {
-        console.warn('Supabase deletePaymentRequest warning:', error.message);
+        throw new Error(`Error al eliminar en el servidor: ${error.message}`);
       }
-    } catch (e) {
-      console.warn('Supabase deletePaymentRequest fallback to local:', e);
+    } catch (e: any) {
+      console.error('Supabase deletePaymentRequest error:', e);
+      throw new Error(`No se pudo eliminar la solicitud en el servidor: ${e.message || e}. Por favor intenta de nuevo.`);
     }
   }
+
+  // 2. Mark as permanently deleted in local blacklist
+  addDeletedRequestId(requestId);
+
+  // 3. Remove from local storage array
+  const filtered = requests.filter(r => r.id !== requestId);
+  setLocalRequests(filtered);
 }
 
 // Analytics and Metrics Helper

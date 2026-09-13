@@ -411,6 +411,32 @@ export function App() {
     };
   }, [currentUser, requests]);
 
+  // Auto-sincronización inteligente al volver a la pestaña o desbloquear el dispositivo
+  useEffect(() => {
+    if (!currentUser) return;
+
+    let lastSyncTime = Date.now();
+
+    const handleResume = () => {
+      if (document.visibilityState === 'visible') {
+        const now = Date.now();
+        // Si transcurrieron más de 10 segundos desde la última sincronización, conciliar con el servidor
+        if (now - lastSyncTime > 10000) {
+          lastSyncTime = now;
+          loadRequests(currentUser, false);
+        }
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleResume);
+    window.addEventListener('focus', handleResume);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleResume);
+      window.removeEventListener('focus', handleResume);
+    };
+  }, [currentUser]);
+
   // Fetch payment requests and beneficiaries when currentUser changes or user refreshes
   const loadRequests = async (user: UserProfile, forceRefresh = false) => {
     try {
