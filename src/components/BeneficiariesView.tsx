@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { Beneficiary, ServiceCategory } from '../types';
+import { notificationService } from '../services/notificationService';
 import {
   Building2,
   Search,
@@ -63,6 +64,7 @@ export const BeneficiariesView: React.FC<BeneficiariesViewProps> = ({
     if (b.bank_details.zelle_email) textToCopy += `\nZelle Email: ${b.bank_details.zelle_email}`;
 
     navigator.clipboard.writeText(textToCopy);
+    notificationService.triggerHaptic('light');
     setCopiedId(b.id);
     setTimeout(() => setCopiedId(null), 2000);
   };

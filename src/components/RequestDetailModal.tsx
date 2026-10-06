@@ -148,11 +148,11 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
       val
     );
 
-  const isDirectUsd = request.currency === 'USD' || request.bcv_rate === 0;
+  const isDirectUsd = request.currency === 'USD';
   const displayUsd =
     request.amount_usd > 0
       ? request.amount_usd
-      : request.amount_bs > 0 && request.bcv_rate > 0
+      : request.amount_bs > 0 && request.bcv_rate && request.bcv_rate > 0
       ? Number((request.amount_bs / request.bcv_rate).toFixed(2))
       : 0;
   const category = request.category || 'hospedaje';

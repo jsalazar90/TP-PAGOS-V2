@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { PaymentRequest, UserProfile } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { getRequestReceiptFiles, getRequestSupportFiles } from '../services/dataService';
+import { notificationService } from '../services/notificationService';
 import {
   Building2,
   User,
@@ -64,11 +65,11 @@ export const RequestCard: React.FC<RequestCardProps> = ({
   const [copiedBank, setCopiedBank] = useState(false);
   const [copiedLoc, setCopiedLoc] = useState(false);
 
-  const isDirectUsd = request.currency === 'USD' || request.bcv_rate === 0;
+  const isDirectUsd = request.currency === 'USD';
   const displayUsd =
     request.amount_usd > 0
       ? request.amount_usd
-      : request.amount_bs > 0 && request.bcv_rate > 0
+      : request.amount_bs > 0 && request.bcv_rate && request.bcv_rate > 0
       ? Number((request.amount_bs / request.bcv_rate).toFixed(2))
       : 0;
   const canDelete =
@@ -77,6 +78,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
 
   const handleCopyLocator = () => {
     navigator.clipboard.writeText(request.locator);
+    notificationService.triggerHaptic('light');
     setCopiedLoc(true);
     setTimeout(() => setCopiedLoc(false), 2000);
   };
@@ -126,6 +128,7 @@ export const RequestCard: React.FC<RequestCardProps> = ({
     }
 
     navigator.clipboard.writeText(textToCopy);
+    notificationService.triggerHaptic('light');
     setCopiedBank(true);
     setTimeout(() => setCopiedBank(false), 2500);
   };
@@ -315,22 +318,22 @@ export const RequestCard: React.FC<RequestCardProps> = ({
             {/* Payment Method Badge */}
             {request.bank_details.payment_method === 'binance' ||
             request.bank_details.binance_email ? (
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-amber-50 text-amber-900 border border-amber-300 flex items-center gap-1">
-                <QrCode className="w-3 h-3 text-amber-700" /> Binance Pay
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-amber-800 border border-amber-200/60 flex items-center gap-1">
+                <QrCode className="w-3 h-3 text-amber-600" /> Binance
               </span>
             ) : request.bank_details.payment_method === 'pago_movil' ? (
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-teal-50 text-teal-900 border border-teal-300 flex items-center gap-1">
-                <Smartphone className="w-3 h-3 text-teal-700" /> Pago Móvil
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-teal-800 border border-teal-200/60 flex items-center gap-1">
+                <Smartphone className="w-3 h-3 text-teal-600" /> Pago Móvil
               </span>
             ) : request.bank_details.payment_method === 'zelle_usd' ||
               request.bank_details.zelle_email ? (
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-900 border border-emerald-300 flex items-center gap-1">
-                <DollarSign className="w-3 h-3 text-emerald-700" /> Zelle / USD
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-emerald-800 border border-emerald-200/60 flex items-center gap-1">
+                <DollarSign className="w-3 h-3 text-emerald-600" /> Zelle
               </span>
             ) : request.bank_details.payment_method === 'efectivo_usd' ||
               request.bank_details.payment_method === 'efectivo_bs' ? (
-              <span className="text-[10px] font-extrabold px-2 py-0.5 rounded-full bg-slate-100 text-slate-800 border border-slate-300 flex items-center gap-1">
-                <Banknote className="w-3 h-3 text-slate-600" /> Efectivo
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-slate-700 border border-slate-200 flex items-center gap-1">
+                <Banknote className="w-3 h-3 text-slate-500" /> Efectivo
               </span>
             ) : null}
 
@@ -477,58 +480,110 @@ export const RequestCard: React.FC<RequestCardProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Action Buttons */}
-        <div className="flex items-center gap-1.5 shrink-0 md:flex-col md:items-end justify-between md:justify-center">
-          <div className="flex flex-wrap items-center gap-1.5">
+        {/* Right Column: Responsive Action Buttons */}
+        <div className="pt-2 border-t border-slate-100 md:border-t-0 md:pt-0 flex items-center justify-between md:flex-col md:items-end md:justify-center gap-2 shrink-0">
+          {/* Quick Bank Details Drawer Toggle Pill */}
+          <button
+            onClick={() => setShowBankDetails(!showBankDetails)}
+            className="text-xs font-bold text-teal-800 hover:text-teal-900 flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-teal-50 hover:bg-teal-100/80 border border-teal-200/90 transition-all shrink-0 active-press shadow-2xs"
+            title="Ver datos bancarios o billetera para pagar"
+          >
+            {request.bank_details.payment_method === 'binance' ? (
+              <QrCode className="w-3.5 h-3.5 text-amber-600" />
+            ) : request.bank_details.payment_method === 'pago_movil' ? (
+              <Smartphone className="w-3.5 h-3.5 text-teal-600" />
+            ) : (
+              <Landmark className="w-3.5 h-3.5 text-[#00b4a2]" />
+            )}
+            <span>Datos Bancarios</span>
+            {showBankDetails ? (
+              <ChevronUp className="w-3.5 h-3.5 text-teal-700" />
+            ) : (
+              <ChevronDown className="w-3.5 h-3.5 text-teal-700" />
+            )}
+          </button>
+
+          {/* Action Buttons Cluster */}
+          <div className="flex items-center gap-1.5 shrink-0">
+            {/* Primary / Manage Button (Admin) */}
+            {currentUser.role === 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && (
+              <button
+                onClick={() => onOpenStatusModal(request)}
+                className="active-press px-3 py-1.5 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors shrink-0"
+              >
+                {request.status === 'en_proceso' && <RefreshCw className="w-3.5 h-3.5" />}
+                {request.status === 'urgente' && (
+                  <AlertTriangle className="w-3.5 h-3.5 text-yellow-200 animate-pulse" />
+                )}
+                <span>Gestionar</span>
+              </button>
+            )}
+
+            {/* View Details Button */}
             <button
               onClick={() => onOpenDetails(request)}
-              className="active-press px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 border border-slate-200 transition-colors"
+              className="active-press px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 border border-slate-200 transition-colors shrink-0"
+              title="Ver ficha completa y soportes"
             >
               <Eye className="w-3.5 h-3.5 text-slate-500" />
-              <span>Ver Ficha</span>
+              <span className="hidden sm:inline">Ver Ficha</span>
+              <span className="sm:hidden">Ficha</span>
             </button>
 
+            {/* Admin Edit Button */}
             {currentUser.role === 'admin' && onEditRequest && (
               <button
                 onClick={() => onEditRequest(request)}
                 title="Editar solicitud"
-                className="active-press px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1 border border-amber-200 transition-colors"
+                className="active-press p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1 border border-amber-200 transition-colors shrink-0"
               >
                 <Pencil className="w-3.5 h-3.5 text-amber-600" />
-                <span>Editar</span>
+                <span className="hidden sm:inline">Editar</span>
               </button>
             )}
 
+            {/* Non-admin Request Modification / Cancellation */}
             {currentUser.role !== 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && (
               <>
                 <button
                   onClick={() => onRequestModification && onRequestModification(request)}
                   title="Pedir modificación al administrador"
-                  className={`active-press px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors ${
+                  className={`active-press px-2 py-1.5 sm:px-2.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors shrink-0 ${
                     request.modification_requested
-                      ? 'bg-amber-100 hover:bg-amber-200 text-amber-900 border-amber-300'
+                      ? 'bg-amber-100 text-amber-900 border-amber-300'
                       : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200'
                   }`}
                 >
                   <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                  <span>{request.modification_requested ? 'Modificación Solicitada' : 'Pedir Modificación'}</span>
+                  <span className="hidden sm:inline">
+                    {request.modification_requested ? 'Modificación Solicitada' : 'Pedir Modificación'}
+                  </span>
+                  <span className="sm:hidden">
+                    {request.modification_requested ? 'Modif.' : 'Modificar'}
+                  </span>
                 </button>
 
                 <button
                   onClick={() => onRequestCancellation && onRequestCancellation(request)}
                   title="Solicitar anulación al administrador"
-                  className={`active-press px-2.5 py-1.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors ${
+                  className={`active-press px-2 py-1.5 sm:px-2.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors shrink-0 ${
                     request.cancellation_requested
-                      ? 'bg-rose-100 hover:bg-rose-200 text-rose-900 border-rose-300'
+                      ? 'bg-rose-100 text-rose-900 border-rose-300'
                       : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
                   }`}
                 >
                   <Ban className="w-3.5 h-3.5 text-rose-600" />
-                  <span>{request.cancellation_requested ? 'Anulación Solicitada' : 'Solicitar Anulación'}</span>
+                  <span className="hidden sm:inline">
+                    {request.cancellation_requested ? 'Anulación Solicitada' : 'Solicitar Anulación'}
+                  </span>
+                  <span className="sm:hidden">
+                    {request.cancellation_requested ? 'Anul.' : 'Anular'}
+                  </span>
                 </button>
               </>
             )}
 
+            {/* Admin Delete Button */}
             {canDelete && onDeleteRequest && (
               <button
                 onClick={() => {
@@ -539,45 +594,12 @@ export const RequestCard: React.FC<RequestCardProps> = ({
                   }
                 }}
                 title="Eliminar solicitud (Solo Administradores)"
-                className="active-press p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors"
+                className="active-press p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors shrink-0"
               >
                 <Trash2 className="w-3.5 h-3.5 text-rose-600" />
               </button>
             )}
-
-            {currentUser.role === 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && (
-              <button
-                onClick={() => onOpenStatusModal(request)}
-                className="active-press px-3.5 py-1.5 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors"
-              >
-                {request.status === 'en_proceso' && <RefreshCw className="w-3.5 h-3.5" />}
-                {request.status === 'urgente' && (
-                  <AlertTriangle className="w-3.5 h-3.5 text-yellow-200 animate-pulse" />
-                )}
-                <span>Gestionar</span>
-              </button>
-            )}
           </div>
-
-          {/* Quick Bank Details Drawer Button */}
-          <button
-            onClick={() => setShowBankDetails(!showBankDetails)}
-            className="text-[11px] font-bold text-teal-800 hover:text-teal-900 flex items-center gap-1 py-0.5 px-2 rounded-lg bg-teal-50 hover:bg-teal-100 border border-teal-200 transition-colors"
-          >
-            {request.bank_details.payment_method === 'binance' ? (
-              <QrCode className="w-3 h-3 text-amber-600" />
-            ) : request.bank_details.payment_method === 'pago_movil' ? (
-              <Smartphone className="w-3 h-3 text-teal-600" />
-            ) : (
-              <Landmark className="w-3 h-3 text-[#00b4a2]" />
-            )}
-            <span>Datos Bancarios</span>
-            {showBankDetails ? (
-              <ChevronUp className="w-3 h-3" />
-            ) : (
-              <ChevronDown className="w-3 h-3" />
-            )}
-          </button>
         </div>
       </div>
 

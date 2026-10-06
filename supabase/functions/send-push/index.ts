@@ -73,11 +73,17 @@ serve(async (req) => {
       url = body.url || url;
     }
 
-    // 2. Obtener todas las suscripciones de los administradores
-    const { data: subscriptions, error: subError } = await supabase
+    // 2. Obtener todas las suscripciones según el destinatario objetivo
+    const target = body.target || 'admins';
+    let subQuery = supabase
       .from('push_subscriptions')
-      .select('id, endpoint, p256dh, auth')
-      .eq('user_role', 'admin');
+      .select('id, endpoint, p256dh, auth');
+
+    if (target === 'admins') {
+      subQuery = subQuery.eq('user_role', 'admin');
+    }
+
+    const { data: subscriptions, error: subError } = await subQuery;
 
     if (subError) {
       throw new Error(`Error al leer suscripciones: ${subError.message}`);
@@ -85,7 +91,7 @@ serve(async (req) => {
 
     if (!subscriptions || subscriptions.length === 0) {
       return new Response(
-        JSON.stringify({ message: 'No hay administradores suscritos a notificaciones push actualmente.' }),
+        JSON.stringify({ message: `No hay suscripciones activas para el objetivo: ${target}.` }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }

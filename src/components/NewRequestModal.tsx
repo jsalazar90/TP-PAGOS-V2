@@ -9,6 +9,7 @@ import {
   Beneficiary
 } from '../types';
 import { fetchBeneficiaries } from '../services/dataService';
+import { notificationService } from '../services/notificationService';
 import { FilePreviewModal } from './FilePreviewModal';
 import { BeneficiaryPickerModal } from './BeneficiaryPickerModal';
 import {
@@ -1163,9 +1164,14 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         },
         support_file: supportFile,
       });
+
+      // Feedback háptico de éxito
+      notificationService.triggerHaptic(isUrgent ? 'urgent' : 'success');
+
       resetForm();
       onClose();
     } catch (err: any) {
+      notificationService.triggerHaptic('error');
       setErrorMsg(err.message || 'Error al guardar la solicitud');
     } finally {
       setLoading(false);

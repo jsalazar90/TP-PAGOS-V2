@@ -108,6 +108,50 @@ class NotificationService {
     }
   }
 
+  // Feedback háptico inteligente (Web Vibration API para Smartphones Android / PWA)
+  public triggerHaptic(
+    type: 'light' | 'medium' | 'heavy' | 'success' | 'urgent' | 'warning' | 'error' = 'medium'
+  ) {
+    if (typeof window === 'undefined' || !('vibrate' in navigator)) {
+      return;
+    }
+
+    try {
+      switch (type) {
+        case 'light':
+          // Toque fino para copiado, toggles y acciones rápidas
+          navigator.vibrate(30);
+          break;
+        case 'medium':
+          // Toque estándar de confirmación
+          navigator.vibrate(60);
+          break;
+        case 'heavy':
+          // Toque firme para botones de alto impacto
+          navigator.vibrate(100);
+          break;
+        case 'success':
+          // Vibración suave ascendente para pagos liquidados con éxito
+          navigator.vibrate([40, 50, 100]);
+          break;
+        case 'urgent':
+          // Alerta táctil insistente con patrón de doble pulso para solicitudes urgentes
+          navigator.vibrate([150, 80, 150, 80, 250]);
+          break;
+        case 'warning':
+          // Doble pulso de aviso para modificaciones o anulaciones
+          navigator.vibrate([80, 40, 80]);
+          break;
+        case 'error':
+          // Patrón de rechazo para fallos o cancelaciones
+          navigator.vibrate([60, 40, 60, 40, 80]);
+          break;
+      }
+    } catch (e) {
+      // Silenciar si el navegador tiene la vibración deshabilitada por el sistema operativo
+    }
+  }
+
   // Verificar si las notificaciones estándar están soportadas
   public isSupported(): boolean {
     return 'Notification' in window;
@@ -288,15 +332,16 @@ class NotificationService {
       soundType?: 'new_request' | 'modification' | 'urgent' | 'paid';
     }
   ): Promise<boolean> {
-    // 1. Reproducir sonido y vibración
+    // 1. Reproducir sonido y vibración háptica según tipo de alerta
     this.playChime(options.soundType || 'new_request');
-    if ('vibrate' in navigator) {
-      try {
-        navigator.vibrate([200, 100, 200]);
-      } catch (e) {
-        // Ignore vibration errors
-      }
-    }
+    const hapticType = options.soundType === 'urgent'
+      ? 'urgent'
+      : options.soundType === 'paid'
+      ? 'success'
+      : options.soundType === 'modification'
+      ? 'warning'
+      : 'medium';
+    this.triggerHaptic(hapticType);
 
     if (!this.isSupported() || Notification.permission !== 'granted') {
       return false;

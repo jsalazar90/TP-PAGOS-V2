@@ -1,7 +1,14 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { PaymentRequest, UserProfile, JtRate } from '../types';
 import { StatusBadge } from './StatusBadge';
-import { exportRequestsToCSV, exportDifferentialReportToExcel, getRequestReceiptFiles } from '../services/dataService';
+import {
+  exportRequestsToCSV,
+  exportDifferentialReportToExcel,
+  getRequestReceiptFiles,
+  fetchHistoricalPaymentRequests,
+  fetchHistoricalExportData,
+  HistoryStats
+} from '../services/dataService';
 import {
   History,
   Search,
@@ -27,27 +34,30 @@ import {
   Wallet,
   RotateCcw,
   TrendingUp,
-  FileSpreadsheet
+  FileSpreadsheet,
+  Loader2
 } from 'lucide-react';
 
 interface HistoryViewProps {
-  requests: PaymentRequest[];
+  requests?: PaymentRequest[];
   currentUser?: UserProfile | null;
   jtRates?: JtRate[];
   onOpenDetails: (request: PaymentRequest) => void;
   onRestoreRequest?: (request: PaymentRequest) => void;
   onOpenJtRateModal?: () => void;
+  refreshTrigger?: number;
 }
 
 export const HistoryView: React.FC<HistoryViewProps> = ({
-  requests,
   currentUser,
   jtRates = [],
   onOpenDetails,
   onRestoreRequest,
   onOpenJtRateModal,
+  refreshTrigger = 0,
 }) => {
   const [searchQuery, setSearchQuery] = useState('');
+  const [debouncedSearchQuery, setDebouncedSearchQuery] = useState('');
   const [startDate, setStartDate] = useState('');
   const [endDate, setEndDate] = useState('');
   // Predeterminado: mostrar todas las solicitudes
@@ -55,163 +65,136 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
   // Filtro de estatus: todas, realizada, anulada
   const [statusFilter, setStatusFilter] = useState<'all' | 'realizado' | 'anulado'>('all');
 
-  // Paginación
+  // Paginación Servidor
   const [currentPage, setCurrentPage] = useState<number>(1);
   const [pageSize, setPageSize] = useState<number>(20);
 
-  const historyRequests = useMemo(() => {
-    return requests.filter(r => r.status === 'realizado' || r.status === 'anulado');
-  }, [requests]);
+  // Estados de datos históricos
+  const [historyData, setHistoryData] = useState<PaymentRequest[]>([]);
+  const [totalCount, setTotalCount] = useState<number>(0);
+  const [totalPages, setTotalPages] = useState<number>(1);
+  const [loading, setLoading] = useState<boolean>(true);
+  const [isExporting, setIsExporting] = useState<boolean>(false);
+  const [stats, setStats] = useState<HistoryStats>({
+    countRealizadas: 0,
+    countAnuladas: 0,
+    totalDirectUsd: 0,
+    totalUsdFromBs: 0,
+    totalUSD: 0,
+    totalBS: 0
+  });
 
-  const countRealizadas = useMemo(() => {
-    return historyRequests.filter(r => r.status === 'realizado').length;
-  }, [historyRequests]);
+  // Debounce para búsqueda textual (300ms)
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedSearchQuery(searchQuery);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
 
-  const countAnuladas = useMemo(() => {
-    return historyRequests.filter(r => r.status === 'anulado').length;
-  }, [historyRequests]);
-
-  const filteredHistory = useMemo(() => {
-    const now = new Date();
-    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
-    const startOfWeek = startOfToday - now.getDay() * 24 * 60 * 60 * 1000;
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).getTime();
-
-    return historyRequests
-      .filter(r => {
-        // Filtro por estatus (todas / realizada / anulada)
-        if (statusFilter !== 'all' && r.status !== statusFilter) return false;
-
-        // Usar la fecha real de liquidación (paid_at) o creación para el filtrado temporal
-        const itemTime = new Date(r.paid_at || r.receipt_files?.[0]?.uploaded_at || r.created_at || r.updated_at).getTime();
-
-        // Filtro por rango manual Desde - Hasta
-        if (startDate) {
-          const startMs = new Date(startDate + 'T00:00:00').getTime();
-          if (itemTime < startMs) return false;
-        }
-        if (endDate) {
-          const endMs = new Date(endDate + 'T23:59:59.999').getTime();
-          if (itemTime > endMs) return false;
-        }
-
-        // Filtro rápido por períodos preestablecidos (si no hay rango manual)
-        if (!startDate && !endDate) {
-          if (dateFilter === 'today' && itemTime < startOfToday) return false;
-          if (dateFilter === 'week' && itemTime < startOfWeek) return false;
-          if (dateFilter === 'month' && itemTime < startOfMonth) return false;
-        }
-
-        if (searchQuery.trim()) {
-          const q = searchQuery.toLowerCase();
-          return (
-            (r.title || '').toLowerCase().includes(q) ||
-            (r.hotel_name || '').toLowerCase().includes(q) ||
-            (r.guest_name || '').toLowerCase().includes(q) ||
-            (r.guest_ci || '').toLowerCase().includes(q) ||
-            (r.locator || '').toLowerCase().includes(q) ||
-            (r.client || '').toLowerCase().includes(q) ||
-            (r.route_from_to || '').toLowerCase().includes(q) ||
-            (r.creator_name || '').toLowerCase().includes(q)
-          );
-        }
-        return true;
-      })
-      .sort((a, b) => {
-        const timeB = new Date(b.paid_at || b.receipt_files?.[0]?.uploaded_at || b.created_at || b.updated_at).getTime();
-        const timeA = new Date(a.paid_at || a.receipt_files?.[0]?.uploaded_at || a.created_at || a.updated_at).getTime();
-        return timeB - timeA;
-      });
-  }, [historyRequests, statusFilter, dateFilter, startDate, endDate, searchQuery]);
-
-  // Reset page to 1 when filters or search change
+  // Resetear a página 1 cuando cambian los filtros
   useEffect(() => {
     setCurrentPage(1);
-  }, [statusFilter, dateFilter, startDate, endDate, searchQuery, pageSize]);
+  }, [statusFilter, dateFilter, startDate, endDate, debouncedSearchQuery, pageSize]);
 
-  // Cálculos de paginación
-  const totalPages = Math.max(1, Math.ceil(filteredHistory.length / pageSize));
-  const startIndex = (currentPage - 1) * pageSize;
-  const endIndex = Math.min(startIndex + pageSize, filteredHistory.length);
+  // Cargar datos históricos paginados del servidor
+  useEffect(() => {
+    let isMounted = true;
+    const loadHistory = async () => {
+      setLoading(true);
+      try {
+        const res = await fetchHistoricalPaymentRequests({
+          page: currentPage,
+          pageSize,
+          status: statusFilter,
+          search: debouncedSearchQuery,
+          startDate,
+          endDate,
+          dateFilter,
+          currentUser
+        });
 
-  const paginatedRequests = useMemo(() => {
-    return filteredHistory.slice(startIndex, startIndex + pageSize);
-  }, [filteredHistory, startIndex, pageSize]);
+        if (isMounted) {
+          setHistoryData(res.data);
+          setTotalCount(res.totalCount);
+          setTotalPages(res.totalPages);
+          setStats(res.stats);
+        }
+      } catch (err) {
+        console.error('Error cargando historial de pagos:', err);
+      } finally {
+        if (isMounted) setLoading(false);
+      }
+    };
 
-  // Total Dólares equivalentes de pagos pagados en Bolívares mediante tasa
-  const totalUsdFromBs = useMemo(() => {
-    return filteredHistory.reduce((acc, r) => {
-      if (r.status === 'anulado') return acc;
-      const isDirectUsd =
-        r.currency === 'USD' ||
-        r.bank_details?.payment_method === 'binance' ||
-        r.bank_details?.payment_method === 'zelle_usd' ||
-        r.bank_details?.payment_method === 'efectivo_usd' ||
-        !r.bcv_rate ||
-        r.bcv_rate === 0;
-      if (isDirectUsd) return acc;
-      const usdVal =
-        r.amount_usd > 0
-          ? r.amount_usd
-          : r.amount_bs > 0 && r.bcv_rate > 0
-          ? r.amount_bs / r.bcv_rate
-          : 0;
-      return acc + usdVal;
-    }, 0);
-  }, [filteredHistory]);
+    loadHistory();
+    return () => {
+      isMounted = false;
+    };
+  }, [currentPage, pageSize, statusFilter, dateFilter, startDate, endDate, debouncedSearchQuery, currentUser, refreshTrigger]);
 
-  // Total Dólares pagados directamente mediante transacciones en USD
-  const totalDirectUsd = useMemo(() => {
-    return filteredHistory.reduce((acc, r) => {
-      if (r.status === 'anulado') return acc;
-      const isDirectUsd =
-        r.currency === 'USD' ||
-        r.bank_details?.payment_method === 'binance' ||
-        r.bank_details?.payment_method === 'zelle_usd' ||
-        r.bank_details?.payment_method === 'efectivo_usd' ||
-        !r.bcv_rate ||
-        r.bcv_rate === 0;
-      if (!isDirectUsd) return acc;
-      return acc + (r.amount_usd || 0);
-    }, 0);
-  }, [filteredHistory]);
+  const countRealizadas = stats.countRealizadas;
+  const countAnuladas = stats.countAnuladas;
+  const totalDirectUsd = stats.totalDirectUsd;
+  const totalUsdFromBs = stats.totalUsdFromBs;
+  const totalUSD = stats.totalUSD;
+  const totalBS = stats.totalBS;
 
-  const totalUSD = useMemo(() => {
-    return totalUsdFromBs + totalDirectUsd;
-  }, [totalUsdFromBs, totalDirectUsd]);
+  // Manejadores de exportación masiva con datos filtrados completos
+  const handleExportExcel = async () => {
+    try {
+      setIsExporting(true);
+      const dataToExport = await fetchHistoricalExportData({
+        status: statusFilter,
+        search: debouncedSearchQuery,
+        startDate,
+        endDate,
+        dateFilter,
+        currentUser
+      });
+      exportRequestsToCSV(dataToExport, 'TP_PAGOS_HISTORIAL');
+    } catch (e) {
+      console.error('Error al exportar Excel:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-  const totalBS = useMemo(() => {
-    return filteredHistory.reduce((acc, r) => {
-      if (r.status === 'anulado') return acc; // Saldo en 0
-      const isDirectUsd =
-        r.currency === 'USD' &&
-        (r.bank_details?.payment_method === 'binance' ||
-          r.bank_details?.payment_method === 'zelle_usd' ||
-          r.bank_details?.payment_method === 'efectivo_usd');
-      if (isDirectUsd && (!r.amount_bs || r.amount_bs === 0)) return acc;
-      const bs =
-        r.amount_bs ||
-        (r.currency === 'USD' || !r.bcv_rate ? 0 : (r.amount_usd || 0) * (r.bcv_rate || 0));
-      return acc + bs;
-    }, 0);
-  }, [filteredHistory]);
+  const handleExportDifferential = async () => {
+    try {
+      setIsExporting(true);
+      const dataToExport = await fetchHistoricalExportData({
+        status: statusFilter,
+        search: debouncedSearchQuery,
+        startDate,
+        endDate,
+        dateFilter,
+        currentUser
+      });
+      exportDifferentialReportToExcel(dataToExport, jtRates);
+    } catch (e) {
+      console.error('Error al exportar diferencial:', e);
+    } finally {
+      setIsExporting(false);
+    }
+  };
 
-  // Segmentación calibrada: 22 líneas en Hoja 1 y 26 líneas en hojas siguientes
+  // Segmentación calibrada para impresión oficial tipo carta
   const printPages = useMemo(() => {
-    if (filteredHistory.length === 0) return [];
+    if (historyData.length === 0) return [];
     const pages: PaymentRequest[][] = [];
     const PAGE_1_SIZE = 22;
     const OTHER_PAGES_SIZE = 26;
 
-    pages.push(filteredHistory.slice(0, PAGE_1_SIZE));
+    pages.push(historyData.slice(0, PAGE_1_SIZE));
     let idx = PAGE_1_SIZE;
 
-    while (idx < filteredHistory.length) {
-      pages.push(filteredHistory.slice(idx, idx + OTHER_PAGES_SIZE));
+    while (idx < historyData.length) {
+      pages.push(historyData.slice(idx, idx + OTHER_PAGES_SIZE));
       idx += OTHER_PAGES_SIZE;
     }
     return pages;
-  }, [filteredHistory]);
+  }, [historyData]);
 
   const formatUSD = (val: number) =>
     new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(val);
@@ -319,7 +302,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               <span>Historial de Pagos</span>
             </h1>
             <span className="text-xs font-bold px-2.5 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-200">
-              {filteredHistory.length} de {historyRequests.length}
+              {totalCount} {totalCount === 1 ? 'solicitud' : 'solicitudes'}
             </span>
           </div>
           <p className="text-xs text-slate-500">
@@ -343,30 +326,30 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               </button>
 
               <button
-                onClick={() => exportDifferentialReportToExcel(filteredHistory, jtRates)}
-                disabled={filteredHistory.length === 0}
+                onClick={handleExportDifferential}
+                disabled={loading || isExporting || totalCount === 0}
                 className="p-2 sm:px-3.5 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 active-press disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors flex items-center gap-1.5"
                 title="Descargar reporte contable de diferencial a Tasa JT (Excel)"
               >
-                <FileSpreadsheet className="w-3.5 h-3.5" />
-                <span>Exportar Diferencial</span>
+                {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <FileSpreadsheet className="w-3.5 h-3.5" />}
+                <span>{isExporting ? 'Generando...' : 'Exportar Diferencial'}</span>
               </button>
             </>
           )}
 
           <button
-            onClick={() => exportRequestsToCSV(filteredHistory, 'TP_PAGOS_HISTORIAL')}
-            disabled={filteredHistory.length === 0}
+            onClick={handleExportExcel}
+            disabled={loading || isExporting || totalCount === 0}
             className="p-2 sm:px-3.5 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 active-press disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors flex items-center gap-1.5"
             title="Descargar listado en formato Excel / CSV"
           >
-            <Download className="w-3.5 h-3.5" />
-            <span>Exportar Excel</span>
+            {isExporting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Download className="w-3.5 h-3.5" />}
+            <span>{isExporting ? 'Generando...' : 'Exportar Excel'}</span>
           </button>
 
           <button
             onClick={() => window.print()}
-            disabled={filteredHistory.length === 0}
+            disabled={loading || totalCount === 0}
             className="p-2 sm:px-3.5 py-2 rounded-xl bg-slate-900 hover:bg-slate-800 active-press disabled:opacity-50 text-white font-bold text-xs shadow-2xs transition-colors flex items-center gap-1.5"
             title="Imprimir reporte contable organizado"
           >
@@ -415,7 +398,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
               <span className={`text-[10px] px-1.5 py-0.2 rounded-full font-bold ${
                 statusFilter === 'all' ? 'bg-slate-900 text-white' : 'bg-slate-200 text-slate-700'
               }`}>
-                {historyRequests.length}
+                {statusFilter === 'all' ? totalCount : (stats.countRealizadas + stats.countAnuladas)}
               </span>
             </button>
 
@@ -580,9 +563,17 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
       </div>
 
       {/* History List */}
-      {filteredHistory.length > 0 ? (
+      {loading ? (
+        <div className="bg-white p-12 rounded-2xl border border-slate-200 shadow-2xs text-center space-y-3">
+          <div className="w-10 h-10 rounded-2xl bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+            <Loader2 className="w-5 h-5 animate-spin text-emerald-600" />
+          </div>
+          <p className="text-xs font-bold text-slate-700">Cargando registros históricos del servidor...</p>
+          <p className="text-[11px] text-slate-400">Página {currentPage} de {totalPages}</p>
+        </div>
+      ) : historyData.length > 0 ? (
         <div className="space-y-2.5">
-          {paginatedRequests.map((req) => {
+          {historyData.map((req) => {
             const category = req.category || 'hospedaje';
             return (
               <div
@@ -770,7 +761,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
             {/* Info & Page Size Selector */}
             <div className="flex items-center gap-3 text-slate-600 font-medium flex-wrap justify-center sm:justify-start">
               <span>
-                Mostrando <strong>{filteredHistory.length > 0 ? startIndex + 1 : 0}</strong> - <strong>{endIndex}</strong> de <strong>{filteredHistory.length}</strong> solicitudes
+                Mostrando <strong>{totalCount > 0 ? (currentPage - 1) * pageSize + 1 : 0}</strong> - <strong>{Math.min(currentPage * pageSize, totalCount)}</strong> de <strong>{totalCount}</strong> solicitudes
               </span>
               <div className="flex items-center gap-1.5 border-l border-slate-200 pl-3">
                 <span className="text-slate-400">Mostrar por página:</span>
@@ -889,12 +880,12 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
           for (let i = 0; i <= pIdx; i++) {
             itemsUntilNow += printPages[i].length;
           }
-          const accumulatedRequests = filteredHistory.slice(0, itemsUntilNow);
-          const accumulatedUSD = accumulatedRequests.reduce((acc, r) => {
+          const accumulatedRequests = historyData.slice(0, itemsUntilNow);
+          const accumulatedUSD = accumulatedRequests.reduce((acc: number, r: PaymentRequest) => {
             if (r.status === 'anulado') return acc;
             return acc + (r.amount_usd || 0);
           }, 0);
-          const accumulatedBS = accumulatedRequests.reduce((acc, r) => {
+          const accumulatedBS = accumulatedRequests.reduce((acc: number, r: PaymentRequest) => {
             if (r.status === 'anulado') return acc;
             const bs =
               r.amount_bs ||
@@ -962,7 +953,7 @@ export const HistoryView: React.FC<HistoryViewProps> = ({
                       Total Transacciones
                     </span>
                     <span className="text-[9.5pt] font-black text-slate-950">
-                      {filteredHistory.length} registros
+                      {totalCount} registros
                     </span>
                   </div>
                   <div className="border-r border-slate-300">

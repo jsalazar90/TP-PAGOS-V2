@@ -3,6 +3,7 @@ import { PaymentRequest, RequestStatus, AttachedFile } from '../types';
 import { StatusBadge } from './StatusBadge';
 import { FilePreviewModal } from './FilePreviewModal';
 import { getRequestReceiptFiles } from '../services/dataService';
+import { notificationService } from '../services/notificationService';
 import {
   X,
   Upload,
@@ -279,8 +280,23 @@ export const StatusChangeModal: React.FC<StatusChangeModalProps> = ({
         receiptFilesList,
         selectedStatus === 'realizado' ? originBank.trim().toUpperCase() : request.origin_bank
       );
+
+      // Feedback háptico y auditivo diferenciado
+      if (selectedStatus === 'realizado') {
+        notificationService.triggerHaptic('success');
+        notificationService.playChime('paid');
+      } else if (selectedStatus === 'urgente') {
+        notificationService.triggerHaptic('urgent');
+        notificationService.playChime('urgent');
+      } else if (selectedStatus === 'anulado') {
+        notificationService.triggerHaptic('warning');
+      } else {
+        notificationService.triggerHaptic('medium');
+      }
+
       onClose();
     } catch (err: any) {
+      notificationService.triggerHaptic('error');
       setErrorMsg(err.message || 'Error al actualizar el estado de la solicitud');
     } finally {
       setLoading(false);

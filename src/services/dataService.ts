@@ -3,6 +3,7 @@ import {
   FinancialSummary,
   PaymentRequest,
   RequestStatus,
+  PaymentCurrency,
   UserProfile,
   UserRole,
   Beneficiary,
@@ -86,6 +87,11 @@ export function saveRealtimeRequestToLocal(action: 'upsert' | 'delete', itemOrId
       setLocalRequests(local.filter(r => r.id !== itemOrId));
     } else {
       const item = itemOrId as PaymentRequest;
+      // Si el ítem ya no está activo ('realizado' o 'anulado'), se retira de la bandeja activa local
+      if (item.status === 'realizado' || item.status === 'anulado') {
+        setLocalRequests(local.filter(r => r.id !== item.id));
+        return;
+      }
       const exists = local.some(r => r.id === item.id);
       if (exists) {
         setLocalRequests(local.map(r => r.id === item.id ? { ...r, ...item } : r));
@@ -357,7 +363,8 @@ export function getCachedPaymentRequests(_currentUser?: UserProfile | null): Pay
   const deletedIds = getDeletedRequestIds();
   let list = getLocalRequests().map(item => normalizePaymentRequest(item, undefined, _currentUser));
 
-  list = list.filter(item => !deletedIds.has(item.id));
+  // 🛡️ BANDEJA ACTIVA: Solo solicitudes pendientes ('en_proceso' y 'urgente')
+  list = list.filter(item => !deletedIds.has(item.id) && (item.status === 'en_proceso' || item.status === 'urgente'));
 
   if (_currentUser && _currentUser.role === 'operador') {
     list = list.filter(item => item.created_by === _currentUser.id);
@@ -370,6 +377,9 @@ export function getCachedPaymentRequests(_currentUser?: UserProfile | null): Pay
   });
 }
 
+// ==========================================
+// BANDEJA ACTIVA (SOLO 'en_proceso' Y 'urgente')
+// ==========================================
 export async function fetchPaymentRequests(
   _currentUser?: UserProfile,
   forceRefresh = false
@@ -379,7 +389,6 @@ export async function fetchPaymentRequests(
   if (isSupabaseConfigured && supabase) {
     try {
       // 🚀 OPTIMIZACIÓN DE EGRESS CON RECONCILIACIÓN ACTIVA:
-      // Si no es un refresco forzado y ya hay datos válidos en caché local (sin datos mock):
       const hasValidLocalCache = !forceRefresh && localRequests.length > 0 && localRequests.every(r => !r.id.startsWith('req-'));
 
       if (hasValidLocalCache) {
@@ -392,6 +401,7 @@ export async function fetchPaymentRequests(
         let deltaQuery = supabase
           .from('payment_requests')
           .select('*, profiles:created_by(full_name, username)')
+          .in('status', ['en_proceso', 'urgente'])
           .or(`updated_at.gt.${latestTimestamp},created_at.gt.${latestTimestamp}`)
           .order('created_at', { ascending: false });
 
@@ -399,7 +409,7 @@ export async function fetchPaymentRequests(
           deltaQuery = deltaQuery.eq('created_by', _currentUser.id);
         }
 
-        // Consultar únicamente IDs y estados de solicitudes activas para detectar eliminaciones o cambios de estado
+        // Consultar únicamente IDs y estados de solicitudes activas para detectar liquidaciones y anulaciones
         let activeQuery = supabase
           .from('payment_requests')
           .select('id, status')
@@ -425,37 +435,32 @@ export async function fetchPaymentRequests(
           ];
 
           const activeMap = new Map(activeData.map(a => [a.id, a.status]));
-          let needsFullRefresh = false;
 
-          merged = merged.map(r => {
+          // Solo conservamos en la bandeja activa aquellas que siguen vigentes en el servidor
+          merged = merged.filter(r => activeMap.has(r.id)).map(r => {
             const serverStatus = activeMap.get(r.id);
             if (serverStatus && r.status !== serverStatus) {
               return { ...r, status: serverStatus };
-            }
-            if (!serverStatus && (r.status === 'en_proceso' || r.status === 'urgente')) {
-              needsFullRefresh = true;
             }
             return r;
           });
 
           const localIdSet = new Set(merged.map(r => r.id));
           const hasMissingActive = activeData.some(a => !localIdSet.has(a.id));
-          if (hasMissingActive) {
-            needsFullRefresh = true;
-          }
 
-          if (!needsFullRefresh) {
+          if (!hasMissingActive) {
             setLocalRequests(merged);
             return getCachedPaymentRequests(_currentUser);
           }
         }
-        console.warn('Delta sync detectó desfase con el servidor, ejecutando reconciliación completa...');
+        console.warn('Delta sync detectó desfase en bandeja activa, ejecutando sincronización limpia...');
       }
 
-      // Consulta completa de Supabase (fuente de verdad definitiva)
+      // Consulta de bandeja activa en Supabase (estrictamente 'en_proceso' y 'urgente')
       let query = supabase
         .from('payment_requests')
         .select('*, profiles:created_by(full_name, username)')
+        .in('status', ['en_proceso', 'urgente'])
         .order('created_at', { ascending: false });
 
       if (_currentUser && _currentUser.role === 'operador') {
@@ -476,6 +481,350 @@ export async function fetchPaymentRequests(
   }
 
   return getCachedPaymentRequests(_currentUser);
+}
+
+// Alias semántico para la bandeja activa
+export const fetchActivePaymentRequests = fetchPaymentRequests;
+
+// ==========================================
+// HISTORIAL HISTÓRICO PAGINADO ('realizado', 'anulado')
+// ==========================================
+export interface HistoryQueryParams {
+  page?: number;            // 1-indexed, default 1
+  pageSize?: number;        // default 20
+  status?: 'all' | 'realizado' | 'anulado';
+  search?: string;
+  startDate?: string;
+  endDate?: string;
+  dateFilter?: 'all' | 'today' | 'week' | 'month' | 'custom';
+  currentUser?: UserProfile | null;
+}
+
+export interface HistoryStats {
+  countRealizadas: number;
+  countAnuladas: number;
+  totalDirectUsd: number;
+  totalUsdFromBs: number;
+  totalUSD: number;
+  totalBS: number;
+}
+
+export interface HistoryQueryResult {
+  data: PaymentRequest[];
+  totalCount: number;
+  page: number;
+  pageSize: number;
+  totalPages: number;
+  stats: HistoryStats;
+}
+
+export async function fetchHistoricalPaymentRequests(
+  params: HistoryQueryParams = {}
+): Promise<HistoryQueryResult> {
+  const page = Math.max(1, params.page || 1);
+  const pageSize = Math.max(1, params.pageSize || 20);
+  const from = (page - 1) * pageSize;
+  const to = from + pageSize - 1;
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // 1. Query paginada de registros completos
+      let query = supabase
+        .from('payment_requests')
+        .select('*, profiles:created_by(full_name, username)', { count: 'exact' });
+
+      // 2. Query ligera para estadísticas contables (sin adjuntos ni payloads pesados)
+      let statsQuery = supabase
+        .from('payment_requests')
+        .select('id, status, currency, amount_usd, amount_bs, bcv_rate, bank_details');
+
+      // Filtro de Estatus
+      if (params.status === 'realizado') {
+        query = query.eq('status', 'realizado');
+        statsQuery = statsQuery.eq('status', 'realizado');
+      } else if (params.status === 'anulado') {
+        query = query.eq('status', 'anulado');
+        statsQuery = statsQuery.eq('status', 'anulado');
+      } else {
+        query = query.in('status', ['realizado', 'anulado']);
+        statsQuery = statsQuery.in('status', ['realizado', 'anulado']);
+      }
+
+      // Restricción por rol de operador
+      if (params.currentUser && params.currentUser.role === 'operador') {
+        query = query.eq('created_by', params.currentUser.id);
+        statsQuery = statsQuery.eq('created_by', params.currentUser.id);
+      }
+
+      // Filtro Temporal
+      const now = new Date();
+      let startIso: string | null = null;
+      let endIso: string | null = null;
+
+      if (params.startDate) {
+        startIso = new Date(params.startDate + 'T00:00:00.000').toISOString();
+      }
+      if (params.endDate) {
+        endIso = new Date(params.endDate + 'T23:59:59.999').toISOString();
+      }
+
+      if (!params.startDate && !params.endDate && params.dateFilter && params.dateFilter !== 'all') {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (params.dateFilter === 'today') {
+          startIso = startOfToday.toISOString();
+        } else if (params.dateFilter === 'week') {
+          const startOfWeek = new Date(startOfToday.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
+          startIso = startOfWeek.toISOString();
+        } else if (params.dateFilter === 'month') {
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          startIso = startOfMonth.toISOString();
+        }
+      }
+
+      if (startIso) {
+        query = query.or(`paid_at.gte.${startIso},and(paid_at.is.null,created_at.gte.${startIso})`);
+        statsQuery = statsQuery.or(`paid_at.gte.${startIso},and(paid_at.is.null,created_at.gte.${startIso})`);
+      }
+      if (endIso) {
+        query = query.or(`paid_at.lte.${endIso},and(paid_at.is.null,created_at.lte.${endIso})`);
+        statsQuery = statsQuery.or(`paid_at.lte.${endIso},and(paid_at.is.null,created_at.lte.${endIso})`);
+      }
+
+      // Búsqueda textual
+      if (params.search && params.search.trim()) {
+        const q = params.search.trim();
+        const searchExpr = `locator.ilike.%${q}%,client.ilike.%${q}%,title.ilike.%${q}%,hotel_name.ilike.%${q}%,guest_name.ilike.%${q}%,guest_ci.ilike.%${q}%,route_from_to.ilike.%${q}%`;
+        query = query.or(searchExpr);
+        statsQuery = statsQuery.or(searchExpr);
+      }
+
+      // Orden y Paginación
+      query = query
+        .order('paid_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false })
+        .range(from, to);
+
+      const [{ data, count, error }, { data: statsData }] = await Promise.all([
+        query,
+        statsQuery
+      ]);
+
+      if (error) {
+        console.error('fetchHistoricalPaymentRequests error:', error);
+        throw error;
+      }
+
+      const totalCount = count || 0;
+      const normalizedList = (data || []).map(item => normalizePaymentRequest(item, undefined, params.currentUser));
+
+      // Cálculo de Estadísticas Contables del Conjunto Filtrado
+      const statItems = statsData || [];
+      let countRealizadas = 0;
+      let countAnuladas = 0;
+      let totalDirectUsd = 0;
+      let totalUsdFromBs = 0;
+      let totalBS = 0;
+
+      for (const r of statItems) {
+        if (r.status === 'realizado') countRealizadas++;
+        else if (r.status === 'anulado') countAnuladas++;
+
+        if (r.status === 'anulado') continue;
+
+        const isDirectUsd =
+          r.currency === 'USD' ||
+          r.bank_details?.payment_method === 'binance' ||
+          r.bank_details?.payment_method === 'zelle_usd' ||
+          r.bank_details?.payment_method === 'efectivo_usd';
+
+        const amountUsd = Number(r.amount_usd) || 0;
+        const amountBs = Number(r.amount_bs) || 0;
+        const bcvRate = Number(r.bcv_rate) || 0;
+
+        if (isDirectUsd) {
+          totalDirectUsd += amountUsd;
+          if (amountBs > 0) totalBS += amountBs;
+        } else {
+          const usdVal = amountUsd > 0 ? amountUsd : (amountBs > 0 && bcvRate > 0 ? amountBs / bcvRate : 0);
+          totalUsdFromBs += usdVal;
+          const bsVal = amountBs > 0 ? amountBs : (amountUsd > 0 && bcvRate > 0 ? amountUsd * bcvRate : 0);
+          totalBS += bsVal;
+        }
+      }
+
+      const totalUSD = totalDirectUsd + totalUsdFromBs;
+
+      return {
+        data: normalizedList,
+        totalCount,
+        page,
+        pageSize,
+        totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+        stats: {
+          countRealizadas,
+          countAnuladas,
+          totalDirectUsd,
+          totalUsdFromBs,
+          totalUSD,
+          totalBS
+        }
+      };
+    } catch (e) {
+      console.warn('fetchHistoricalPaymentRequests Supabase failed, fallback to local:', e);
+    }
+  }
+
+  // Fallback Local Storage
+  const allLocal = getLocalRequests();
+  let localHistorical = allLocal.filter(r => r.status === 'realizado' || r.status === 'anulado');
+
+  if (params.status && params.status !== 'all') {
+    localHistorical = localHistorical.filter(r => r.status === params.status);
+  }
+  if (params.currentUser && params.currentUser.role === 'operador') {
+    localHistorical = localHistorical.filter(r => r.created_by === params.currentUser!.id);
+  }
+  if (params.search && params.search.trim()) {
+    const q = params.search.toLowerCase().trim();
+    localHistorical = localHistorical.filter(r =>
+      (r.locator || '').toLowerCase().includes(q) ||
+      (r.client || '').toLowerCase().includes(q) ||
+      (r.title || '').toLowerCase().includes(q) ||
+      (r.hotel_name || '').toLowerCase().includes(q) ||
+      (r.guest_name || '').toLowerCase().includes(q)
+    );
+  }
+
+  const totalCount = localHistorical.length;
+  const sliced = localHistorical.slice(from, to + 1).map(item => normalizePaymentRequest(item, undefined, params.currentUser));
+
+  return {
+    data: sliced,
+    totalCount,
+    page,
+    pageSize,
+    totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
+    stats: {
+      countRealizadas: localHistorical.filter(r => r.status === 'realizado').length,
+      countAnuladas: localHistorical.filter(r => r.status === 'anulado').length,
+      totalDirectUsd: 0,
+      totalUsdFromBs: 0,
+      totalUSD: 0,
+      totalBS: 0
+    }
+  };
+}
+
+// Obtener conjunto completo para descargas Excel / CSV de historial
+export async function fetchHistoricalExportData(
+  params: Omit<HistoryQueryParams, 'page' | 'pageSize'> = {}
+): Promise<PaymentRequest[]> {
+  if (isSupabaseConfigured && supabase) {
+    try {
+      let query = supabase
+        .from('payment_requests')
+        .select('*, profiles:created_by(full_name, username)');
+
+      if (params.status === 'realizado') {
+        query = query.eq('status', 'realizado');
+      } else if (params.status === 'anulado') {
+        query = query.eq('status', 'anulado');
+      } else {
+        query = query.in('status', ['realizado', 'anulado']);
+      }
+
+      if (params.currentUser && params.currentUser.role === 'operador') {
+        query = query.eq('created_by', params.currentUser.id);
+      }
+
+      const now = new Date();
+      let startIso: string | null = null;
+      let endIso: string | null = null;
+
+      if (params.startDate) {
+        startIso = new Date(params.startDate + 'T00:00:00.000').toISOString();
+      }
+      if (params.endDate) {
+        endIso = new Date(params.endDate + 'T23:59:59.999').toISOString();
+      }
+      if (!params.startDate && !params.endDate && params.dateFilter && params.dateFilter !== 'all') {
+        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+        if (params.dateFilter === 'today') {
+          startIso = startOfToday.toISOString();
+        } else if (params.dateFilter === 'week') {
+          const startOfWeek = new Date(startOfToday.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
+          startIso = startOfWeek.toISOString();
+        } else if (params.dateFilter === 'month') {
+          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+          startIso = startOfMonth.toISOString();
+        }
+      }
+
+      if (startIso) {
+        query = query.or(`paid_at.gte.${startIso},and(paid_at.is.null,created_at.gte.${startIso})`);
+      }
+      if (endIso) {
+        query = query.or(`paid_at.lte.${endIso},and(paid_at.is.null,created_at.lte.${endIso})`);
+      }
+
+      if (params.search && params.search.trim()) {
+        const q = params.search.trim();
+        const searchExpr = `locator.ilike.%${q}%,client.ilike.%${q}%,title.ilike.%${q}%,hotel_name.ilike.%${q}%,guest_name.ilike.%${q}%,guest_ci.ilike.%${q}%,route_from_to.ilike.%${q}%`;
+        query = query.or(searchExpr);
+      }
+
+      query = query
+        .order('paid_at', { ascending: false, nullsFirst: false })
+        .order('created_at', { ascending: false });
+
+      const { data, error } = await query;
+      if (error) throw error;
+      return (data || []).map(item => normalizePaymentRequest(item, undefined, params.currentUser));
+    } catch (e) {
+      console.warn('fetchHistoricalExportData error:', e);
+    }
+  }
+
+  const allLocal = getLocalRequests();
+  return allLocal.filter(r => r.status === 'realizado' || r.status === 'anulado');
+}
+
+// Búsqueda individual de solicitud por ID o LOC (para Deep Links y Notificaciones Push)
+export async function fetchPaymentRequestById(
+  idOrLocator: string,
+  currentUser?: UserProfile | null
+): Promise<PaymentRequest | null> {
+  if (!idOrLocator) return null;
+
+  const local = getLocalRequests();
+  const foundLocal = local.find(r => r.id === idOrLocator || r.locator === idOrLocator);
+  if (foundLocal) {
+    return normalizePaymentRequest(foundLocal, undefined, currentUser);
+  }
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      const isUUID = isValidUUID(idOrLocator);
+      let query = supabase
+        .from('payment_requests')
+        .select('*, profiles:created_by(full_name, username)');
+
+      if (isUUID) {
+        query = query.eq('id', idOrLocator);
+      } else {
+        query = query.eq('locator', idOrLocator);
+      }
+
+      const { data, error } = await query.maybeSingle();
+      if (!error && data) {
+        return normalizePaymentRequest(data, undefined, currentUser);
+      }
+    } catch (e) {
+      console.warn('fetchPaymentRequestById error:', e);
+    }
+  }
+
+  return null;
 }
 
 export async function repairZeroUsdRequests(): Promise<{ fixedCount: number }> {
@@ -630,7 +979,12 @@ const KNOWN_UNSUPPORTED_COLUMNS = new Set<string>([
   'last_modified_at'
 ]);
 
-async function resilientSupabaseUpdate(requestId: string, payload: any, retryCount = 0): Promise<any> {
+async function resilientSupabaseUpdate(
+  requestId: string,
+  payload: any,
+  retryCount = 0,
+  expectedStatuses?: RequestStatus[]
+): Promise<any> {
   if (!supabase) throw new Error('Supabase client not available');
 
   // Filtrar columnas no existentes antes de enviar la petición para evitar errores 400 Bad Request
@@ -641,21 +995,33 @@ async function resilientSupabaseUpdate(requestId: string, payload: any, retryCou
     }
   }
 
-  let { data, error } = await supabase
+  let query = supabase
     .from('payment_requests')
     .update(sanitizedPayload)
-    .eq('id', requestId)
+    .eq('id', requestId);
+
+  if (expectedStatuses && expectedStatuses.length > 0) {
+    query = query.in('status', expectedStatuses);
+  }
+
+  let { data, error } = await query
     .select('*, profiles:created_by(full_name, username)')
-    .single();
+    .maybeSingle();
 
   if (error) {
     if (error.message?.includes('relationship') || error.message?.includes('profiles') || error.code === 'PGRST200') {
-      const retryNoJoin = await supabase
+      let retryQuery = supabase
         .from('payment_requests')
         .update(sanitizedPayload)
-        .eq('id', requestId)
+        .eq('id', requestId);
+
+      if (expectedStatuses && expectedStatuses.length > 0) {
+        retryQuery = retryQuery.in('status', expectedStatuses);
+      }
+
+      const retryNoJoin = await retryQuery
         .select('*')
-        .single();
+        .maybeSingle();
 
       if (!retryNoJoin.error && retryNoJoin.data) {
         return retryNoJoin.data;
@@ -676,7 +1042,7 @@ async function resilientSupabaseUpdate(requestId: string, payload: any, retryCou
       );
       const adjusted = { ...payload };
       delete adjusted[missingCol];
-      return resilientSupabaseUpdate(requestId, adjusted, retryCount + 1);
+      return resilientSupabaseUpdate(requestId, adjusted, retryCount + 1, expectedStatuses);
     }
 
     if (
@@ -691,10 +1057,45 @@ async function resilientSupabaseUpdate(requestId: string, payload: any, retryCou
       );
       const adjusted = { ...payload };
       delete adjusted.status;
-      return resilientSupabaseUpdate(requestId, adjusted, retryCount + 1);
+      return resilientSupabaseUpdate(requestId, adjusted, retryCount + 1, expectedStatuses);
     }
 
     throw new Error(error.message);
+  }
+
+  // 🛡️ BLOQUEO CONCURRENTE OPTIMISTA: Si no se afectó ninguna fila debido al filtro de estado
+  if (!data && expectedStatuses && expectedStatuses.length > 0) {
+    const { data: currentRecord } = await supabase
+      .from('payment_requests')
+      .select('id, locator, status, paid_at, origin_bank')
+      .eq('id', requestId)
+      .maybeSingle();
+
+    if (currentRecord) {
+      // Sincronizar la caché local de inmediato con el estado real del servidor
+      const local = getLocalRequests();
+      const idx = local.findIndex(r => r.id === requestId);
+      if (idx !== -1) {
+        local[idx] = { ...local[idx], ...currentRecord };
+        setLocalRequests(local);
+      }
+
+      if (currentRecord.status === 'realizado') {
+        throw new Error(
+          `⚠️ ¡ALERTA DE CONCURRENCIA: PAGO YA LIQUIDADO! La solicitud #${currentRecord.locator || ''} ya fue marcada como "Realizado" (pagada) por otro administrador. Se canceló la operación para evitar un PAGO DUPLICADO.`
+        );
+      }
+      if (currentRecord.status === 'anulado') {
+        throw new Error(
+          `⚠️ ¡ALERTA DE CONCURRENCIA! La solicitud #${currentRecord.locator || ''} fue anulada previamente por otro usuario. No se puede procesar el pago.`
+        );
+      }
+      throw new Error(
+        `⚠️ Conflicto de concurrencia: El estado de la solicitud #${currentRecord.locator || ''} cambió a "${currentRecord.status}" en el servidor. Por favor refresca la bandeja para ver la información actualizada.`
+      );
+    } else {
+      throw new Error(`⚠️ La solicitud no existe en el servidor o fue eliminada por otro usuario.`);
+    }
   }
 
   return data;
@@ -729,25 +1130,24 @@ export async function createPaymentRequest(
   const primarySupportUrl = uploadedSupports.length > 0 ? uploadedSupports[0].url : undefined;
   const primarySupportFileName = uploadedSupports.length > 0 ? uploadedSupports[0].fileName : undefined;
 
-  const isDirectUsd = input.currency === 'USD' || input.bcv_rate === 0;
+  const effectiveCurrency: PaymentCurrency = input.currency || 'USD';
+  const isDirectUsd = effectiveCurrency === 'USD';
+  const bcvRate = Number(input.bcv_rate) || 0;
   let effectiveUsd = Number(input.amount_usd) || 0;
-  const bcvRate = isDirectUsd ? 0 : Number(input.bcv_rate) || 0;
-  let amountBs =
-    input.amount_bs !== undefined && input.amount_bs > 0
-      ? Number(input.amount_bs.toFixed(2))
-      : isDirectUsd
-      ? 0
-      : Number((effectiveUsd * bcvRate).toFixed(2));
+  let amountBs = Number(input.amount_bs) || 0;
 
-  if (!isDirectUsd && bcvRate > 0) {
-    if (effectiveUsd <= 0 && amountBs > 0) {
+  if (isDirectUsd) {
+    if (amountBs <= 0 && bcvRate > 0 && effectiveUsd > 0) {
+      amountBs = Number((effectiveUsd * bcvRate).toFixed(2));
+    }
+  } else {
+    // VES currency
+    if (effectiveUsd <= 0 && bcvRate > 0 && amountBs > 0) {
       effectiveUsd = Number((amountBs / bcvRate).toFixed(2));
-    } else if (amountBs <= 0 && effectiveUsd > 0) {
+    } else if (amountBs <= 0 && bcvRate > 0 && effectiveUsd > 0) {
       amountBs = Number((effectiveUsd * bcvRate).toFixed(2));
     }
   }
-
-  const effectiveCurrency = input.currency || (isDirectUsd ? 'USD' : 'VES');
   const initialStatus = input.status || (input.is_urgent ? 'urgente' : 'en_proceso');
   const creatorFullName = currentUser.full_name || currentUser.username;
 
@@ -933,7 +1333,14 @@ export async function updateRequestStatus(
         updateData.modification_requested = false;
       }
 
-      const data = await resilientSupabaseUpdate(requestId, updateData);
+      // 🛡️ BLOQUEO CONCURRENTE OPTIMISTA:
+      // Exigir que el estado actual en el servidor sea 'en_proceso' o 'urgente' para evitar pagos dobles o conflictos
+      const expectedStatuses: RequestStatus[] | undefined =
+        newStatus === 'realizado' || newStatus === 'anulado'
+          ? ['en_proceso', 'urgente']
+          : undefined;
+
+      const data = await resilientSupabaseUpdate(requestId, updateData, 0, expectedStatuses);
 
       if (data) {
         // Despachar notificación Push de pago realizado a todos los dispositivos sincronizados
@@ -1000,15 +1407,12 @@ export async function fetchUsers(forceRefresh = false): Promise<UserProfile[]> {
   }
 
   const localUsers = getLocalUsers();
-  const localPassMap = new Map(
-    localUsers.map(u => [String(u?.username || u?.email || '').toLowerCase(), u.password])
-  );
 
   if (isSupabaseConfigured && supabase) {
     try {
       const { data, error } = await supabase
         .from('profiles')
-        .select('id, username, email, full_name, role, is_active, password, created_at')
+        .select('id, username, email, full_name, role, is_active, created_at')
         .order('created_at', { ascending: false });
 
       if (error) {
@@ -1019,11 +1423,6 @@ export async function fetchUsers(forceRefresh = false): Promise<UserProfile[]> {
       if (data && data.length > 0) {
         const enriched: UserProfile[] = data.map((u: any) => {
           const uname = String(u?.username || u?.email?.split('@')[0] || u?.full_name || 'usuario').trim();
-          const pass =
-            u?.password ||
-            localPassMap.get(uname.toLowerCase()) ||
-            localPassMap.get(String(u?.email || '').toLowerCase()) ||
-            (uname.toLowerCase() === 'admin' ? 'admin' : '1234');
 
           return {
             id: u.id,
@@ -1032,7 +1431,6 @@ export async function fetchUsers(forceRefresh = false): Promise<UserProfile[]> {
             full_name: u.full_name || uname,
             role: u.role || 'solicitante',
             is_active: u.is_active ?? true,
-            password: pass,
             created_at: u.created_at || new Date().toISOString()
           };
         });
@@ -1064,49 +1462,28 @@ export async function authenticateUser(
     return { success: false, error: 'Por favor introduce tu nombre de usuario y contraseña' };
   }
 
-  // Super Usuario Auditor
-  if (cleanInput === 'jhoansg' && (cleanPass === '1709' || enteredPassword === '1709')) {
-    const superUser: UserProfile = {
-      id: 'super-user-jhoansg',
-      username: 'jhoansg',
-      email: 'jhoansg@tppagos.com',
-      full_name: 'Jhoan SG (Super Auditor)',
-      role: 'admin',
-      is_active: true,
-      created_at: new Date().toISOString()
-    };
-    return { success: true, user: superUser };
-  }
-
-  // 1. Intentar buscar directo en Supabase para obtener credenciales frescas en tiempo real
+  // 1. Autenticación Criptográfica Segura en Supabase vía RPC (Backend Bcrypt)
   if (isSupabaseConfigured && supabase) {
     try {
-      const { data, error } = await supabase
-        .from('profiles')
-        .select('id, username, email, full_name, role, is_active, password, created_at')
-        .or(`username.ilike.${cleanInput},email.ilike.${cleanInput},email.ilike.${cleanInput}@tppagos.com`)
-        .limit(1);
+      const { data: rpcRes, error: rpcErr } = await supabase.rpc('authenticate_user', {
+        p_username: cleanInput,
+        p_password: cleanPass
+      });
 
-      if (!error && data && data.length > 0) {
-        const u = data[0];
-        if (!u.is_active) {
-          return { success: false, error: '⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.' };
-        }
-        const dbPass = String(u.password || (u.username === 'admin' ? 'admin' : '1234')).trim();
-        if (cleanPass === dbPass || enteredPassword === u.password) {
+      if (!rpcErr && rpcRes) {
+        if (rpcRes.success && rpcRes.user) {
           const matchedUser: UserProfile = {
-            id: u.id,
-            username: u.username,
-            email: u.email,
-            full_name: u.full_name || u.username,
-            role: u.role || 'solicitante',
-            is_active: u.is_active ?? true,
-            password: u.password,
-            created_at: u.created_at || new Date().toISOString()
+            id: rpcRes.user.id,
+            username: rpcRes.user.username,
+            email: rpcRes.user.email,
+            full_name: rpcRes.user.full_name,
+            role: rpcRes.user.role,
+            is_active: rpcRes.user.is_active,
+            created_at: rpcRes.user.created_at
           };
-          // Actualizar caché local inmediatamente
+          // Actualizar caché de sesión local de forma segura (sin password)
           const local = getLocalUsers();
-          const idx = local.findIndex(l => l.id === u.id || l.username.toLowerCase() === u.username.toLowerCase());
+          const idx = local.findIndex(l => l.id === matchedUser.id || l.username.toLowerCase() === matchedUser.username.toLowerCase());
           if (idx !== -1) {
             local[idx] = matchedUser;
           } else {
@@ -1115,7 +1492,46 @@ export async function authenticateUser(
           setLocalUsers(local);
           return { success: true, user: matchedUser };
         } else {
-          return { success: false, error: '⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.' };
+          return { success: false, error: rpcRes.error || '⚠️ Credenciales inválidas' };
+        }
+      }
+
+      // Si la función RPC aún no está creada en Supabase (fallback de transición para usuario individual)
+      if (rpcErr) {
+        console.warn('RPC authenticate_user notice (usando consulta dirigida de usuario individual):', rpcErr.message);
+        const { data, error } = await supabase
+          .from('profiles')
+          .select('id, username, email, full_name, role, is_active, password, created_at')
+          .or(`username.ilike.${cleanInput},email.ilike.${cleanInput},email.ilike.${cleanInput}@tppagos.com`)
+          .limit(1);
+
+        if (!error && data && data.length > 0) {
+          const u = data[0];
+          if (!u.is_active) {
+            return { success: false, error: '⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.' };
+          }
+          const dbPass = String(u.password || (u.username === 'admin' ? 'admin' : '1234')).trim();
+          if (cleanPass === dbPass || enteredPassword === u.password) {
+            const matchedUser: UserProfile = {
+              id: u.id,
+              username: u.username,
+              email: u.email,
+              full_name: u.full_name || u.username,
+              role: u.role || 'solicitante',
+              is_active: u.is_active ?? true,
+              created_at: u.created_at || new Date().toISOString()
+            };
+            const local = getLocalUsers();
+            const idx = local.findIndex(l => l.id === u.id);
+            if (idx !== -1) local[idx] = matchedUser;
+            else local.push(matchedUser);
+            setLocalUsers(local);
+            return { success: true, user: matchedUser };
+          } else {
+            return { success: false, error: '⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.' };
+          }
+        } else if (!error && (!data || data.length === 0)) {
+          return { success: false, error: '⚠️ Usuario no encontrado. Por favor verifica tu nombre de usuario o solicita tu registro al Administrador.' };
         }
       }
     } catch (e) {
@@ -1123,26 +1539,21 @@ export async function authenticateUser(
     }
   }
 
-  // 2. Fallback a usuarios locales o refrescados
-  const localUsers = await fetchUsers(true);
+  // 2. Fallback a usuarios locales
+  const localUsers = getLocalUsers();
   const foundUser = localUsers.find(
     (u) =>
       (u.username && u.username.toLowerCase() === cleanInput) ||
-      u.email.toLowerCase() === cleanInput ||
-      u.email.split('@')[0].toLowerCase() === cleanInput
+      (u.email && u.email.toLowerCase() === cleanInput) ||
+      (u.email && u.email.split('@')[0].toLowerCase() === cleanInput)
   );
 
   if (!foundUser) {
-    return { success: false, error: '⚠️ Usuario no encontrado. Por favor verifica tu nombre de usuario o solicita tu registro al Administrador.' };
+    return { success: false, error: '⚠️ Usuario no encontrado.' };
   }
 
   if (!foundUser.is_active) {
     return { success: false, error: '⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.' };
-  }
-
-  const expectedPassword = String(foundUser.password || (foundUser.username === 'admin' ? 'admin' : '1234')).trim();
-  if (cleanPass !== expectedPassword && enteredPassword !== foundUser.password) {
-    return { success: false, error: '⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.' };
   }
 
   return { success: true, user: foundUser };
@@ -1151,50 +1562,82 @@ export async function authenticateUser(
 export async function createNewUser(
   userData: Omit<UserProfile, 'id' | 'created_at'>
 ): Promise<UserProfile> {
+  const cleanUsername = userData.username.trim().toLowerCase();
+  const cleanEmail = (userData.email || `${cleanUsername}@tppagos.com`).trim().toLowerCase();
+  const cleanName = userData.full_name.trim();
+
+  if (isSupabaseConfigured && supabase) {
+    try {
+      // 1. Intentar crear vía RPC con hash Bcrypt en backend
+      const { data: rpcUser, error: rpcErr } = await supabase.rpc('create_user_with_password', {
+        p_username: cleanUsername,
+        p_email: cleanEmail,
+        p_full_name: cleanName,
+        p_role: userData.role,
+        p_password: userData.password || '1234'
+      });
+
+      if (!rpcErr && rpcUser) {
+        const createdUser: UserProfile = {
+          id: rpcUser.id,
+          username: rpcUser.username,
+          email: rpcUser.email,
+          full_name: rpcUser.full_name,
+          role: rpcUser.role,
+          is_active: rpcUser.is_active,
+          created_at: rpcUser.created_at
+        };
+        const users = getLocalUsers();
+        setLocalUsers([createdUser, ...users.filter(u => u.id !== createdUser.id)]);
+        invalidateUsersCache();
+        return createdUser;
+      }
+
+      // 2. Fallback de inserción directa
+      const payload: any = {
+        username: cleanUsername,
+        email: cleanEmail,
+        full_name: cleanName,
+        role: userData.role,
+        is_active: userData.is_active ?? true,
+        password: userData.password || '1234'
+      };
+
+      const { data, error } = await supabase.from('profiles').insert([payload]).select().single();
+      if (!error && data) {
+        const created: UserProfile = {
+          id: data.id,
+          username: data.username,
+          email: data.email,
+          full_name: data.full_name,
+          role: data.role,
+          is_active: data.is_active,
+          created_at: data.created_at
+        };
+        const users = getLocalUsers();
+        setLocalUsers([created, ...users.filter(u => u.id !== created.id)]);
+        invalidateUsersCache();
+        return created;
+      }
+    } catch (e: any) {
+      console.error('Error al crear usuario en Supabase:', e);
+      throw new Error(`Error al crear usuario: ${e.message || e}`);
+    }
+  }
+
   const generatedId =
     typeof crypto !== 'undefined' && crypto.randomUUID
       ? crypto.randomUUID()
       : `00000000-0000-4000-8000-${String(Date.now()).padStart(12, '0')}`;
 
-  const payload: any = {
-    id: generatedId,
-    username: userData.username,
-    email: userData.email,
-    full_name: userData.full_name,
-    role: userData.role,
-    is_active: userData.is_active ?? true,
-    password: userData.password || '1234'
-  };
-
-  if (isSupabaseConfigured && supabase) {
-    try {
-      const { data, error } = await supabase.from('profiles').insert([payload]).select().single();
-      if (!error && data) {
-        const created = { ...data, password: userData.password || data.password || '1234' };
-        const users = getLocalUsers();
-        setLocalUsers([created, ...users.filter(u => u.id !== created.id)]);
-        return created;
-      }
-      if (error && error.message.includes('password')) {
-        const { password: _, ...noPass } = payload;
-        const { data: retryData } = await supabase.from('profiles').insert([noPass]).select().single();
-        if (retryData) {
-          const created = { ...retryData, password: userData.password || '1234' };
-          const users = getLocalUsers();
-          setLocalUsers([created, ...users.filter(u => u.id !== created.id)]);
-          return created;
-        }
-      }
-    } catch (e) {
-      console.warn('Supabase createNewUser fallback to local:', e);
-    }
-  }
-
   const users = getLocalUsers();
   const newUser: UserProfile = {
     id: generatedId,
-    ...userData,
-    password: userData.password || '1234',
+    username: cleanUsername,
+    email: cleanEmail,
+    full_name: cleanName,
+    role: userData.role,
+    is_active: userData.is_active ?? true,
     created_at: new Date().toISOString()
   };
   const updated = [newUser, ...users.filter(u => u.id !== newUser.id)];
@@ -1216,7 +1659,7 @@ export async function toggleUserActiveStatus(userId: string): Promise<UserProfil
         .from('profiles')
         .update({ is_active: newStatus })
         .eq('id', userId)
-        .select()
+        .select('id, username, email, full_name, role, is_active, created_at')
         .single();
       if (!error && data) {
         if (index !== -1) {
@@ -1249,30 +1692,43 @@ export async function updateUserPassword(
     throw new Error('Usuario no encontrado');
   }
 
-  const updatedUser: UserProfile = {
-    ...users[index],
-    password: newPassword
-  };
-
   if (isSupabaseConfigured && supabase) {
     try {
+      // 1. Intentar actualizar contraseña vía RPC con hash Bcrypt en backend
+      const { data: rpcSuccess, error: rpcError } = await supabase.rpc('update_user_password', {
+        p_user_id: userId,
+        p_new_password: newPassword
+      });
+
+      if (!rpcError && rpcSuccess) {
+        const updated: UserProfile = { ...users[index] };
+        users[index] = updated;
+        setLocalUsers(users);
+        return updated;
+      }
+
+      // 2. Fallback actualización directa si RPC no existe aún
       const { data, error } = await supabase
         .from('profiles')
-        .update({ password: newPassword })
+        .update({ password: newPassword, updated_at: new Date().toISOString() })
         .eq('id', userId)
-        .select()
+        .select('id, username, email, full_name, role, is_active, created_at')
         .single();
 
       if (!error && data) {
-        users[index] = { ...data, password: newPassword };
+        users[index] = { ...data };
         setLocalUsers(users);
         return users[index];
       }
-    } catch (e) {
-      console.warn('Supabase updateUserPassword fallback to local:', e);
+    } catch (e: any) {
+      console.error('Error al actualizar contraseña en Supabase:', e);
+      throw new Error(`Error al actualizar la contraseña: ${e.message || e}`);
     }
   }
 
+  const updatedUser: UserProfile = {
+    ...users[index]
+  };
   users[index] = updatedUser;
   setLocalUsers(users);
   return updatedUser;
@@ -1539,25 +1995,25 @@ export async function updatePaymentRequest(
     supportFileName = uploadRes.fileName;
   }
 
-  const isDirectUsd = input.currency === 'USD' || input.bcv_rate === 0;
-  let effectiveUsd = Number(input.amount_usd) || 0;
-  const bcvRate = isDirectUsd ? 0 : Number(input.bcv_rate) || 0;
-  let amountBs =
-    input.amount_bs !== undefined && input.amount_bs > 0
-      ? Number(input.amount_bs.toFixed(2))
-      : isDirectUsd
-      ? 0
-      : Number((effectiveUsd * bcvRate).toFixed(2));
+  const effectiveCurrency: PaymentCurrency = input.currency || (existing?.currency as PaymentCurrency) || 'USD';
+  const isDirectUsd = effectiveCurrency === 'USD';
+  const bcvRate = Number(input.bcv_rate ?? existing?.bcv_rate) || 0;
+  let effectiveUsd = Number(input.amount_usd ?? existing?.amount_usd) || 0;
+  let amountBs = Number(input.amount_bs ?? existing?.amount_bs) || 0;
 
-  if (!isDirectUsd && bcvRate > 0) {
-    if (effectiveUsd <= 0 && amountBs > 0) {
+  if (isDirectUsd) {
+    if (amountBs <= 0 && bcvRate > 0 && effectiveUsd > 0) {
+      amountBs = Number((effectiveUsd * bcvRate).toFixed(2));
+    }
+  } else {
+    // VES currency
+    if (effectiveUsd <= 0 && bcvRate > 0 && amountBs > 0) {
       effectiveUsd = Number((amountBs / bcvRate).toFixed(2));
-    } else if (amountBs <= 0 && effectiveUsd > 0) {
+    } else if (amountBs <= 0 && bcvRate > 0 && effectiveUsd > 0) {
       amountBs = Number((effectiveUsd * bcvRate).toFixed(2));
     }
   }
 
-  const effectiveCurrency = input.currency || (isDirectUsd ? 'USD' : 'VES');
   const updatedStatus = input.status || (input.is_urgent ? 'urgente' : 'en_proceso');
 
   if (isSupabaseConfigured && supabase) {
@@ -1598,7 +2054,8 @@ export async function updatePaymentRequest(
         updated_at: new Date().toISOString()
       };
 
-      const data = await resilientSupabaseUpdate(requestId, updateRecord);
+      const expectedStatuses: RequestStatus[] = ['en_proceso', 'urgente'];
+      const data = await resilientSupabaseUpdate(requestId, updateRecord, 0, expectedStatuses);
 
       if (data) {
         return {
@@ -1682,7 +2139,8 @@ export async function requestModification(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+      const expectedStatuses: RequestStatus[] = ['en_proceso', 'urgente'];
+      const data = await resilientSupabaseUpdate(requestId, updatePayload, 0, expectedStatuses);
 
       if (data) {
         broadcastPushToAdmins({
@@ -1730,7 +2188,8 @@ export async function cancelModificationRequest(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+      const expectedStatuses: RequestStatus[] = ['en_proceso', 'urgente'];
+      const data = await resilientSupabaseUpdate(requestId, updatePayload, 0, expectedStatuses);
 
       if (data) {
         return {
@@ -1777,7 +2236,8 @@ export async function requestCancellation(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+      const expectedStatuses: RequestStatus[] = ['en_proceso', 'urgente'];
+      const data = await resilientSupabaseUpdate(requestId, updatePayload, 0, expectedStatuses);
 
       if (data) {
         broadcastPushToAdmins({
@@ -1825,7 +2285,8 @@ export async function cancelCancellationRequest(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+      const expectedStatuses: RequestStatus[] = ['en_proceso', 'urgente'];
+      const data = await resilientSupabaseUpdate(requestId, updatePayload, 0, expectedStatuses);
 
       if (data) {
         return {
@@ -1894,7 +2355,8 @@ export async function restorePaymentRequest(
 
   if (isSupabaseConfigured && supabase) {
     try {
-      const data = await resilientSupabaseUpdate(requestId, updatePayload);
+      const expectedStatuses: RequestStatus[] = ['anulado'];
+      const data = await resilientSupabaseUpdate(requestId, updatePayload, 0, expectedStatuses);
       if (data) {
         const normalized = normalizePaymentRequest(data, undefined, currentUser);
         normalized.status = 'en_proceso';

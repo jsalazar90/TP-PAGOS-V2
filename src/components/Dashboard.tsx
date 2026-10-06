@@ -15,7 +15,9 @@ import {
   Download,
   X,
   Building2,
-  Ban
+  Ban,
+  CheckCircle2,
+  Sparkles
 } from 'lucide-react';
 
 interface DashboardProps {
@@ -456,26 +458,68 @@ export const Dashboard: React.FC<DashboardProps> = ({
             />
           ))}
         </div>
+      ) : activeRequests.length === 0 ? (
+        /* Estado Vacío de Bandeja Limpia (0 solicitudes pendientes) */
+        <div className="text-center py-16 px-4 bg-white rounded-3xl border border-slate-200/80 shadow-2xs space-y-4">
+          <div className="w-16 h-16 rounded-3xl bg-teal-50 text-[#00b4a2] border border-teal-100 flex items-center justify-center mx-auto shadow-2xs">
+            <CheckCircle2 className="w-8 h-8 stroke-[2.2]" />
+          </div>
+          <div className="space-y-1">
+            <div className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-teal-50 text-teal-800 text-xs font-bold border border-teal-200/70 mb-1">
+              <Sparkles className="w-3.5 h-3.5 text-[#00b4a2]" />
+              <span>Todo al día</span>
+            </div>
+            <h3 className="text-base sm:text-lg font-black text-slate-900">
+              ¡Bandeja al día! Cero pagos pendientes
+            </h3>
+            <p className="text-xs sm:text-sm text-slate-500 max-w-md mx-auto">
+              Todas las solicitudes activas han sido liquidadas y procesadas con éxito. Puedes registrar una nueva solicitud en cualquier momento o revisar las transacciones pasadas en el Historial.
+            </p>
+          </div>
+          <div className="flex items-center justify-center gap-2 pt-1">
+            <button
+              onClick={onOpenNewRequest}
+              className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white text-xs font-bold shadow-2xs active-press transition-all"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Crear Nueva Solicitud</span>
+            </button>
+          </div>
+        </div>
       ) : (
+        /* Estado Vacío cuando un filtro o búsqueda no coincide */
         <div className="text-center py-14 px-4 bg-white rounded-2xl border border-slate-200 shadow-2xs space-y-3">
-          <div className="w-12 h-12 rounded-2xl bg-teal-50 text-[#00b4a2] flex items-center justify-center mx-auto">
+          <div className="w-12 h-12 rounded-2xl bg-slate-100 text-slate-500 flex items-center justify-center mx-auto">
             <Inbox className="w-6 h-6" />
           </div>
           <div>
-            <h3 className="text-sm font-bold text-slate-800">No hay solicitudes que coincidan</h3>
+            <h3 className="text-sm font-bold text-slate-800">No hay solicitudes con los filtros aplicados</h3>
             <p className="text-xs text-slate-500 max-w-sm mx-auto mt-1">
               {searchQuery
-                ? `No encontramos resultados para "${searchQuery}". Intenta con otro término o limpia los filtros.`
-                : 'No tienes solicitudes pendientes en la vista seleccionada.'}
+                ? `No encontramos coincidencias para "${searchQuery}".`
+                : 'No hay solicitudes activas que cumplan con la categoría o estado seleccionado.'}
             </p>
           </div>
-          <button
-            onClick={onOpenNewRequest}
-            className="inline-flex items-center gap-1.5 px-4 py-2 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white text-xs font-bold shadow-2xs active-press transition-all"
-          >
-            <Plus className="w-4 h-4 stroke-[2.5]" />
-            <span>Crear Nueva Solicitud</span>
-          </button>
+          <div className="flex items-center justify-center gap-2">
+            <button
+              onClick={() => {
+                setSelectedCategory('all');
+                setActiveFilter('all');
+                setSearchQuery('');
+              }}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 text-xs font-bold border border-slate-200 active-press transition-all"
+            >
+              <X className="w-3.5 h-3.5" />
+              <span>Limpiar filtros</span>
+            </button>
+            <button
+              onClick={onOpenNewRequest}
+              className="inline-flex items-center gap-1.5 px-3.5 py-2 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white text-xs font-bold shadow-2xs active-press transition-all"
+            >
+              <Plus className="w-4 h-4 stroke-[2.5]" />
+              <span>Nueva Solicitud</span>
+            </button>
+          </div>
         </div>
       )}
     </div>

@@ -146,6 +146,42 @@ export const NotificationDiagnosticsModal: React.FC<NotificationDiagnosticsModal
             </div>
           </div>
 
+          {/* Haptic & Sound Tester */}
+          <div className="p-3 bg-slate-50/80 rounded-2xl border border-slate-200/80 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-slate-800 flex items-center gap-1.5">
+                <Smartphone className="w-3.5 h-3.5 text-[#00b4a2]" />
+                <span>Prueba de Respuesta Táctil (Háptica)</span>
+              </span>
+              <span className="text-[10px] text-slate-400 font-medium">Android / PWA</span>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => {
+                  notificationService.triggerHaptic('success');
+                  notificationService.playChime('paid');
+                }}
+                className="p-2 rounded-xl bg-teal-50 hover:bg-teal-100 text-teal-800 border border-teal-200 text-[11px] font-bold flex items-center justify-center gap-1 active-press transition-colors shadow-2xs"
+                title="Vibración suave ascendente + tono armónico"
+              >
+                <span>✨ Pago Liquidado</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => {
+                  notificationService.triggerHaptic('urgent');
+                  notificationService.playChime('urgent');
+                }}
+                className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-800 border border-rose-200 text-[11px] font-bold flex items-center justify-center gap-1 active-press transition-colors shadow-2xs"
+                title="Doble pulso insistente de alarma"
+              >
+                <span>🔥 Alerta Urgente</span>
+              </button>
+            </div>
+          </div>
+
           {statusMsg && (
             <div className="p-2.5 bg-slate-900 text-white rounded-xl text-xs font-mono border border-slate-800 animate-fade-in">
               {statusMsg}

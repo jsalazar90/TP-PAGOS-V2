@@ -27,7 +27,8 @@ import {
   deleteBeneficiary,
   fetchJtRates,
   saveJtRate,
-  getLocalJtRates
+  getLocalJtRates,
+  fetchPaymentRequestById
 } from './services/dataService';
 import { isSupabaseConfigured, supabase } from './services/supabase';
 import { Navbar } from './components/Navbar';
@@ -102,6 +103,7 @@ export function App() {
   const [isDiagnosticsOpen, setIsDiagnosticsOpen] = useState(false);
   const [jtRates, setJtRates] = useState<JtRate[]>(() => getLocalJtRates());
   const [isJtRateModalOpen, setIsJtRateModalOpen] = useState(false);
+  const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
 
   // Auditor Module State (/auditor)
   const [isAuditorRoute, setIsAuditorRoute] = useState<boolean>(() => {
@@ -234,8 +236,12 @@ export function App() {
                 showToast(notifTitle, isUrgent ? 'error' : 'success');
               }
 
-              // Actualizar estado local directamente (SIN descargar toda la BD)
-              setRequests(prev => [normalized, ...prev.filter(r => r.id !== normalized.id)]);
+              // Actualizar bandeja activa únicamente si la nueva solicitud es pendiente
+              if (normalized.status === 'en_proceso' || normalized.status === 'urgente') {
+                setRequests(prev => [normalized, ...prev.filter(r => r.id !== normalized.id)]);
+              } else {
+                setHistoryRefreshTrigger(prev => prev + 1);
+              }
             } else if (payload.eventType === 'UPDATE') {
               const updatedRaw = payload.new;
               const prevReq = payload.old;
@@ -308,10 +314,16 @@ export function App() {
                 showToast(cancelTitle, 'error');
               }
 
-              // Actualizar estado local directamente (SIN descargar toda la BD)
-              setRequests(prev =>
-                prev.map(r => (r.id === normalized.id ? { ...r, ...normalized } : r))
-              );
+              // Si la solicitud cambió a realizado o anulado, retirarla de la bandeja activa y refrescar historial
+              if (normalized.status === 'realizado' || normalized.status === 'anulado') {
+                setRequests(prev => prev.filter(r => r.id !== normalized.id));
+                setHistoryRefreshTrigger(prev => prev + 1);
+              } else {
+                setRequests(prev => {
+                  const exists = prev.some(r => r.id === normalized.id);
+                  return exists ? prev.map(r => r.id === normalized.id ? { ...r, ...normalized } : r) : [normalized, ...prev];
+                });
+              }
 
               // Si está abierto el modal de detalles de esta solicitud, actualizarlo
               setSelectedRequestForDetail(prev =>
@@ -356,22 +368,20 @@ export function App() {
   const openRequestById = async (reqId: string, user: UserProfile) => {
     if (!reqId) return;
 
-    // 1. Buscar en la lista actual cargada
+    // 1. Buscar en la lista activa cargada
     let target = requests.find(r => r.id === reqId || r.locator === reqId);
 
-    // 2. Si no está en memoria, consultar la lista fresca de Supabase
+    // 2. Si no está en memoria activa, consultar directamente en el servidor
     if (!target) {
       try {
-        const freshList = await fetchPaymentRequests(user);
-        setRequests(freshList);
-        target = freshList.find(r => r.id === reqId || r.locator === reqId);
+        target = (await fetchPaymentRequestById(reqId, user)) || undefined;
       } catch (e) {
         console.warn('Error buscando solicitud para detalle:', e);
       }
     }
 
     if (target) {
-      setActiveTab(target.status === 'realizado' ? 'history' : 'dashboard');
+      setActiveTab(target.status === 'realizado' || target.status === 'anulado' ? 'history' : 'dashboard');
       setSelectedRequestForDetail(target);
     }
   };
@@ -608,7 +618,12 @@ export function App() {
   ) => {
     try {
       const updatedReq = await updateRequestStatus(requestId, newStatus, receiptFiles, originBank);
-      setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
+      if (newStatus === 'realizado' || newStatus === 'anulado') {
+        setRequests(prev => prev.filter(r => r.id !== requestId));
+        setHistoryRefreshTrigger(prev => prev + 1);
+      } else {
+        setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
+      }
       
       const statusLabels: Record<RequestStatus, string> = {
         urgente: 'URGENTE',
@@ -833,7 +848,8 @@ export function App() {
     if (!currentUser) return;
     try {
       const updated = await restorePaymentRequest(request.id, reason, currentUser);
-      setRequests(prev => prev.map(r => r.id === request.id ? updated : r));
+      setRequests(prev => [updated, ...prev.filter(r => r.id !== request.id)]);
+      setHistoryRefreshTrigger(prev => prev + 1);
       if (selectedRequestForDetail?.id === request.id) {
         setSelectedRequestForDetail(updated);
       }
@@ -947,6 +963,8 @@ export function App() {
         onOpenNewRequest={handleOpenNewRequest}
         onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
         onLogout={handleLogout}
+        pendingCount={requests.length}
+        urgentCount={requests.filter(r => r.status === 'urgente').length}
       />
 
       {/* Supabase Status Banner Indicator if not configured */}
@@ -995,6 +1013,7 @@ export function App() {
                 onOpenDetails={(req) => setSelectedRequestForDetail(req)}
                 onRestoreRequest={handleOpenRestore}
                 onOpenJtRateModal={() => setIsJtRateModalOpen(true)}
+                refreshTrigger={historyRefreshTrigger}
               />
             )}
 
