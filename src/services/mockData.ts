@@ -2,6 +2,16 @@ import { PaymentRequest, UserProfile, Beneficiary } from '../types';
 
 export const INITIAL_USERS: UserProfile[] = [
   {
+    id: 'usr-test-1',
+    username: 'prueba',
+    email: 'prueba@tppagos.com',
+    full_name: 'Usuario de Prueba (Admin)',
+    role: 'admin',
+    password: '1234',
+    is_active: true,
+    created_at: new Date().toISOString()
+  },
+  {
     id: 'usr-admin-1',
     username: 'admin',
     email: 'admin@jtpagos.com',

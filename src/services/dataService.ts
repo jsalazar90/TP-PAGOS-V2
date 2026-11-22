@@ -118,7 +118,7 @@ function getLocalUsers(): UserProfile[] {
       localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(INITIAL_USERS));
       return INITIAL_USERS;
     }
-    return parsed.map(u => {
+    const mapped: UserProfile[] = parsed.map(u => {
       const uname = String(u?.username || u?.email?.split('@')[0] || u?.full_name || 'usuario').trim();
       return {
         id: u?.id || `usr-${Date.now()}`,
@@ -131,6 +131,15 @@ function getLocalUsers(): UserProfile[] {
         created_at: u?.created_at || new Date().toISOString()
       };
     });
+    if (!isSupabaseConfigured && !mapped.some(u => u.username.toLowerCase() === 'prueba')) {
+      const testUser = INITIAL_USERS.find(u => u.username === 'prueba');
+      if (testUser) {
+        const updated = [testUser, ...mapped];
+        localStorage.setItem(USERS_STORAGE_KEY, JSON.stringify(updated));
+        return updated;
+      }
+    }
+    return mapped;
   } catch (e) {
     return INITIAL_USERS;
   }
@@ -1598,6 +1607,11 @@ export async function authenticateUser(
 
   if (!foundUser.is_active) {
     return { success: false, error: '⚠️ Tu cuenta de usuario se encuentra inactiva. Contacta al Administrador.' };
+  }
+
+  const expectedPass = String(foundUser.password || '').trim();
+  if (expectedPass && cleanPass !== expectedPass && enteredPassword !== foundUser.password) {
+    return { success: false, error: '⚠️ Contraseña incorrecta. Por favor verifica tu contraseña e intenta nuevamente.' };
   }
 
   return { success: true, user: foundUser };

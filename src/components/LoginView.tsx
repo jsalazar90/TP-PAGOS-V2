@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { UserProfile } from '../types';
 import { TPLogo } from './TPLogo';
-import { User, Lock, ArrowRight } from 'lucide-react';
+import { User, Lock, ArrowRight, Sparkles } from 'lucide-react';
 import { authenticateUser } from '../services/dataService';
+import { isSupabaseConfigured } from '../services/supabase';
 
 interface LoginViewProps {
   onLoginSuccess: (user: UserProfile) => void;
@@ -15,11 +16,10 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
   const [errorMsg, setErrorMsg] = useState('');
   const [loading, setLoading] = useState(false);
 
-  const handleStandardLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
+  const performLogin = async (loginUser: string, loginPass: string) => {
     setErrorMsg('');
 
-    if (!username.trim() || !password) {
+    if (!loginUser.trim() || !loginPass) {
       setErrorMsg('Por favor introduce tu nombre de usuario y contraseña');
       return;
     }
@@ -31,7 +31,7 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
       sessionStorage.removeItem('tp_super_auditor_user');
       sessionStorage.removeItem('tp_super_auditor_session');
 
-      const result = await authenticateUser(username, password);
+      const result = await authenticateUser(loginUser, loginPass);
 
       if (!result.success || !result.user) {
         setErrorMsg(result.error || '⚠️ Error al autenticar usuario.');
@@ -49,6 +49,17 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleStandardLogin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    await performLogin(username, password);
+  };
+
+  const handleQuickTestLogin = async () => {
+    setUsername('prueba');
+    setPassword('1234');
+    await performLogin('prueba', '1234');
   };
 
   return (
@@ -115,6 +126,34 @@ export const LoginView: React.FC<LoginViewProps> = ({ onLoginSuccess }) => {
               <ArrowRight className="w-3.5 h-3.5" />
             </button>
           </form>
+
+          {!isSupabaseConfigured && (
+            <div className="pt-3 border-t border-slate-100 space-y-2.5">
+              <div className="p-3 rounded-xl bg-teal-50/80 border border-teal-200/80 space-y-1.5 text-xs">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-bold text-teal-900 flex items-center gap-1.5">
+                    <Sparkles className="w-3.5 h-3.5 text-[#00b4a2] shrink-0" />
+                    <span>Modo Local de Prueba (Sin Supabase)</span>
+                  </span>
+                </div>
+                <p className="text-[11px] text-teal-800">
+                  Usuario: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-teal-200">prueba</strong> · Contraseña: <strong className="font-mono bg-white px-1.5 py-0.5 rounded border border-teal-200">1234</strong> <span className="text-teal-700 font-semibold">(Admin)</span>
+                </p>
+                <p className="text-[10px] text-slate-600">
+                  También disponibles: <code className="font-mono">admin</code>/<code className="font-mono">admin</code>, <code className="font-mono">maria</code>/<code className="font-mono">1234</code> (Solicitante), <code className="font-mono">operador</code>/<code className="font-mono">1234</code> (Operador).
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={handleQuickTestLogin}
+                disabled={loading}
+                className="active-press w-full py-2 rounded-xl bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs shadow-2xs flex items-center justify-center gap-1.5 transition-colors"
+              >
+                <Sparkles className="w-3.5 h-3.5 text-amber-300" />
+                <span>Entrar con usuario de prueba</span>
+              </button>
+            </div>
+          )}
         </div>
       </div>
     </div>
