@@ -4,6 +4,7 @@ import { VitePWA } from 'vite-plugin-pwa';
 
 // https://vitejs.dev/config/
 export default defineConfig({
+  base: '/',
   plugins: [
     react(),
     VitePWA({
@@ -11,7 +12,8 @@ export default defineConfig({
       devOptions: {
         enabled: true
       },
-      includeAssets: ['favicon.ico', 'apple-touch-icon.png', 'maskable-icon-512.png', 'logo.png', 'pwa-192x192.png', 'pwa-512x512.png'],
+      includeManifestIcons: false,
+      includeAssets: ['favicon.ico'],
       manifest: {
         name: 'TP PAGOS PRO - Control y Gestión de Pagos',
         short_name: 'TP PAGOS',
@@ -63,6 +65,10 @@ export default defineConfig({
       },
       workbox: {
         maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+        cleanupOutdatedCaches: true,
+        clientsClaim: true,
+        skipWaiting: true,
+        navigateFallbackDenylist: [/^\/assets\//, /^\/api\//],
         importScripts: ['/sw-push-listener.js'],
         globPatterns: ['**/*.{js,css,html,ico,png,svg,woff,woff2}'],
         runtimeCaching: [
@@ -99,20 +105,7 @@ export default defineConfig({
     })
   ],
   build: {
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes('node_modules/recharts')) return 'vendor-recharts';
-          if (id.includes('node_modules/xlsx')) return 'vendor-xlsx';
-          if (id.includes('node_modules/motion') || id.includes('node_modules/framer-motion')) {
-            return 'vendor-motion';
-          }
-          if (id.includes('/src/opticavision/') || id.includes('\\src\\opticavision\\')) {
-            return 'erp-opticavision';
-          }
-        }
-      }
-    }
+    chunkSizeWarningLimit: 3000
   },
   server: {
     port: 3000,

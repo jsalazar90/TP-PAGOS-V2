@@ -6,14 +6,54 @@ import { App } from './App';
 import './index.css';
 
 // Registrar Service Worker de PWA con soporte Push en segundo plano
-registerSW({
+const updateSW = registerSW({
   immediate: true,
   onNeedRefresh() {
-    console.log('[PWA] Nueva versión disponible.');
+    console.log('[PWA] Nueva versión disponible, actualizando...');
+    updateSW(true);
   },
   onOfflineReady() {
     console.log('[PWA] Aplicación lista para trabajar sin conexión.');
+  },
+  onRegisteredSW(_swUrl, registration) {
+    if (registration) {
+      registration.update().catch(() => {});
+    }
   }
+});
+
+// Recuperación automática si ocurre un error de carga de módulos dinámicos tras un redeploy
+window.addEventListener('vite:preloadError', (event) => {
+  event.preventDefault();
+  const RELOAD_KEY = 'tp_asset_reload_once';
+  try {
+    if (sessionStorage.getItem(RELOAD_KEY) === '1') return;
+    sessionStorage.setItem(RELOAD_KEY, '1');
+  } catch {
+    // ignore sessionStorage error
+  }
+
+  const cleanupTasks: Promise<unknown>[] = [];
+  if ('serviceWorker' in navigator && navigator.serviceWorker.getRegistrations) {
+    cleanupTasks.push(
+      navigator.serviceWorker
+        .getRegistrations()
+        .then((regs) => Promise.all(regs.map((reg) => reg.unregister())))
+        .catch(() => {})
+    );
+  }
+  if ('caches' in window && window.caches.keys) {
+    cleanupTasks.push(
+      window.caches
+        .keys()
+        .then((keys) => Promise.all(keys.map((key) => window.caches.delete(key))))
+        .catch(() => {})
+    );
+  }
+
+  Promise.all(cleanupTasks).finally(() => {
+    window.location.reload();
+  });
 });
 
 interface ErrorBoundaryProps {
@@ -85,4 +125,10 @@ ReactDOM.createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </React.StrictMode>
 );
+
+try {
+  sessionStorage.removeItem('tp_asset_reload_once');
+} catch {
+  // ignore sessionStorage error
+}
 
