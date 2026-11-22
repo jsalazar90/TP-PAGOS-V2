@@ -7,6 +7,7 @@ import {
   UserProfile,
   UserRole,
   Beneficiary,
+  BankDetails,
   AttachedFile,
   JtRate
 } from '../types';
@@ -152,6 +153,17 @@ export function normalizeBeneficiary(b: any): Beneficiary {
 
   const benName = (b.name || bDetails.beneficiary || b.bank_beneficiary || '').trim().toUpperCase();
   const benRif = (b.rif || bDetails.rif || b.bank_rif || '').trim().toUpperCase();
+  const resolvedMethod = bDetails.payment_method || b.payment_method || 'transferencia_bs';
+  const rawBank = (bDetails.bank || b.bank_name || '').trim().toUpperCase();
+  const resolvedBank =
+    rawBank ||
+    (resolvedMethod === 'binance'
+      ? 'BINANCE PAY'
+      : resolvedMethod === 'zelle_usd'
+      ? 'ZELLE (USD)'
+      : resolvedMethod === 'efectivo_usd' || resolvedMethod === 'efectivo_bs'
+      ? 'EFECTIVO'
+      : 'BANESCO');
 
   return {
     id: String(b.id || `ben-${Date.now()}`),
@@ -159,10 +171,10 @@ export function normalizeBeneficiary(b: any): Beneficiary {
     rif: benRif,
     category: b.category || 'hospedaje',
     bank_details: {
-      payment_method: bDetails.payment_method || b.payment_method || 'transferencia_bs',
+      payment_method: resolvedMethod,
       beneficiary: benName,
       rif: benRif,
-      bank: (bDetails.bank || b.bank_name || 'BANESCO').trim().toUpperCase(),
+      bank: resolvedBank,
       account_number: (bDetails.account_number || b.bank_account || '').trim(),
       account_type: bDetails.account_type || 'Corriente',
       pago_movil_phone: (bDetails.pago_movil_phone || b.pago_movil_phone || '').trim(),
@@ -172,6 +184,12 @@ export function normalizeBeneficiary(b: any): Beneficiary {
       zelle_email: (bDetails.zelle_email || b.zelle_email || '').trim(),
       zelle_name: (bDetails.zelle_name || b.zelle_name || '').trim().toUpperCase(),
       cash_receiver: (bDetails.cash_receiver || b.cash_receiver || '').trim().toUpperCase(),
+      swift_or_aba: (bDetails.swift_or_aba || '').trim().toUpperCase(),
+      bank_country_or_address: (bDetails.bank_country_or_address || '').trim(),
+      intermediary_bank_or_notes: (bDetails.intermediary_bank_or_notes || '').trim(),
+      default_account_id: bDetails.default_account_id || undefined,
+      default_account_code: bDetails.default_account_code || undefined,
+      default_account_name: bDetails.default_account_name || undefined,
       notes: bDetails.notes || ''
     },
     created_at: b.created_at || new Date().toISOString(),
@@ -635,6 +653,7 @@ export async function fetchHistoricalPaymentRequests(
           r.currency === 'USD' ||
           r.bank_details?.payment_method === 'binance' ||
           r.bank_details?.payment_method === 'zelle_usd' ||
+          r.bank_details?.payment_method === 'transferencia_usd' ||
           r.bank_details?.payment_method === 'efectivo_usd';
 
         const amountUsd = Number(r.amount_usd) || 0;
@@ -1273,7 +1292,15 @@ export async function updateRequestStatus(
   requestId: string,
   newStatus: RequestStatus,
   receiptFilesInput?: (File | AttachedFile)[] | File | null,
-  originBank?: string
+  originBank?: string,
+  paidAt?: string,
+  extraFields?: {
+    accounting_account_id?: string;
+    accounting_account_code?: string;
+    accounting_account_name?: string;
+    payment_execution_reference?: string;
+    bank_allocations?: any[];
+  }
 ): Promise<PaymentRequest> {
   const existing = getLocalRequests().find(r => r.id === requestId);
   let finalReceiptFiles: AttachedFile[] = [];
@@ -1318,7 +1345,7 @@ export async function updateRequestStatus(
         updated_at: new Date().toISOString()
       };
       if (newStatus === 'realizado') {
-        updateData.paid_at = existing?.paid_at || new Date().toISOString();
+        updateData.paid_at = paidAt || existing?.paid_at || new Date().toISOString();
       }
       if (finalReceiptFiles.length > 0) {
         updateData.receipt_files = finalReceiptFiles;
@@ -1327,6 +1354,23 @@ export async function updateRequestStatus(
       }
       if (originBank !== undefined) {
         updateData.origin_bank = originBank;
+      }
+      if (extraFields) {
+        if (extraFields.accounting_account_id !== undefined) {
+          updateData.accounting_account_id = extraFields.accounting_account_id;
+        }
+        if (extraFields.accounting_account_code !== undefined) {
+          updateData.accounting_account_code = extraFields.accounting_account_code;
+        }
+        if (extraFields.accounting_account_name !== undefined) {
+          updateData.accounting_account_name = extraFields.accounting_account_name;
+        }
+        if (extraFields.payment_execution_reference !== undefined) {
+          updateData.payment_execution_reference = extraFields.payment_execution_reference;
+        }
+        if (extraFields.bank_allocations !== undefined) {
+          updateData.bank_allocations = extraFields.bank_allocations;
+        }
       }
       if (newStatus === 'anulado' || newStatus === 'realizado') {
         updateData.cancellation_requested = false;
@@ -1376,7 +1420,7 @@ export async function updateRequestStatus(
     ...requests[index],
     status: newStatus,
     updated_at: new Date().toISOString(),
-    ...(newStatus === 'realizado' ? { paid_at: requests[index].paid_at || new Date().toISOString() } : {}),
+    ...(newStatus === 'realizado' ? { paid_at: paidAt || requests[index].paid_at || new Date().toISOString() } : {}),
     ...(finalReceiptFiles.length > 0 ? {
       receipt_files: finalReceiptFiles,
       receipt_file_url: primaryReceiptUrl,
@@ -2337,7 +2381,7 @@ export async function restorePaymentRequest(
     _restored_by_name: restorerName,
     _restored_at: now,
     _restored_reason: reason
-  };
+  } as BankDetails;
 
   const updatePayload: any = {
     status: 'en_proceso',
@@ -2534,12 +2578,13 @@ export function exportRequestsToCSV(requests: PaymentRequest[], filenamePrefix =
   ];
 
   const rows = validRequests.map(r => {
-    const b = r.bank_details || {};
+    const b: Partial<BankDetails> = r.bank_details || {};
     const bankAccount =
-      b.account_number ||
+      (b.account_number ? (b.swift_or_aba ? `${b.account_number} (SWIFT: ${b.swift_or_aba})` : b.account_number) : '') ||
       b.pago_movil_phone ||
       b.zelle_email ||
       b.binance_pay_id ||
+      b.binance_email ||
       b.cash_receiver ||
       '';
 
@@ -3043,7 +3088,10 @@ export function exportDifferentialReportToExcel(
     const isDirectUsd =
       r.currency === 'USD' ||
       Number(r.bcv_rate) === 0 ||
-      (!r.currency && (r.bank_details?.payment_method === 'zelle_usd' || r.bank_details?.payment_method === 'efectivo_usd'));
+      (!r.currency &&
+        (r.bank_details?.payment_method === 'zelle_usd' ||
+          r.bank_details?.payment_method === 'transferencia_usd' ||
+          r.bank_details?.payment_method === 'efectivo_usd'));
 
     if (isDirectUsd) return false;
 

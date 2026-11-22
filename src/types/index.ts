@@ -16,6 +16,7 @@ export type PaymentMethodType =
   | 'transferencia_bs'
   | 'pago_movil'
   | 'binance'
+  | 'transferencia_usd'
   | 'zelle_usd'
   | 'efectivo_usd'
   | 'efectivo_bs';
@@ -43,6 +44,12 @@ export interface BankDetails {
   zelle_email?: string;
   zelle_name?: string;
   cash_receiver?: string;
+  swift_or_aba?: string;
+  bank_country_or_address?: string;
+  intermediary_bank_or_notes?: string;
+  default_account_id?: string;
+  default_account_code?: string;
+  default_account_name?: string;
   notes?: string;
 }
 
@@ -190,14 +197,5 @@ export interface FinancialSummary {
   countAnulado: number;
   countCancellationRequested: number;
   countTotal: number;
-}
-
-export interface JtRate {
-  id: string;
-  rate_date: string; // YYYY-MM-DD
-  rate: number;
-  created_by?: string;
-  created_at: string;
-  updated_at: string;
 }
 

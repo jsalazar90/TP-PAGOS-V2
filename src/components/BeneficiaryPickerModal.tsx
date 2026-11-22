@@ -4,7 +4,7 @@
 // ==============================================================================
 
 import React, { useState, useMemo, useEffect, useRef } from 'react';
-import { Beneficiary, ServiceCategory } from '../types';
+import { BankDetails, Beneficiary, ServiceCategory } from '../types';
 import {
   Search,
   X,
@@ -20,7 +20,8 @@ import {
   DollarSign,
   Landmark,
   Banknote,
-  ArrowRight
+  ArrowRight,
+  Globe
 } from 'lucide-react';
 
 interface BeneficiaryPickerModalProps {
@@ -68,6 +69,7 @@ export const BeneficiaryPickerModal: React.FC<BeneficiaryPickerModalProps> = ({
           const phoneMatch = (b.bank_details?.pago_movil_phone || '').toLowerCase().includes(q);
           const binanceMatch = (b.bank_details?.binance_email || b.bank_details?.binance_pay_id || '').toLowerCase().includes(q);
           const zelleMatch = (b.bank_details?.zelle_email || b.bank_details?.zelle_name || '').toLowerCase().includes(q);
+          const swiftMatch = (b.bank_details?.swift_or_aba || b.bank_details?.bank_country_or_address || '').toLowerCase().includes(q);
           const categoryMatch = (b.category || '').toLowerCase().includes(q);
 
           return (
@@ -78,6 +80,7 @@ export const BeneficiaryPickerModal: React.FC<BeneficiaryPickerModalProps> = ({
             phoneMatch ||
             binanceMatch ||
             zelleMatch ||
+            swiftMatch ||
             categoryMatch
           );
         }
@@ -146,6 +149,13 @@ export const BeneficiaryPickerModal: React.FC<BeneficiaryPickerModalProps> = ({
       return (
         <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-teal-50 text-teal-900 border border-teal-300 flex items-center gap-1">
           <Smartphone className="w-3 h-3 text-teal-700" /> Pago Móvil
+        </span>
+      );
+    }
+    if (method === 'transferencia_usd') {
+      return (
+        <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-900 border border-emerald-300 flex items-center gap-1">
+          <Globe className="w-3 h-3 text-emerald-700" /> Transferencia USD
         </span>
       );
     }
@@ -300,7 +310,7 @@ export const BeneficiaryPickerModal: React.FC<BeneficiaryPickerModalProps> = ({
           {filteredBeneficiaries.length > 0 ? (
             filteredBeneficiaries.map((b) => {
               const isSelected = selectedBeneficiaryId === b.id;
-              const details = b.bank_details || {};
+              const details: Partial<BankDetails> = b.bank_details || {};
 
               return (
                 <div
@@ -338,6 +348,11 @@ export const BeneficiaryPickerModal: React.FC<BeneficiaryPickerModalProps> = ({
                       {details.account_number && (
                         <span className="font-mono text-slate-500 font-bold">
                           {details.account_number}
+                        </span>
+                      )}
+                      {details.swift_or_aba && (
+                        <span className="font-mono text-emerald-800 font-semibold">
+                          SWIFT/ABA: {details.swift_or_aba}
                         </span>
                       )}
                       {details.pago_movil_phone && (

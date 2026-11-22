@@ -1,5 +1,6 @@
 import { useState, useEffect } from 'react';
-import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary, AttachedFile, JtRate } from './types';
+import { Navigate, Route, Routes, useLocation, useNavigate } from 'react-router-dom';
+import { PaymentRequest, UserProfile, UserRole, RequestStatus, CreatePaymentRequestInput, Beneficiary, JtRate } from './types';
 import {
   fetchPaymentRequests,
   getCachedPaymentRequests,
@@ -31,6 +32,18 @@ import {
   fetchPaymentRequestById
 } from './services/dataService';
 import { isSupabaseConfigured, supabase } from './services/supabase';
+import { ErpCompanyProvider, useCompany } from './opticavision/context/CompanyContext';
+import { getTodayLocalDate } from './opticavision/utils/dateUtils';
+import { AccountingLedgerPage } from './components/AccountingLedgerPage';
+import BanksMenu from './opticavision/pages/BanksMenu';
+import Banks from './opticavision/pages/Banks';
+import ComprobanteMovimientoBanco from './opticavision/pages/ComprobanteMovimientoBanco';
+import Accounting from './opticavision/pages/Accounting';
+import ChartOfAccounts from './opticavision/pages/ChartOfAccounts';
+import AccountingEntries from './opticavision/pages/AccountingEntries';
+import FixedAssetsModule from './opticavision/pages/FixedAssetsModule';
+import AccountingConfig from './opticavision/pages/AccountingConfig';
+import Reports from './opticavision/pages/Reports';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
 import { HistoryView } from './components/HistoryView';
@@ -39,7 +52,7 @@ import { BeneficiaryModal } from './components/BeneficiaryModal';
 import { UserManagementView } from './components/UserManagementView';
 import { LoginView } from './components/LoginView';
 import { NewRequestModal } from './components/NewRequestModal';
-import { StatusChangeModal } from './components/StatusChangeModal';
+import { StatusChangeModal, StatusChangeSaveOptions } from './components/StatusChangeModal';
 import { RequestDetailModal } from './components/RequestDetailModal';
 import { ModificationRequestModal } from './components/ModificationRequestModal';
 import { CancellationRequestModal } from './components/CancellationRequestModal';
@@ -67,6 +80,57 @@ export function App() {
     }
     return null;
   });
+
+  // Toast notifications
+  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
+
+  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
+    setToast({ message, type });
+    setTimeout(() => setToast(null), 4000);
+  };
+
+  return (
+    <ErpCompanyProvider currentUser={currentUser} onShowToast={showToast}>
+      <AppContent
+        currentUser={currentUser}
+        setCurrentUser={setCurrentUser}
+        toast={toast}
+        showToast={showToast}
+      />
+    </ErpCompanyProvider>
+  );
+}
+
+interface AppContentProps {
+  currentUser: UserProfile | null;
+  setCurrentUser: React.Dispatch<React.SetStateAction<UserProfile | null>>;
+  toast: { message: string; type: 'success' | 'error' } | null;
+  showToast: (message: string, type?: 'success' | 'error') => void;
+}
+
+function AppContent({ currentUser, setCurrentUser, toast, showToast }: AppContentProps) {
+  const location = useLocation();
+  const navigate = useNavigate();
+  const {
+    activeCompanyId,
+    bancos,
+    movimientosBancos,
+    cuentasContables,
+    comprobantes,
+    configContable,
+    activosFijos,
+    categoriasActivos,
+    depreciaciones,
+    cxc,
+    cxp,
+    cobranzas,
+    pagosRealizados,
+    empresa,
+    workingYear,
+    handleSave,
+    erpShowToast
+  } = useCompany();
+
   const [usersList, setUsersList] = useState<UserProfile[]>([]);
   const [beneficiariesList, setBeneficiariesList] = useState<Beneficiary[]>([]);
   // Carga instantánea (0 segundos): se inicializa inmediatamente con los datos guardados en memoria local
@@ -88,9 +152,10 @@ export function App() {
     const cachedReqs = localStorage.getItem('jt_pagos_requests_v1');
     return !(savedUser && cachedReqs);
   });
-  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'beneficiaries' | 'users'>('dashboard');
+  const [activeTab, setActiveTab] = useState<'dashboard' | 'history' | 'beneficiaries' | 'accounting' | 'users'>('dashboard');
   const [isBeneficiaryModalOpen, setIsBeneficiaryModalOpen] = useState(false);
   const [editingBeneficiary, setEditingBeneficiary] = useState<Beneficiary | null>(null);
+  const [preselectedBeneficiaryId, setPreselectedBeneficiaryId] = useState<string | null>(null);
 
   // Modals
   const [isNewRequestOpen, setIsNewRequestOpen] = useState(false);
@@ -104,6 +169,12 @@ export function App() {
   const [jtRates, setJtRates] = useState<JtRate[]>(() => getLocalJtRates());
   const [isJtRateModalOpen, setIsJtRateModalOpen] = useState(false);
   const [historyRefreshTrigger, setHistoryRefreshTrigger] = useState(0);
+
+  const isErpRoute =
+    location.pathname.startsWith('/accounting-ledger') ||
+    location.pathname.startsWith('/banks') ||
+    location.pathname.startsWith('/accounting') ||
+    location.pathname.startsWith('/reports');
 
   // Auditor Module State (/auditor)
   const [isAuditorRoute, setIsAuditorRoute] = useState<boolean>(() => {
@@ -122,12 +193,19 @@ export function App() {
       // Re-validar credencial exclusiva de super usuario al cambiar de ruta
       setIsAuditorLoggedIn(sessionStorage.getItem('tp_super_auditor_user') === 'jhoansg');
     };
+    checkRoute();
     window.addEventListener('popstate', checkRoute);
     return () => window.removeEventListener('popstate', checkRoute);
-  }, []);
+  }, [location.pathname, location.search]);
+
+  useEffect(() => {
+    if (currentUser && currentUser.role !== 'admin' && isErpRoute) {
+      navigate('/', { replace: true });
+    }
+  }, [currentUser, isErpRoute, navigate]);
 
   const handleGoToMainFromAuditor = () => {
-    window.history.pushState({}, '', '/');
+    navigate('/');
     setIsAuditorRoute(false);
   };
 
@@ -135,14 +213,6 @@ export function App() {
     sessionStorage.removeItem('tp_super_auditor_user');
     sessionStorage.removeItem('tp_super_auditor_session');
     setIsAuditorLoggedIn(false);
-  };
-
-  // Toast notifications
-  const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' } | null>(null);
-
-  const showToast = (message: string, type: 'success' | 'error' = 'success') => {
-    setToast({ message, type });
-    setTimeout(() => setToast(null), 4000);
   };
 
   // Load users and initial data
@@ -382,6 +452,9 @@ export function App() {
 
     if (target) {
       setActiveTab(target.status === 'realizado' || target.status === 'anulado' ? 'history' : 'dashboard');
+      if (isErpRoute) {
+        navigate('/');
+      }
       setSelectedRequestForDetail(target);
     }
   };
@@ -547,6 +620,9 @@ export function App() {
     setCurrentUser(null);
     setRequests([]);
     setActiveTab('dashboard');
+    if (isErpRoute) {
+      navigate('/');
+    }
     showToast('Sesión cerrada correctamente', 'success');
   };
 
@@ -613,22 +689,183 @@ export function App() {
   const handleConfirmStatusChange = async (
     requestId: string,
     newStatus: RequestStatus,
-    receiptFiles?: (File | AttachedFile)[] | File | null,
-    originBank?: string
+    options: StatusChangeSaveOptions
   ) => {
     try {
-      const updatedReq = await updateRequestStatus(requestId, newStatus, receiptFiles, originBank);
+      const targetReq = requests.find(r => r.id === requestId);
+      const todayStr = getTodayLocalDate();
+      const paidAtIso =
+        newStatus === 'realizado' && options.paymentDate && options.paymentDate !== todayStr
+          ? `${options.paymentDate}T12:00:00.000Z`
+          : undefined;
+
+      const updatedReq = await updateRequestStatus(
+        requestId,
+        newStatus,
+        options.receiptFiles,
+        options.originBank,
+        paidAtIso,
+        {
+          accounting_account_id: options.overrideAccountId,
+          accounting_account_code: options.overrideAccountCode,
+          accounting_account_name: options.overrideAccountName,
+          payment_execution_reference: options.paymentExecutionReference,
+          bank_allocations: options.bankAllocations
+        }
+      );
+
+      let postedToErp = false;
+      if (
+        newStatus === 'realizado' &&
+        targetReq?.status !== 'realizado' &&
+        options.bankAllocations &&
+        options.bankAllocations.length > 0
+      ) {
+        const matchedNiifAccount = (cuentasContables || []).find(
+          (c: any) =>
+            (options.overrideAccountId && String(c.id) === String(options.overrideAccountId)) ||
+            (options.overrideAccountCode && c.codigo === options.overrideAccountCode)
+        );
+        const ctaGastoId =
+          matchedNiifAccount?.id ||
+          options.overrideAccountCode ||
+          targetReq?.bank_details?.default_account_code ||
+          '5.1.04.001';
+
+        const firstImageProof = (updatedReq.receipt_files || []).find(
+          (rf) =>
+            rf.url?.startsWith('data:image/') ||
+            /\.(png|jpe?g|webp|gif)(\?|$)/i.test(rf.url || '') ||
+            /\.(png|jpe?g|webp|gif)$/i.test(rf.fileName || '')
+        );
+
+        const fecha = options.paymentDate || todayStr;
+        const baseTs = Date.now();
+        const benName =
+          updatedReq.bank_details?.beneficiary || updatedReq.hotel_name || 'Beneficiario';
+
+        for (let idx = 0; idx < options.bankAllocations.length; idx++) {
+          const alloc = options.bankAllocations[idx];
+          const bankObj = (bancos || []).find(
+            (b: any) => String(b.id) === String(alloc.bankId)
+          );
+
+          const movId =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `mov-${baseTs}-${idx}`;
+          const compId =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `comp-${baseTs}-${idx}`;
+
+          const refFinal =
+            (alloc.reference || '').trim() ||
+            options.paymentExecutionReference ||
+            (updatedReq.locator || '').replace(/^#/, '') ||
+            `PAG-${String(baseTs).slice(-5)}`;
+
+          const descripcion = `Pago Solicitud #${updatedReq.locator} - ${benName}${
+            updatedReq.title ? ` (${updatedReq.title})` : ''
+          }`;
+
+          const isVES =
+            bankObj?.moneda === 'Bolivares' || alloc.currency === 'Bolivares';
+          const tasa = isVES
+            ? alloc.tasa > 0
+              ? alloc.tasa
+              : Number(bankObj?.tasa) || updatedReq.bcv_rate || 1
+            : 1;
+          const montoUsd = Number(alloc.amountUsd.toFixed(2));
+          const montoBs = isVES ? (montoUsd * tasa).toFixed(2) : null;
+
+          const ctaBancoId =
+            alloc.bankAccountingAccountId ||
+            bankObj?.cuenta_contable_id ||
+            bankObj?.cuentaContableId ||
+            configContable?.cuentaBancos ||
+            '1.1.01.003';
+
+          // Pasar un único objeto a handleSave (nunca un arreglo)
+          await handleSave('movimientosBancos', {
+            id: movId,
+            empresa_id: activeCompanyId,
+            createdAt: baseTs + idx,
+            banco_id: alloc.bankId,
+            fecha,
+            ref: refFinal,
+            descripcion,
+            tipo: 'egreso',
+            monto: montoUsd,
+            tasa,
+            montoBs,
+            estado: 'activo',
+            isCuarentena: false,
+            cuarentenaStatus: null,
+            cuentaContrapartida: ctaGastoId,
+            soporteImagen: firstImageProof?.url || '',
+            usuario: currentUser?.email || currentUser?.full_name || 'admin',
+            comprobanteId: compId,
+            comprobante_id: compId,
+            solicitudId: updatedReq.id
+          });
+
+          const line1Id =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `l1-${baseTs}-${idx}`;
+          const line2Id =
+            typeof crypto !== 'undefined' && crypto.randomUUID
+              ? crypto.randomUUID()
+              : `l2-${baseTs}-${idx}`;
+
+          await handleSave('comprobantes', {
+            id: compId,
+            empresa_id: activeCompanyId,
+            fecha,
+            numero: `CMP-${String(baseTs).slice(-6)}${
+              options.bankAllocations.length > 1 ? `-${idx + 1}` : ''
+            }`,
+            tipo: 'Diario',
+            descripcion,
+            referencia: refFinal,
+            total: montoUsd,
+            estado: 'Contabilizado',
+            movimientoBancoId: movId,
+            lineas: [
+              {
+                id: line1Id,
+                cuentaId: ctaGastoId,
+                descripcion,
+                debe: montoUsd,
+                haber: 0
+              },
+              {
+                id: line2Id,
+                cuentaId: ctaBancoId,
+                descripcion: `Egreso Banco ${bankObj?.banco || alloc.bankName} - ${benName}`,
+                debe: 0,
+                haber: montoUsd
+              }
+            ]
+          });
+        }
+        postedToErp = true;
+      }
+
       if (newStatus === 'realizado' || newStatus === 'anulado') {
         setRequests(prev => prev.filter(r => r.id !== requestId));
         setHistoryRefreshTrigger(prev => prev + 1);
       } else {
         setRequests(prev => prev.map(r => r.id === requestId ? updatedReq : r));
       }
-      
+
       const statusLabels: Record<RequestStatus, string> = {
         urgente: 'URGENTE',
         en_proceso: 'En Proceso',
-        realizado: 'Realizado (Enviado a Historial)',
+        realizado: postedToErp
+          ? 'Realizado (Debitado de Tesorería & Contabilizado)'
+          : 'Realizado (Enviado a Historial)',
         anulado: 'Anulado (Enviado a Historial con Saldo $0)'
       };
 
@@ -639,8 +876,14 @@ export function App() {
         user: currentUser,
         target_id: updatedReq.locator,
         target_title: updatedReq.title,
-        details: `Estado de la solicitud #${updatedReq.locator} cambiado a "${statusLabels[newStatus]}" por ${currentUser?.full_name || 'Admin'}.${originBank ? ` Banco Emisor: ${originBank}.` : ''}${receiptFiles ? ' Con comprobante(s) adjunto(s).' : ''}`,
-        metadata: { locator: updatedReq.locator, new_status: newStatus, origin_bank: originBank }
+        details: `Estado de la solicitud #${updatedReq.locator} cambiado a "${statusLabels[newStatus]}" por ${currentUser?.full_name || 'Admin'}.${options.originBank ? ` Banco Emisor: ${options.originBank}.` : ''}${options.overrideAccountCode ? ` Cuenta Contable: ${options.overrideAccountCode}.` : ''}${options.receiptFiles?.length ? ' Con comprobante(s) adjunto(s).' : ''}`,
+        metadata: {
+          locator: updatedReq.locator,
+          new_status: newStatus,
+          origin_bank: options.originBank,
+          account_code: options.overrideAccountCode,
+          bank_allocations: options.bankAllocations?.length || 0
+        }
       }).catch(console.warn);
     } catch (err: any) {
       showToast(`Error: ${err.message}`, 'error');
@@ -945,21 +1188,50 @@ export function App() {
 
   const handleOpenNewRequest = () => {
     setEditingRequest(null);
+    setPreselectedBeneficiaryId(null);
     setIsNewRequestOpen(true);
   };
 
   const handleOpenEditRequest = (request: PaymentRequest) => {
     setEditingRequest(request);
+    setPreselectedBeneficiaryId(null);
     setIsNewRequestOpen(true);
   };
+
+  const isAdmin = currentUser.role === 'admin';
+  const effectiveActiveTab = isErpRoute && isAdmin ? 'accounting' : activeTab;
+
+  const handleTabChange = (
+    tab: 'dashboard' | 'history' | 'beneficiaries' | 'accounting' | 'users'
+  ) => {
+    if (tab === 'accounting') {
+      if (!isAdmin) return;
+      setActiveTab('accounting');
+      navigate('/accounting-ledger');
+      return;
+    }
+    setActiveTab(tab);
+    if (isErpRoute) {
+      navigate('/');
+    }
+  };
+
+  const proveedores = beneficiariesList.map((b) => ({
+    id: b.id,
+    name: b.name,
+    nombre: b.name,
+    taxId: b.rif || '',
+    rif: b.rif || '',
+    type: 'supplier'
+  }));
 
   return (
     <div className="min-h-screen bg-slate-50 text-slate-800 flex flex-col">
       {/* Navigation Header */}
       <Navbar
         currentUser={currentUser}
-        activeTab={activeTab}
-        setActiveTab={setActiveTab}
+        activeTab={effectiveActiveTab}
+        setActiveTab={handleTabChange}
         onOpenNewRequest={handleOpenNewRequest}
         onOpenDiagnostics={() => setIsDiagnosticsOpen(true)}
         onLogout={handleLogout}
@@ -978,23 +1250,156 @@ export function App() {
       )}
 
       {/* Main View Container */}
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-6 pt-5">
+      <main
+        className={`flex-1 w-full ${
+          isErpRoute && isAdmin
+            ? 'max-w-none px-3 sm:px-5 pt-3 pb-6'
+            : 'max-w-7xl mx-auto px-4 sm:px-6 pt-5'
+        }`}
+      >
         <PWAInstallBanner />
-        {loading ? (
+        {isErpRoute && isAdmin ? (
+          <Routes>
+            <Route path="/accounting-ledger" element={<AccountingLedgerPage />} />
+            <Route path="/banks" element={<BanksMenu />} />
+            <Route
+              path="/banks/:submodule"
+              element={
+                <Banks
+                  bancos={bancos}
+                  movimientosBancos={movimientosBancos}
+                  cxc={cxc}
+                  cxp={cxp}
+                  cobranzas={cobranzas}
+                  pagos={pagosRealizados}
+                  clientes={[]}
+                  contactos={proveedores}
+                  cuentasContables={cuentasContables}
+                  configContable={configContable}
+                  onSave={handleSave}
+                  showToast={erpShowToast}
+                  workingYear={workingYear}
+                  comprobantes={comprobantes}
+                />
+              }
+            />
+            <Route path="/accounting" element={<Accounting />} />
+            <Route
+              path="/accounting/accounts"
+              element={
+                <ChartOfAccounts
+                  cuentasContables={cuentasContables}
+                  onSave={handleSave}
+                  showToast={erpShowToast}
+                />
+              }
+            />
+            <Route
+              path="/accounting/entries"
+              element={
+                <AccountingEntries
+                  comprobantes={comprobantes}
+                  cuentasContables={cuentasContables}
+                  onSave={handleSave}
+                  showToast={erpShowToast}
+                  workingYear={workingYear}
+                />
+              }
+            />
+            <Route
+              path="/accounting/fixed-assets"
+              element={
+                <FixedAssetsModule
+                  activosFijos={activosFijos}
+                  categoriasActivos={categoriasActivos}
+                  depreciaciones={depreciaciones}
+                  cuentasContables={cuentasContables}
+                  proveedores={proveedores}
+                  configContable={configContable}
+                  comprobantes={comprobantes}
+                  cxp={cxp}
+                  cxc={cxc}
+                  onSave={handleSave}
+                  showToast={erpShowToast}
+                />
+              }
+            />
+            <Route
+              path="/accounting/closing"
+              element={
+                <AccountingConfig
+                  configContable={configContable}
+                  cuentasContables={cuentasContables}
+                  comprobantes={comprobantes}
+                  onSave={handleSave}
+                  showToast={erpShowToast}
+                />
+              }
+            />
+            <Route
+              path="/accounting/config"
+              element={
+                <AccountingConfig
+                  configContable={configContable}
+                  cuentasContables={cuentasContables}
+                  comprobantes={comprobantes}
+                  onSave={handleSave}
+                  showToast={erpShowToast}
+                />
+              }
+            />
+            <Route
+              path="/reports/comprobante-movimiento-banco"
+              element={
+                <ComprobanteMovimientoBanco
+                  bancos={bancos}
+                  movimientosBancos={movimientosBancos}
+                  cuentasContables={cuentasContables}
+                  empresa={empresa}
+                  configContable={configContable}
+                  comprobantes={comprobantes}
+                />
+              }
+            />
+            <Route
+              path="/reports"
+              element={
+                <Reports
+                  facturasServicio={[]}
+                  comprobantes={comprobantes}
+                  cuentasContables={cuentasContables}
+                  cxc={cxc}
+                  cxp={cxp}
+                  bancos={bancos}
+                  movimientosBancos={movimientosBancos}
+                  servicios={[]}
+                  contactos={proveedores}
+                  products={[]}
+                  configContable={configContable}
+                  empresa={empresa}
+                  cobranzas={cobranzas}
+                  onSave={handleSave}
+                  showToast={erpShowToast}
+                />
+              }
+            />
+            <Route path="*" element={<Navigate to="/accounting-ledger" replace />} />
+          </Routes>
+        ) : loading ? (
           <div className="flex items-center justify-center py-20 text-slate-400 text-sm">
             <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-teal-600 mr-3"></div>
             <span>Cargando sistema TP PAGOS PRO...</span>
           </div>
         ) : (
           <>
-            {activeTab === 'dashboard' && (
+            {effectiveActiveTab === 'dashboard' && (
               <Dashboard
                 requests={requests}
                 currentUser={currentUser}
                 onOpenDetails={(req) => setSelectedRequestForDetail(req)}
                 onOpenStatusModal={(req) => setSelectedRequestForStatus(req)}
                 onOpenNewRequest={handleOpenNewRequest}
-                onOpenBeneficiaries={() => setActiveTab('beneficiaries')}
+                onOpenBeneficiaries={() => handleTabChange('beneficiaries')}
                 onEditRequest={handleOpenEditRequest}
                 onDeleteRequest={currentUser.role === 'admin' ? handleDeleteRequest : undefined}
                 onRequestModification={handleRequestModification}
@@ -1005,7 +1410,7 @@ export function App() {
               />
             )}
 
-            {activeTab === 'history' && (
+            {effectiveActiveTab === 'history' && (
               <HistoryView
                 requests={requests}
                 currentUser={currentUser}
@@ -1017,16 +1422,22 @@ export function App() {
               />
             )}
 
-            {activeTab === 'beneficiaries' && (
+            {effectiveActiveTab === 'beneficiaries' && (
               <BeneficiariesView
                 beneficiaries={beneficiariesList}
+                currentUser={currentUser}
                 onOpenCreate={handleOpenCreateBeneficiary}
                 onOpenEdit={handleOpenEditBeneficiary}
                 onDelete={handleDeleteBeneficiary}
+                onUseInRequest={(ben) => {
+                  setEditingRequest(null);
+                  setPreselectedBeneficiaryId(ben.id);
+                  setIsNewRequestOpen(true);
+                }}
               />
             )}
 
-            {activeTab === 'users' && (
+            {effectiveActiveTab === 'users' && (
               <UserManagementView
                 users={usersList}
                 currentUser={currentUser}
@@ -1065,9 +1476,11 @@ export function App() {
         isOpen={isNewRequestOpen}
         editingRequest={editingRequest}
         beneficiaries={beneficiariesList}
+        preselectedBeneficiaryId={preselectedBeneficiaryId}
         onClose={() => {
           setIsNewRequestOpen(false);
           setEditingRequest(null);
+          setPreselectedBeneficiaryId(null);
         }}
         onSubmit={handleSaveRequest}
       />
@@ -1118,6 +1531,8 @@ export function App() {
       <BeneficiaryModal
         isOpen={isBeneficiaryModalOpen}
         editingBeneficiary={editingBeneficiary}
+        currentUser={currentUser}
+        onDelete={handleDeleteBeneficiary}
         onClose={() => {
           setIsBeneficiaryModalOpen(false);
           setEditingBeneficiary(null);

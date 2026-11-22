@@ -18,6 +18,7 @@ import {
   ArrowUpRight,
   Copy,
   Check,
+  CheckCircle2,
   QrCode,
   Smartphone,
   DollarSign,
@@ -33,7 +34,8 @@ import {
   Edit3,
   Clock,
   Ban,
-  RotateCcw
+  RotateCcw,
+  Globe
 } from 'lucide-react';
 
 interface RequestCardProps {
@@ -105,6 +107,12 @@ export const RequestCard: React.FC<RequestCardProps> = ({
         textToCopy += `\nPago Móvil: ${request.bank_details.pago_movil_phone}`;
       if (request.bank_details.pago_movil_ci)
         textToCopy += `\nCédula/RIF: ${request.bank_details.pago_movil_ci}`;
+    } else if (request.bank_details.payment_method === 'transferencia_usd') {
+      if (request.bank_details.rif) textToCopy += `\nRIF/Tax ID: ${request.bank_details.rif}`;
+      if (request.bank_details.bank) textToCopy += `\nBanco Internacional: ${request.bank_details.bank}`;
+      if (request.bank_details.account_number) textToCopy += `\nCuenta / IBAN: ${request.bank_details.account_number}`;
+      if (request.bank_details.swift_or_aba) textToCopy += `\nSWIFT/ABA: ${request.bank_details.swift_or_aba}`;
+      if (request.bank_details.bank_country_or_address) textToCopy += `\nPaís/Dir: ${request.bank_details.bank_country_or_address}`;
     } else if (
       request.bank_details.payment_method === 'efectivo_usd' ||
       request.bank_details.payment_method === 'efectivo_bs'
@@ -325,6 +333,10 @@ export const RequestCard: React.FC<RequestCardProps> = ({
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-teal-800 border border-teal-200/60 flex items-center gap-1">
                 <Smartphone className="w-3 h-3 text-teal-600" /> Pago Móvil
               </span>
+            ) : request.bank_details.payment_method === 'transferencia_usd' ? (
+              <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-800 border border-emerald-200 flex items-center gap-1">
+                <Globe className="w-3 h-3 text-emerald-600" /> Transf. USD
+              </span>
             ) : request.bank_details.payment_method === 'zelle_usd' ||
               request.bank_details.zelle_email ? (
               <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-slate-100 text-emerald-800 border border-emerald-200/60 flex items-center gap-1">
@@ -480,126 +492,152 @@ export const RequestCard: React.FC<RequestCardProps> = ({
           </div>
         </div>
 
-        {/* Right Column: Responsive Action Buttons */}
-        <div className="pt-2 border-t border-slate-100 md:border-t-0 md:pt-0 flex items-center justify-between md:flex-col md:items-end md:justify-center gap-2 shrink-0">
-          {/* Quick Bank Details Drawer Toggle Pill */}
-          <button
-            onClick={() => setShowBankDetails(!showBankDetails)}
-            className="text-xs font-bold text-teal-800 hover:text-teal-900 flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl bg-teal-50 hover:bg-teal-100/80 border border-teal-200/90 transition-all shrink-0 active-press shadow-2xs"
-            title="Ver datos bancarios o billetera para pagar"
-          >
-            {request.bank_details.payment_method === 'binance' ? (
-              <QrCode className="w-3.5 h-3.5 text-amber-600" />
-            ) : request.bank_details.payment_method === 'pago_movil' ? (
-              <Smartphone className="w-3.5 h-3.5 text-teal-600" />
-            ) : (
-              <Landmark className="w-3.5 h-3.5 text-[#00b4a2]" />
-            )}
-            <span>Datos Bancarios</span>
-            {showBankDetails ? (
-              <ChevronUp className="w-3.5 h-3.5 text-teal-700" />
-            ) : (
-              <ChevronDown className="w-3.5 h-3.5 text-teal-700" />
-            )}
-          </button>
-
-          {/* Action Buttons Cluster */}
-          <div className="flex items-center gap-1.5 shrink-0">
-            {/* Primary / Manage Button (Admin) */}
-            {currentUser.role === 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && (
-              <button
-                onClick={() => onOpenStatusModal(request)}
-                className="active-press px-3 py-1.5 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white font-bold text-xs flex items-center gap-1 shadow-2xs transition-colors shrink-0"
-              >
-                {request.status === 'en_proceso' && <RefreshCw className="w-3.5 h-3.5" />}
-                {request.status === 'urgente' && (
-                  <AlertTriangle className="w-3.5 h-3.5 text-yellow-200 animate-pulse" />
+        {/* Right Column: Panel simétrico en cuadrícula sin espacios vacíos */}
+        <div className="w-full sm:w-[316px] shrink-0 bg-slate-50/70 p-2 rounded-2xl border border-slate-200/80 space-y-1.5">
+          {currentUser.role === 'admin' ? (
+            <>
+              {/* Fila 1 Admin: Acción principal Gestionar + Datos Bancarios */}
+              <div className={`grid ${request.status !== 'realizado' && request.status !== 'anulado' ? 'grid-cols-2' : 'grid-cols-1'} gap-1.5`}>
+                {request.status !== 'realizado' && request.status !== 'anulado' && (
+                  <button
+                    type="button"
+                    onClick={() => onOpenStatusModal(request)}
+                    className="active-press px-3 py-2 rounded-xl bg-[#00b4a2] hover:bg-[#009b8b] text-white font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
+                  >
+                    <CheckCircle2 className="w-3.5 h-3.5 shrink-0" />
+                    <span>Gestionar</span>
+                  </button>
                 )}
-                <span>Gestionar</span>
-              </button>
-            )}
-
-            {/* View Details Button */}
-            <button
-              onClick={() => onOpenDetails(request)}
-              className="active-press px-2.5 py-1.5 rounded-xl bg-slate-100 hover:bg-slate-200 text-slate-700 font-bold text-xs flex items-center gap-1 border border-slate-200 transition-colors shrink-0"
-              title="Ver ficha completa y soportes"
-            >
-              <Eye className="w-3.5 h-3.5 text-slate-500" />
-              <span className="hidden sm:inline">Ver Ficha</span>
-              <span className="sm:hidden">Ficha</span>
-            </button>
-
-            {/* Admin Edit Button */}
-            {currentUser.role === 'admin' && onEditRequest && (
-              <button
-                onClick={() => onEditRequest(request)}
-                title="Editar solicitud"
-                className="active-press p-1.5 sm:px-2.5 sm:py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 font-bold text-xs flex items-center gap-1 border border-amber-200 transition-colors shrink-0"
-              >
-                <Pencil className="w-3.5 h-3.5 text-amber-600" />
-                <span className="hidden sm:inline">Editar</span>
-              </button>
-            )}
-
-            {/* Non-admin Request Modification / Cancellation */}
-            {currentUser.role !== 'admin' && request.status !== 'realizado' && request.status !== 'anulado' && (
-              <>
-                <button
-                  onClick={() => onRequestModification && onRequestModification(request)}
-                  title="Pedir modificación al administrador"
-                  className={`active-press px-2 py-1.5 sm:px-2.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors shrink-0 ${
-                    request.modification_requested
-                      ? 'bg-amber-100 text-amber-900 border-amber-300'
-                      : 'bg-indigo-50 hover:bg-indigo-100 text-indigo-800 border-indigo-200'
-                  }`}
-                >
-                  <Edit3 className="w-3.5 h-3.5 text-amber-600" />
-                  <span className="hidden sm:inline">
-                    {request.modification_requested ? 'Modificación Solicitada' : 'Pedir Modificación'}
-                  </span>
-                  <span className="sm:hidden">
-                    {request.modification_requested ? 'Modif.' : 'Modificar'}
-                  </span>
-                </button>
 
                 <button
-                  onClick={() => onRequestCancellation && onRequestCancellation(request)}
-                  title="Solicitar anulación al administrador"
-                  className={`active-press px-2 py-1.5 sm:px-2.5 rounded-xl font-bold text-xs flex items-center gap-1 border transition-colors shrink-0 ${
-                    request.cancellation_requested
-                      ? 'bg-rose-100 text-rose-900 border-rose-300'
-                      : 'bg-rose-50 hover:bg-rose-100 text-rose-800 border-rose-200'
+                  type="button"
+                  onClick={() => setShowBankDetails(!showBankDetails)}
+                  title="Ver datos bancarios o billetera para pagar"
+                  className={`active-press px-3 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1.5 border transition-all ${
+                    showBankDetails
+                      ? 'bg-[#009b8b] text-white border-[#009b8b] shadow-2xs'
+                      : 'bg-white hover:bg-teal-50 text-[#009b8b] border-teal-200'
                   }`}
                 >
-                  <Ban className="w-3.5 h-3.5 text-rose-600" />
-                  <span className="hidden sm:inline">
-                    {request.cancellation_requested ? 'Anulación Solicitada' : 'Solicitar Anulación'}
-                  </span>
-                  <span className="sm:hidden">
-                    {request.cancellation_requested ? 'Anul.' : 'Anular'}
-                  </span>
+                  <span>Datos Bancarios</span>
+                  {showBankDetails ? (
+                    <ChevronUp className="w-3.5 h-3.5 shrink-0" />
+                  ) : (
+                    <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                  )}
                 </button>
-              </>
-            )}
+              </div>
 
-            {/* Admin Delete Button */}
-            {canDelete && onDeleteRequest && (
+              {/* Fila 2 Admin: Ver Ficha + Editar + Eliminar */}
+              <div className="flex items-center gap-1.5">
+                <button
+                  type="button"
+                  onClick={() => onOpenDetails(request)}
+                  className="active-press flex-1 px-2.5 py-1.5 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/90 font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
+                  title="Ver ficha completa y soportes"
+                >
+                  <Eye className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                  <span>Ver Ficha</span>
+                </button>
+
+                {onEditRequest && (
+                  <button
+                    type="button"
+                    onClick={() => onEditRequest(request)}
+                    className="active-press flex-1 px-2.5 py-1.5 rounded-xl bg-amber-50 hover:bg-amber-100 text-amber-800 border border-amber-200 font-bold text-xs flex items-center justify-center gap-1.5 transition-all"
+                    title="Modificar los datos de esta solicitud (Administrador)"
+                  >
+                    <Pencil className="w-3.5 h-3.5 shrink-0" />
+                    <span>Editar</span>
+                  </button>
+                )}
+
+                {canDelete && onDeleteRequest && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      if (
+                        window.confirm(`¿Estás seguro de eliminar la solicitud LOC: #${request.locator}?`)
+                      ) {
+                        onDeleteRequest(request);
+                      }
+                    }}
+                    title="Eliminar solicitud (Solo Administradores)"
+                    className="active-press px-2.5 py-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-600 border border-rose-200 font-bold text-xs flex items-center justify-center transition-all"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            </>
+          ) : (
+            /* Cuadrícula 2x2 simétrica para Solicitante y Operador */
+            <div className="grid grid-cols-2 gap-1.5">
               <button
-                onClick={() => {
-                  if (
-                    window.confirm(`¿Estás seguro de eliminar la solicitud LOC: #${request.locator}?`)
-                  ) {
-                    onDeleteRequest(request);
-                  }
-                }}
-                title="Eliminar solicitud (Solo Administradores)"
-                className="active-press p-1.5 rounded-xl bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 transition-colors shrink-0"
+                type="button"
+                onClick={() => onOpenDetails(request)}
+                className="active-press px-2.5 py-2 rounded-xl bg-white hover:bg-slate-100 text-slate-700 border border-slate-200/90 font-bold text-xs flex items-center justify-center gap-1.5 shadow-2xs transition-all"
+                title="Ver ficha completa y soportes"
               >
-                <Trash2 className="w-3.5 h-3.5 text-rose-600" />
+                <Eye className="w-3.5 h-3.5 text-slate-500 shrink-0" />
+                <span>Ver Ficha</span>
               </button>
-            )}
-          </div>
+
+              <button
+                type="button"
+                onClick={() => setShowBankDetails(!showBankDetails)}
+                title="Ver datos bancarios o billetera para pagar"
+                className={`active-press px-2.5 py-2 rounded-xl font-bold text-xs flex items-center justify-center gap-1 border transition-all ${
+                  showBankDetails
+                    ? 'bg-[#009b8b] text-white border-[#009b8b] shadow-2xs'
+                    : 'bg-teal-50/90 hover:bg-teal-100 text-[#009b8b] border-teal-200'
+                }`}
+              >
+                <span>Datos Bancarios</span>
+                {showBankDetails ? (
+                  <ChevronUp className="w-3.5 h-3.5 shrink-0" />
+                ) : (
+                  <ChevronDown className="w-3.5 h-3.5 shrink-0" />
+                )}
+              </button>
+
+              {request.status !== 'realizado' && request.status !== 'anulado' && (
+                <>
+                  <button
+                    type="button"
+                    onClick={() => onRequestModification && onRequestModification(request)}
+                    title="Pedir modificación al administrador"
+                    className={`active-press px-2.5 py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all ${
+                      request.modification_requested
+                        ? 'bg-amber-100 text-amber-950 border-amber-300 shadow-2xs'
+                        : 'bg-amber-50/90 hover:bg-amber-100 text-amber-800 border-amber-200'
+                    }`}
+                  >
+                    <Pencil className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {request.modification_requested ? 'Modif. Solicitada' : 'Pedir Modificación'}
+                    </span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => onRequestCancellation && onRequestCancellation(request)}
+                    title="Solicitar anulación al administrador"
+                    className={`active-press px-2.5 py-2 rounded-xl font-bold text-[11px] flex items-center justify-center gap-1 border transition-all ${
+                      request.cancellation_requested
+                        ? 'bg-rose-100 text-rose-950 border-rose-300 shadow-2xs'
+                        : 'bg-rose-50/90 hover:bg-rose-100 text-rose-700 border-rose-200'
+                    }`}
+                  >
+                    <Ban className="w-3.5 h-3.5 shrink-0" />
+                    <span className="truncate">
+                      {request.cancellation_requested ? 'Anul. Solicitada' : 'Solicitar Anulación'}
+                    </span>
+                  </button>
+                </>
+              )}
+            </div>
+          )}
         </div>
       </div>
 
@@ -702,6 +740,30 @@ export const RequestCard: React.FC<RequestCardProps> = ({
                   <p className="font-mono text-teal-900 font-bold">
                     <strong className="text-slate-500 font-normal">Cédula:</strong>{' '}
                     {request.bank_details.pago_movil_ci}
+                  </p>
+                )}
+              </>
+            )}
+
+            {/* INTERNATIONAL USD ACCOUNT */}
+            {request.bank_details.payment_method === 'transferencia_usd' && (
+              <>
+                {request.bank_details.bank && (
+                  <p>
+                    <strong className="text-slate-500 font-normal">Banco Internacional:</strong>{' '}
+                    {request.bank_details.bank}
+                  </p>
+                )}
+                {request.bank_details.account_number && (
+                  <p className="text-emerald-800 font-bold font-mono select-all">
+                    <strong className="text-slate-500 font-normal">Cuenta / IBAN:</strong>{' '}
+                    {request.bank_details.account_number}
+                  </p>
+                )}
+                {request.bank_details.swift_or_aba && (
+                  <p className="text-emerald-900 font-bold font-mono">
+                    <strong className="text-slate-500 font-normal">SWIFT / ABA:</strong>{' '}
+                    {request.bank_details.swift_or_aba}
                   </p>
                 )}
               </>

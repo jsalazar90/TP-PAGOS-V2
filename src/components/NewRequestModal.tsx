@@ -42,7 +42,8 @@ import {
   Banknote,
   Pencil,
   FileCheck,
-  Search
+  Search,
+  Globe
 } from 'lucide-react';
 
 interface NewRequestModalProps {
@@ -51,6 +52,7 @@ interface NewRequestModalProps {
   onSubmit: (input: CreatePaymentRequestInput) => Promise<void>;
   editingRequest?: PaymentRequest | null;
   beneficiaries?: Beneficiary[];
+  preselectedBeneficiaryId?: string | null;
 }
 
 const POPULAR_BANKS = [
@@ -75,6 +77,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   onSubmit,
   editingRequest,
   beneficiaries,
+  preselectedBeneficiaryId,
 }) => {
   const [loading, setLoading] = useState(false);
   const [errorMsg, setErrorMsg] = useState('');
@@ -115,6 +118,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   const [beneficiariesList, setBeneficiariesList] = useState<Beneficiary[]>(beneficiaries || []);
   const [selectedBeneficiaryId, setSelectedBeneficiaryId] = useState<string>('');
   const [isBeneficiaryPickerOpen, setIsBeneficiaryPickerOpen] = useState<boolean>(false);
+  const appliedPreselectRef = useRef<string | null>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -157,6 +161,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     zelle_email: '',
     zelle_name: '',
     cash_receiver: '',
+    swift_or_aba: '',
+    bank_country_or_address: '',
+    intermediary_bank_or_notes: '',
+    default_account_id: '',
+    default_account_code: '',
+    default_account_name: '',
     notes: '',
   });
 
@@ -180,11 +190,17 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       zelle_email: '',
       zelle_name: '',
       cash_receiver: '',
+      swift_or_aba: '',
+      bank_country_or_address: '',
+      intermediary_bank_or_notes: '',
+      default_account_id: '',
+      default_account_code: '',
+      default_account_name: '',
       notes: '',
     }));
   };
 
-  const handleSelectBeneficiary = (benId: string) => {
+  const handleSelectBeneficiary = (benId: string, baseForm?: typeof formData) => {
     if (!benId) {
       handleResetBeneficiary();
       return;
@@ -194,21 +210,26 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const ben = beneficiariesList.find((b) => b.id === benId);
     if (!ben) return;
 
+    const currentBase = baseForm || formData;
     const bDetails = ben.bank_details;
     const targetCat = ben.category || 'hospedaje';
     const targetMethod = bDetails.payment_method || 'transferencia_bs';
     setCategory(targetCat);
     setPaymentMethod(targetMethod);
 
-    const isDirect = targetMethod === 'binance' || targetMethod === 'zelle_usd' || targetMethod === 'efectivo_usd';
+    const isDirect =
+      targetMethod === 'binance' ||
+      targetMethod === 'zelle_usd' ||
+      targetMethod === 'transferencia_usd' ||
+      targetMethod === 'efectivo_usd';
     const targetCurr = isDirect ? 'USD' : 'VES';
     setCurrency(targetCurr);
 
     const enrichedForm = {
-      ...formData,
+      ...currentBase,
       hotel_name: ben.name,
-      airline: targetCat === 'vuelos' ? ben.name : formData.airline,
-      expense_concept: targetCat === 'gastos_apoyo' ? ben.name : formData.expense_concept,
+      airline: targetCat === 'vuelos' ? ben.name : currentBase.airline,
+      expense_concept: targetCat === 'gastos_apoyo' ? ben.name : currentBase.expense_concept,
       bank_beneficiary: ben.name,
       bank_rif: ben.rif || bDetails.rif || '',
       bank_name: bDetails.bank || 'BANESCO',
@@ -220,6 +241,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       zelle_email: bDetails.zelle_email || '',
       zelle_name: bDetails.zelle_name || '',
       cash_receiver: bDetails.cash_receiver || '',
+      swift_or_aba: bDetails.swift_or_aba || '',
+      bank_country_or_address: bDetails.bank_country_or_address || '',
+      intermediary_bank_or_notes: bDetails.intermediary_bank_or_notes || '',
+      default_account_id: bDetails.default_account_id || '',
+      default_account_code: bDetails.default_account_code || '',
+      default_account_name: bDetails.default_account_name || '',
       notes: bDetails.notes || '',
     };
 
@@ -327,13 +354,24 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       zelle_email: '',
       zelle_name: '',
       cash_receiver: '',
+      swift_or_aba: '',
+      bank_country_or_address: '',
+      intermediary_bank_or_notes: '',
+      default_account_id: '',
+      default_account_code: '',
+      default_account_name: '',
       notes: '',
     });
     setSupportFile(null);
   };
 
   useEffect(() => {
-    if (isOpen && editingRequest) {
+    if (!isOpen) {
+      appliedPreselectRef.current = null;
+      return;
+    }
+
+    if (editingRequest) {
       setStep('preview');
       setCategory(editingRequest.category || 'hospedaje');
       setIsUrgent(editingRequest.status === 'urgente');
@@ -377,12 +415,62 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         zelle_email: editingRequest.bank_details?.zelle_email || '',
         zelle_name: editingRequest.bank_details?.zelle_name || '',
         cash_receiver: editingRequest.bank_details?.cash_receiver || '',
+        swift_or_aba: editingRequest.bank_details?.swift_or_aba || '',
+        bank_country_or_address: editingRequest.bank_details?.bank_country_or_address || '',
+        intermediary_bank_or_notes: editingRequest.bank_details?.intermediary_bank_or_notes || '',
+        default_account_id: editingRequest.bank_details?.default_account_id || '',
+        default_account_code: editingRequest.bank_details?.default_account_code || '',
+        default_account_name: editingRequest.bank_details?.default_account_name || '',
         notes: editingRequest.bank_details?.notes || '',
       });
-    } else if (isOpen && !editingRequest) {
+    } else {
       resetForm();
     }
   }, [isOpen, editingRequest]);
+
+  useEffect(() => {
+    if (isOpen && !editingRequest && preselectedBeneficiaryId && beneficiariesList.length > 0) {
+      if (appliedPreselectRef.current !== preselectedBeneficiaryId) {
+        appliedPreselectRef.current = preselectedBeneficiaryId;
+        handleSelectBeneficiary(preselectedBeneficiaryId, {
+          title: '',
+          client: '',
+          hotel_name: '',
+          locator: '',
+          location: '',
+          room_type: '',
+          people_count: 1,
+          additionals: '',
+          nights_dates: '',
+          route_from_to: '',
+          expense_concept: '',
+          airline: '',
+          flight_route: '',
+          amount_usd: 0,
+          bcv_rate: 0,
+          amount_bs: 0,
+          bank_beneficiary: '',
+          bank_rif: '',
+          bank_name: '',
+          bank_account: '',
+          pago_movil_phone: '',
+          pago_movil_ci: '',
+          binance_email: '',
+          binance_pay_id: '',
+          zelle_email: '',
+          zelle_name: '',
+          cash_receiver: '',
+          swift_or_aba: '',
+          bank_country_or_address: '',
+          intermediary_bank_or_notes: '',
+          default_account_id: '',
+          default_account_code: '',
+          default_account_name: '',
+          notes: '',
+        });
+      }
+    }
+  }, [isOpen, editingRequest, preselectedBeneficiaryId, beneficiariesList]);
 
   const handleClose = () => {
     resetForm();
@@ -450,9 +538,25 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     }
 
     // Montos
-    if (effectiveMethod === 'binance' || effectiveMethod === 'zelle_usd' || effectiveMethod === 'efectivo_usd' || effectiveMethod === 'efectivo_bs') {
+    if (
+      effectiveMethod === 'binance' ||
+      effectiveMethod === 'zelle_usd' ||
+      effectiveMethod === 'transferencia_usd' ||
+      effectiveMethod === 'efectivo_usd' ||
+      effectiveMethod === 'efectivo_bs'
+    ) {
       lines.push('Monto USD: ');
-      lines.push(`Metodo: ${effectiveMethod === 'binance' ? 'Binance' : effectiveMethod === 'zelle_usd' ? 'Zelle' : 'Efectivo'}`);
+      lines.push(
+        `Metodo: ${
+          effectiveMethod === 'binance'
+            ? 'Binance'
+            : effectiveMethod === 'zelle_usd'
+            ? 'Zelle'
+            : effectiveMethod === 'transferencia_usd'
+            ? 'Transferencia USD'
+            : 'Efectivo'
+        }`
+      );
     } else if (effectiveMethod === 'pago_movil') {
       lines.push('Monto USD: ');
       lines.push('Tasa BCV: ');
@@ -474,6 +578,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       if (effectiveMethod === 'transferencia_bs') {
         lines.push(`Banco: ${bDetails?.bank || 'BANESCO'}`);
         lines.push(`Cuenta: ${bDetails?.account_number || ''}`);
+      } else if (effectiveMethod === 'transferencia_usd') {
+        lines.push(`Banco: ${bDetails?.bank || ''}`);
+        lines.push(`Cuenta: ${bDetails?.account_number || ''}`);
+        if (bDetails?.swift_or_aba) lines.push(`SWIFT: ${bDetails.swift_or_aba}`);
+        if (bDetails?.bank_country_or_address) lines.push(`Pais / Direccion: ${bDetails.bank_country_or_address}`);
+        if (bDetails?.intermediary_bank_or_notes) lines.push(`Banco Intermediario: ${bDetails.intermediary_bank_or_notes}`);
       } else if (effectiveMethod === 'pago_movil') {
         lines.push(`Banco: ${bDetails?.bank || 'BANESCO'}`);
         lines.push(`Pago movil: ${bDetails?.pago_movil_phone || ''}`);
@@ -494,6 +604,11 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         lines.push('RIF: ');
         lines.push('Banco: ');
         lines.push('Cuenta: ');
+      } else if (effectiveMethod === 'transferencia_usd') {
+        lines.push('Banco: ');
+        lines.push('Cuenta: ');
+        lines.push('SWIFT: ');
+        lines.push('Pais / Direccion: ');
       } else if (effectiveMethod === 'pago_movil') {
         lines.push('Banco: ');
         lines.push('Pago movil: ');
@@ -704,6 +819,10 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       'Receptor de Efectivo'
     ]);
 
+    const parsedSwiftOrAba = getValue(['Código SWIFT', 'Codigo SWIFT', 'SWIFT / ABA', 'SWIFT/ABA', 'SWIFT', 'BIC', 'ABA']);
+    const parsedBankCountry = getValue(['País / Dirección', 'Pais / Direccion', 'Pais / Dir', 'País', 'Pais', 'Dirección Banco']);
+    const parsedIntermediary = getValue(['Banco Intermediario', 'Intermediario']);
+
     // Detect Payment Method & Currency Automatically
     const explicitMethod = getValue(['Metodo de Pago', 'Método de Pago', 'Metodo', 'Método', 'Forma de Pago']);
     let detectedMethod: PaymentMethodType = currentMethod;
@@ -715,6 +834,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
         detectedCurrency = 'USD';
       } else if (/zelle/i.test(explicitMethod)) {
         detectedMethod = 'zelle_usd';
+        detectedCurrency = 'USD';
+      } else if (/transferencia\s*usd|internacional|swift|aba|iban|panam[aá]/i.test(explicitMethod)) {
+        detectedMethod = 'transferencia_usd';
         detectedCurrency = 'USD';
       } else if (/efectivo/i.test(explicitMethod)) {
         detectedMethod = 'efectivo_usd';
@@ -733,6 +855,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       } else if (parsedZelleEmail || /\bzelle\b/i.test(textToParse)) {
         detectedMethod = 'zelle_usd';
         detectedCurrency = 'USD';
+      } else if (parsedSwiftOrAba || /\b(swift|iban|aba)\b/i.test(textToParse)) {
+        detectedMethod = 'transferencia_usd';
+        detectedCurrency = 'USD';
       } else if (parsedCashReceiver || /\befectivo\b/i.test(textToParse)) {
         detectedMethod = 'efectivo_usd';
         detectedCurrency = 'USD';
@@ -747,7 +872,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       }
     }
 
-    if (/divisa|solo\s*usd|usdt|binance|zelle/i.test(textToParse) && (!rawBcv || numBcv === 0)) {
+    if (/divisa|solo\s*usd|usdt|binance|zelle|swift|iban/i.test(textToParse) && (!rawBcv || numBcv === 0)) {
       detectedCurrency = 'USD';
     } else if (rawBcv && numBcv > 0) {
       detectedCurrency = 'VES';
@@ -872,7 +997,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const finalBeneficiary = parsedBeneficiary || (selectedBen ? selectedBen.name : '');
     const finalRif = parsedRif || (selectedBen ? (selectedBen.rif || benDetails?.rif || '') : '');
     const finalBank = (parsedBank ? parsedBank.toUpperCase() : '') || (selectedBen ? (benDetails?.bank || 'BANESCO') : (currentForm.bank_name || 'BANESCO'));
-    const finalAccount = (parsedAccount ? parsedAccount.replace(/[^0-9-]/g, '') : '') || (selectedBen ? (benDetails?.account_number || '') : (parsedAccount ? parsedAccount.replace(/[^0-9-]/g, '') : ''));
+    const finalAccount =
+      (detectedMethod === 'transferencia_usd'
+        ? parsedAccount.trim()
+        : parsedAccount
+        ? parsedAccount.replace(/[^0-9-]/g, '')
+        : '') || (selectedBen ? (benDetails?.account_number || '') : '');
     const finalPmPhone = (parsedPagoMovilPhone ? parsedPagoMovilPhone.replace(/[^0-9]/g, '') : '') || (selectedBen ? (benDetails?.pago_movil_phone || '') : '');
     const finalPmCi = parsedPagoMovilCi || (selectedBen ? (benDetails?.pago_movil_ci || '') : '');
     const finalBinanceEmail = parsedBinanceEmail || (selectedBen ? (benDetails?.binance_email || '') : '');
@@ -880,6 +1010,9 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
     const finalZelleEmail = parsedZelleEmail || (selectedBen ? (benDetails?.zelle_email || '') : '');
     const finalZelleName = parsedZelleName || (selectedBen ? (benDetails?.zelle_name || '') : '');
     const finalCashReceiver = parsedCashReceiver || (selectedBen ? (benDetails?.cash_receiver || '') : '');
+    const finalSwiftOrAba = (parsedSwiftOrAba ? parsedSwiftOrAba.toUpperCase() : '') || (selectedBen ? (benDetails?.swift_or_aba || '') : currentForm.swift_or_aba);
+    const finalBankCountry = parsedBankCountry || (selectedBen ? (benDetails?.bank_country_or_address || '') : currentForm.bank_country_or_address);
+    const finalIntermediary = parsedIntermediary || (selectedBen ? (benDetails?.intermediary_bank_or_notes || '') : currentForm.intermediary_bank_or_notes);
 
     const finalHotel = isViaticos ? 'VIATICOS' : isGastos ? (parsedExpenseConcept || (selectedBen ? selectedBen.name : 'GASTOS')) : (parsedHotel || (selectedBen ? selectedBen.name : ''));
 
@@ -912,6 +1045,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       zelle_email: finalZelleEmail,
       zelle_name: finalZelleName,
       cash_receiver: finalCashReceiver,
+      swift_or_aba: finalSwiftOrAba,
+      bank_country_or_address: finalBankCountry,
+      intermediary_bank_or_notes: finalIntermediary,
+      default_account_id: selectedBen?.bank_details?.default_account_id || currentForm.default_account_id,
+      default_account_code: selectedBen?.bank_details?.default_account_code || currentForm.default_account_code,
+      default_account_name: selectedBen?.bank_details?.default_account_name || currentForm.default_account_name,
     };
 
     return {
@@ -948,7 +1087,11 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
   const handleApplyTemplate = (newCat: ServiceCategory, newMethod: PaymentMethodType) => {
     setCategory(newCat);
     setPaymentMethod(newMethod);
-    const isDirect = newMethod === 'binance' || newMethod === 'zelle_usd' || newMethod === 'efectivo_usd';
+    const isDirect =
+      newMethod === 'binance' ||
+      newMethod === 'zelle_usd' ||
+      newMethod === 'transferencia_usd' ||
+      newMethod === 'efectivo_usd';
     const newCurr = isDirect ? 'USD' : 'VES';
     setCurrency(newCurr);
     const ben = beneficiariesList.find((b) => b.id === selectedBeneficiaryId);
@@ -1064,6 +1207,11 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
       return;
     }
 
+    if (paymentMethod === 'transferencia_usd' && (!formData.bank_name?.trim() || !formData.bank_account?.trim())) {
+      setErrorMsg('⚠️ Faltan datos de Transferencia USD: Ingresa el Banco Internacional y el N° de Cuenta / IBAN.');
+      return;
+    }
+
     if (paymentMethod === 'pago_movil' && (!formData.pago_movil_phone?.trim() || !formData.pago_movil_ci?.trim())) {
       setErrorMsg('⚠️ Faltan datos de Pago Móvil: Por favor ingresa el Teléfono y Cédula/RIF de destino.');
       return;
@@ -1160,6 +1308,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
           zelle_email: formData.zelle_email,
           zelle_name: formData.zelle_name,
           cash_receiver: formData.cash_receiver,
+          swift_or_aba: formData.swift_or_aba || undefined,
+          bank_country_or_address: formData.bank_country_or_address || undefined,
+          intermediary_bank_or_notes: formData.intermediary_bank_or_notes || undefined,
+          default_account_id: formData.default_account_id || undefined,
+          default_account_code: formData.default_account_code || undefined,
+          default_account_name: formData.default_account_name || undefined,
           notes: formData.notes
         },
         support_file: supportFile,
@@ -1402,6 +1556,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                         <option value="transferencia_bs">🏦 Transferencia (Bs)</option>
                         <option value="pago_movil">📱 Pago Móvil (Bs)</option>
                         <option value="binance">💰 Binance (USDT)</option>
+                        <option value="transferencia_usd">🌎 Transferencia USD</option>
                         <option value="zelle_usd">💵 Zelle (USD)</option>
                         <option value="efectivo_usd">💵 Efectivo ($ / Bs)</option>
                       </select>
@@ -1463,6 +1618,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                     {/* Badge Método de Pago */}
                     <span className="bg-slate-900 text-white px-2.5 py-1 rounded-xl font-bold flex items-center gap-1">
                       {paymentMethod === 'binance' ? '💰 Binance USDT' :
+                       paymentMethod === 'transferencia_usd' ? '🌎 Transferencia USD' :
                        paymentMethod === 'zelle_usd' ? '💵 Zelle USD' :
                        paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs' ? '💵 Efectivo' :
                        paymentMethod === 'pago_movil' ? '📱 Pago Móvil' :
@@ -1481,15 +1637,20 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       </span>
                     )}
 
-                    {/* Transferencia Bancaria */}
-                    {paymentMethod === 'transferencia_bs' && formData.bank_name && (
+                    {/* Transferencia Bancaria Bs / USD */}
+                    {(paymentMethod === 'transferencia_bs' || paymentMethod === 'transferencia_usd') && formData.bank_name && (
                       <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-bold">
                         🏦 {formData.bank_name}
                       </span>
                     )}
-                    {paymentMethod === 'transferencia_bs' && formData.bank_account && (
+                    {(paymentMethod === 'transferencia_bs' || paymentMethod === 'transferencia_usd') && formData.bank_account && (
                       <span className="bg-slate-100 border border-slate-200 px-2.5 py-1 rounded-xl text-slate-700 font-mono font-bold">
                         💳 ••••{formData.bank_account.slice(-4)}
+                      </span>
+                    )}
+                    {paymentMethod === 'transferencia_usd' && formData.swift_or_aba && (
+                      <span className="bg-emerald-50 border border-emerald-200 px-2.5 py-1 rounded-xl text-emerald-900 font-mono font-bold">
+                        🌎 SWIFT: {formData.swift_or_aba}
                       </span>
                     )}
 
@@ -1865,7 +2026,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                         onChange={(e) => {
                           const newMethod = e.target.value as PaymentMethodType;
                           setPaymentMethod(newMethod);
-                          if (newMethod === 'binance' || newMethod === 'zelle_usd') {
+                          if (newMethod === 'binance' || newMethod === 'zelle_usd' || newMethod === 'transferencia_usd') {
                             setCurrency('USD');
                           } else if (newMethod === 'transferencia_bs' || newMethod === 'pago_movil') {
                             setCurrency('VES');
@@ -1877,6 +2038,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                         <option value="transferencia_bs">🏦 Transferencia (Bs)</option>
                         <option value="pago_movil">📱 Pago Móvil (Bs)</option>
                         <option value="binance">💰 Binance Pay (USDT)</option>
+                        <option value="transferencia_usd">🌎 Transferencia USD</option>
                         <option value="zelle_usd">💵 Zelle (USD)</option>
                         <option value="efectivo_usd">💵 Efectivo ($ / Bs)</option>
                       </select>
@@ -1926,6 +2088,33 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       ) : (
                         <p className="text-rose-600 font-bold bg-rose-50 p-1.5 rounded-lg border border-rose-200">
                           ⚠️ Falta el N° de Cuenta Bancaria (20 dígitos) para la transferencia.
+                        </p>
+                      )
+                    )}
+
+                    {paymentMethod === 'transferencia_usd' && (
+                      formData.bank_account ? (
+                        <div className="space-y-0.5">
+                          <p className="font-mono text-emerald-800 font-black select-all">
+                            <strong className="text-slate-500 font-normal font-sans">Cuenta / IBAN:</strong>{' '}
+                            {formData.bank_account}
+                          </p>
+                          {formData.swift_or_aba && (
+                            <p className="font-mono text-emerald-900 font-bold">
+                              <strong className="text-slate-500 font-normal font-sans">SWIFT / ABA:</strong>{' '}
+                              {formData.swift_or_aba}
+                            </p>
+                          )}
+                          {formData.bank_country_or_address && (
+                            <p className="text-slate-700 font-semibold">
+                              <strong className="text-slate-500 font-normal">País / Dir:</strong>{' '}
+                              {formData.bank_country_or_address}
+                            </p>
+                          )}
+                        </div>
+                      ) : (
+                        <p className="text-rose-600 font-bold bg-rose-50 p-1.5 rounded-lg border border-rose-200">
+                          ⚠️ Falta el N° de Cuenta Internacional / IBAN para la transferencia USD.
                         </p>
                       )
                     )}
@@ -2392,7 +2581,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       type="button"
                       onClick={() => {
                         setCurrency('VES');
-                        if (paymentMethod === 'binance' || paymentMethod === 'zelle_usd') {
+                        if (paymentMethod === 'binance' || paymentMethod === 'zelle_usd' || paymentMethod === 'transferencia_usd') {
                           setPaymentMethod('transferencia_bs');
                         }
                       }}
@@ -2451,7 +2640,7 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                 </div>
 
                 {/* Botones de Métodos de Pago */}
-                <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5">
+                <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-6 gap-1.5">
                   <button
                     type="button"
                     onClick={() => {
@@ -2503,6 +2692,22 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                   <button
                     type="button"
                     onClick={() => {
+                      setPaymentMethod('transferencia_usd');
+                      setCurrency('USD');
+                    }}
+                    className={`p-2 rounded-xl text-xs font-bold flex flex-col items-center gap-1 border transition-all ${
+                      paymentMethod === 'transferencia_usd'
+                        ? 'bg-emerald-700 text-white border-emerald-700 shadow-2xs'
+                        : 'bg-white hover:bg-slate-100 text-slate-700 border-slate-200'
+                    }`}
+                  >
+                    <Globe className="w-4 h-4" />
+                    <span>Transf. USD</span>
+                  </button>
+
+                  <button
+                    type="button"
+                    onClick={() => {
                       setPaymentMethod('zelle_usd');
                       setCurrency('USD');
                     }}
@@ -2536,8 +2741,76 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
               {/* Campos dinámicos según el método de pago seleccionado */}
               <div className="space-y-2 pt-1 border-t border-slate-100">
                 <label className="block text-slate-800 font-bold text-xs">
-                  Detalles del Destino de Pago ({paymentMethod === 'binance' ? 'Binance Pay' : paymentMethod === 'zelle_usd' ? 'Zelle USD' : paymentMethod === 'pago_movil' ? 'Pago Móvil' : paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs' ? 'Efectivo' : 'Transferencia Bancaria'})
+                  Detalles del Destino de Pago ({paymentMethod === 'binance' ? 'Binance Pay' : paymentMethod === 'transferencia_usd' ? 'Transferencia Internacional USD' : paymentMethod === 'zelle_usd' ? 'Zelle USD' : paymentMethod === 'pago_movil' ? 'Pago Móvil' : paymentMethod === 'efectivo_usd' || paymentMethod === 'efectivo_bs' ? 'Efectivo' : 'Transferencia Bancaria'})
                 </label>
+
+                {paymentMethod === 'transferencia_usd' && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Beneficiario / Titular *</label>
+                      <input
+                        type="text"
+                        placeholder="Nombre o Razón Social"
+                        value={formData.bank_beneficiary}
+                        onChange={(e) => setFormData({ ...formData, bank_beneficiary: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Banco Internacional *</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Banesco Panamá, Bank of America"
+                        value={formData.bank_name}
+                        onChange={(e) => setFormData({ ...formData, bank_name: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Cuenta Internacional / IBAN *</label>
+                      <input
+                        type="text"
+                        placeholder="N° Cuenta / IBAN"
+                        value={formData.bank_account}
+                        onChange={(e) => setFormData({ ...formData, bank_account: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                        required
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Código SWIFT / BIC o ABA</label>
+                      <input
+                        type="text"
+                        placeholder="SWIFT / ABA"
+                        value={formData.swift_or_aba}
+                        onChange={(e) => setFormData({ ...formData, swift_or_aba: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-mono font-bold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">País / Dirección del Banco</label>
+                      <input
+                        type="text"
+                        placeholder="Ej: Panamá • Checking USD"
+                        value={formData.bank_country_or_address}
+                        onChange={(e) => setFormData({ ...formData, bank_country_or_address: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[11px] font-semibold text-slate-500 mb-0.5">Banco Intermediario / Nota</label>
+                      <input
+                        type="text"
+                        placeholder="Opcional"
+                        value={formData.intermediary_bank_or_notes}
+                        onChange={(e) => setFormData({ ...formData, intermediary_bank_or_notes: e.target.value })}
+                        className="w-full bg-slate-50 border border-slate-200 rounded-xl px-3 py-1.5 text-xs font-semibold"
+                      />
+                    </div>
+                  </div>
+                )}
 
                 {paymentMethod === 'transferencia_bs' && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
@@ -2794,6 +3067,12 @@ export const NewRequestModal: React.FC<NewRequestModalProps> = ({
                       <p>
                         <strong className="text-teal-700 font-sans block text-[11px] uppercase">Transferencia {formData.bank_name}:</strong>
                         <span>N° {formData.bank_account}</span>
+                      </p>
+                    )}
+                    {paymentMethod === 'transferencia_usd' && (
+                      <p>
+                        <strong className="text-emerald-700 font-sans block text-[11px] uppercase">Transferencia USD — {formData.bank_name}:</strong>
+                        <span>Cta: {formData.bank_account} {formData.swift_or_aba ? `• SWIFT: ${formData.swift_or_aba}` : ''}</span>
                       </p>
                     )}
                     {paymentMethod === 'pago_movil' && (

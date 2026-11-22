@@ -1,0 +1,1484 @@
+import React, { useState, useMemo, useEffect } from 'react';
+import { 
+  Search, Plus, Filter, MoreVertical, FileText, ArrowLeft, Edit2, 
+  Trash2, CheckCircle2, XCircle, AlertCircle, X, ChevronDown, 
+  Eye, ShieldCheck, Scale, Check, Printer, DollarSign, Coins, 
+  Sparkles, TrendingUp, TrendingDown, Layers, Download, BookOpen 
+} from 'lucide-react';
+import { Link } from 'react-router-dom';
+import { useCompany } from '../context/CompanyContext';
+import CuentaContableModal from '../components/common/CuentaContableModal';
+import BackButton from '../components/common/BackButton';
+import { getTodayLocalDate, toInputDateFormat } from '../utils/dateUtils';
+import { getTasaForDate } from '../services/exchangeRateService';
+
+export default function AccountingEntries({ comprobantes = [], cuentasContables = [], onSave, showToast, workingYear }: { comprobantes?: any[], cuentasContables?: any[], onSave?: any, showToast?: any, workingYear?: string }) {
+  const { activeCompanyId } = useCompany();
+  const [searchQuery, setSearchQuery] = useState('');
+  const [filterType, setFilterType] = useState('all');
+  const defaultYear = workingYear || String(new Date().getFullYear());
+  const [dateFilters, setDateFilters] = useState({
+    tipo: 'mes',
+    mes: String(new Date().getMonth() + 1).padStart(2, '0'),
+    ano: defaultYear,
+    desde: '',
+    hasta: ''
+  });
+  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [viewingEntry, setViewingEntry] = useState<any | null>(null);
+  const [currentPage, setCurrentPage] = useState(1);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [deletingEntryId, setDeletingEntryId] = useState<string | null>(null);
+  const itemsPerPage = 15;
+  
+  const [form, setForm] = useState({
+    fecha: getTodayLocalDate(),
+    numero: '',
+    tipo: 'Diario',
+    descripcion: '',
+    referencia: ''
+  });
+
+  const [lines, setLines] = useState<any[]>([
+    { id: crypto.randomUUID(), cuentaId: '', descripcion: '', debe: 0, haber: 0 },
+    { id: crypto.randomUUID(), cuentaId: '', descripcion: '', debe: 0, haber: 0 }
+  ]);
+
+  const [activeLineId, setActiveLineId] = useState<string | null>(null);
+  const [searchCuentaTerm, setSearchCuentaTerm] = useState('');
+  const cuentasMovimiento = cuentasContables.filter(c => c.tipo === 'Movimiento').sort((a,b) => (a.codigo||'').localeCompare(b.codigo||''));
+
+  const formatoES = (num: number | string) => {
+    const n = Number(num);
+    if (isNaN(n) || num === null) return "0,00";
+    let str = n.toFixed(2);
+    let parts = str.split('.');
+    parts[0] = parts[0].replace(/\B(?=(\d{3})+(?!\d))/g, ".");
+    return parts.join(',');
+  };
+
+  const sortedEntries = useMemo(() => {
+    const getDayString = (dateStr: string) => {
+      if (!dateStr) return '1970-01-01';
+      const cleanStr = String(dateStr).trim();
+      
+      if (/^\d{4}-\d{2}-\d{2}$/.test(cleanStr)) return cleanStr;
+      
+      if (cleanStr.includes('/')) {
+        const parts = cleanStr.split('/');
+        if (parts.length === 3) {
+          let day = parts[0];
+          let month = parts[1];
+          let year = parts[2];
+          if (day.length === 1) day = '0' + day;
+          if (month.length === 1) month = '0' + month;
+          if (year.length === 4) {
+            return `${year}-${month}-${day}`;
+          }
+        }
+      }
+
+      try {
+        const d = new Date(cleanStr);
+        if (!isNaN(d.getTime())) {
+          return toInputDateFormat(d);
+        }
+      } catch (e) {}
+      return cleanStr;
+    };
+
+    let fIni: string | null = null;
+    let fFin: string | null = null;
+    if (dateFilters.tipo === 'mes') {
+      fIni = `${dateFilters.ano}-${dateFilters.mes}-01`;
+      fFin = `${dateFilters.ano}-${dateFilters.mes}-${new Date(Number(dateFilters.ano), parseInt(dateFilters.mes), 0).getDate()}`;
+    } else if (dateFilters.tipo === 'ano') {
+      fIni = `${dateFilters.ano}-01-01`;
+      fFin = `${dateFilters.ano}-12-31`;
+    } else if (dateFilters.tipo === 'rango') {
+      fIni = dateFilters.desde;
+      fFin = dateFilters.hasta;
+    }
+
+    const list = comprobantes.filter(comp => {
+      const matchesSearch = 
+        (comp.numero || '').toLowerCase().includes((searchQuery || '').toLowerCase()) || 
+        (comp.descripcion || '').toLowerCase().includes((searchQuery || '').toLowerCase());
+      
+      let matchesFilter = true;
+      if (filterType === 'all') {
+        matchesFilter = true;
+      } else if (filterType === 'Descuadrado') {
+        const cLines = Array.isArray(comp.lineas) ? comp.lineas : (Array.isArray(comp.detalles) ? comp.detalles : []);
+        const d = cLines.reduce((acc: number, l: any) => acc + (Number(l.debe) || 0), 0) || Number(comp.total) || 0;
+        const h = cLines.reduce((acc: number, l: any) => acc + (Number(l.haber) || 0), 0) || Number(comp.total) || 0;
+        matchesFilter = comp.estado === 'Descuadrado' || Math.abs(d - h) >= 0.01;
+      } else {
+        matchesFilter = comp.tipo === filterType;
+      }
+      
+      let inPeriod = true;
+      if (dateFilters.tipo !== 'todo') {
+        const compDate = getDayString(comp.fecha);
+        if (fIni && compDate < fIni) inPeriod = false;
+        if (fFin && compDate > fFin) inPeriod = false;
+      }
+      
+      return matchesSearch && matchesFilter && inPeriod;
+    });
+
+    const getTimestamp = (comp: any) => {
+      const rawCreated = comp.created_at || comp.createdAt;
+      if (rawCreated) {
+        const ts = new Date(rawCreated).getTime();
+        if (!isNaN(ts) && ts > 0) return ts;
+      }
+      const strId = String(comp.id || '');
+      const match = strId.match(/comp-(\d+)/);
+      if (match) {
+        return parseInt(match[1], 10);
+      }
+      const timestampMatch = strId.match(/\d{13}/);
+      if (timestampMatch) {
+         return parseInt(timestampMatch[0], 10);
+      }
+      const parsedId = Number(comp.id);
+      if (!isNaN(parsedId) && parsedId > 1000000000000) {
+        return parsedId;
+      }
+      return 0;
+    };
+
+    return list.sort((a, b) => {
+      const dayA = getDayString(a.fecha);
+      const dayB = getDayString(b.fecha);
+      
+      // Orden por fecha ascendente (los primeros días van de primero)
+      if (dayA !== dayB) {
+        return dayA.localeCompare(dayB);
+      }
+
+      // Priorizar asientos de Apertura de primero para la misma fecha
+      const isAperA = a.referencia === 'APER' || (a.descripcion || '').toLowerCase().includes('apertura');
+      const isAperB = b.referencia === 'APER' || (b.descripcion || '').toLowerCase().includes('apertura');
+      if (isAperA && !isAperB) return -1;
+      if (isAperB && !isAperA) return 1;
+
+      // Asientos de Cierre o Ajustes Automáticos al final para la misma fecha
+      const isCierreA = a.tipo === 'Cierre' || (a.referencia || '').includes('CIERRE') || a.referencia === 'AUTO-FX';
+      const isCierreB = b.tipo === 'Cierre' || (b.referencia || '').includes('CIERRE') || b.referencia === 'AUTO-FX';
+      if (isCierreA && !isCierreB) return 1;
+      if (isCierreB && !isCierreA) return -1;
+
+      // Orden por registro / creación ascendente (los primeros registros van de primero)
+      const tsA = getTimestamp(a);
+      const tsB = getTimestamp(b);
+      if (tsA !== tsB && tsA > 0 && tsB > 0) {
+        return tsA - tsB;
+      }
+
+      return String(a.numero || a.id || '').localeCompare(String(b.numero || b.id || ''));
+    });
+  }, [comprobantes, searchQuery, filterType, dateFilters]);
+
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchQuery, filterType, dateFilters]);
+
+  const totalItems = sortedEntries.length;
+  const totalPages = Math.ceil(totalItems / itemsPerPage) || 1;
+  const safeCurrentPage = Math.min(currentPage, totalPages);
+
+  const paginatedEntries = useMemo(() => {
+    const startIndex = (safeCurrentPage - 1) * itemsPerPage;
+    return sortedEntries.slice(startIndex, startIndex + itemsPerPage);
+  }, [sortedEntries, safeCurrentPage, itemsPerPage]);
+
+  const totalDebe = lines.reduce((acc, line) => acc + (Number(line.debe) || 0), 0);
+  const totalHaber = lines.reduce((acc, line) => acc + (Number(line.haber) || 0), 0);
+  const diferencia = Math.abs(totalDebe - totalHaber);
+  const isBalanced = diferencia < 0.01 && totalDebe > 0;
+  const invalidLines = lines.some(l => !l.cuentaId || (Number(l.debe) === 0 && Number(l.haber) === 0));
+  const isDescuadrado = !isBalanced || invalidLines;
+
+  const handleOpenModal = (comp?: any) => {
+    if (comp) {
+      setEditingId(comp.id);
+      setForm({
+        fecha: comp.fecha,
+        numero: comp.numero,
+        tipo: comp.tipo,
+        descripcion: comp.descripcion || comp.concepto || '',
+        referencia: comp.referencia || ''
+      });
+      const rawLines = (comp.lineas && comp.lineas.length > 0) 
+        ? comp.lineas 
+        : ((comp.detalles && comp.detalles.length > 0) ? comp.detalles.map((d: any) => ({
+            id: d.id || crypto.randomUUID(),
+            cuentaId: d.cuentaId || d.cuenta_id || d.cuenta_codigo || d.cuentaCodigo,
+            descripcion: d.descripcion || comp.descripcion || comp.concepto || '',
+            debe: Number(d.debe) || 0,
+            haber: Number(d.haber) || 0
+          })) : ((comp.asientos && comp.asientos.length > 0) ? comp.asientos.map((a: any) => ({
+            id: a.id || crypto.randomUUID(),
+            cuentaId: a.cuentaId || a.cuenta_id || a.cuenta_codigo || a.cuentaCodigo,
+            descripcion: a.descripcion || comp.descripcion || comp.concepto || '',
+            debe: Number(a.debe) || 0,
+            haber: Number(a.haber) || 0
+          })) : []));
+      setLines(rawLines);
+    } else {
+      setEditingId(null);
+      setForm({
+        fecha: getTodayLocalDate(),
+        numero: `CMP-${Date.now().toString().slice(-6)}`,
+        tipo: 'Diario',
+        descripcion: '',
+        referencia: ''
+      });
+      setLines([
+        { id: crypto.randomUUID(), cuentaId: '', descripcion: '', debe: 0, haber: 0 },
+        { id: crypto.randomUUID(), cuentaId: '', descripcion: '', debe: 0, haber: 0 }
+      ]);
+    }
+    setIsModalOpen(true);
+  };
+
+  const handleCloseModal = () => {
+    setIsModalOpen(false);
+    setEditingId(null);
+  };
+
+  const handleConceptoChange = (newDesc: string) => {
+    const oldDesc = form.descripcion;
+    setForm(prev => ({ ...prev, descripcion: newDesc }));
+    setLines(prevLines => prevLines.map(l => {
+      if (!l.descripcion || l.descripcion === oldDesc) {
+        return { ...l, descripcion: newDesc };
+      }
+      return l;
+    }));
+  };
+
+  const handleAddLine = () => {
+    setLines([...lines, { id: crypto.randomUUID(), cuentaId: '', descripcion: form.descripcion || '', debe: 0, haber: 0 }]);
+  };
+
+  const handleRemoveLine = (id: string) => {
+    if (lines.length > 2) {
+      setLines(lines.filter(l => l.id !== id));
+    } else {
+      showToast?.('Debe haber al menos dos líneas en el comprobante', 'error');
+    }
+  };
+
+  const handleLineChange = (id: string, field: string, value: any) => {
+    setLines(lines.map(l => {
+      if (l.id === id) {
+        const newLine = { ...l, [field]: value };
+        // Si se llena el debe, se vacía el haber y viceversa
+        if (field === 'debe' && Number(value) > 0) newLine.haber = 0;
+        if (field === 'haber' && Number(value) > 0) newLine.debe = 0;
+        return newLine;
+      }
+      return l;
+    }));
+  };
+
+  const handleDeleteEntry = async (comp: any) => {
+    if (deletingEntryId) return;
+    if (!window.confirm(`¿Está seguro de que desea ELIMINAR permanentemente el comprobante contable ${comp.numero}?`)) {
+      return;
+    }
+    setDeletingEntryId(comp.id);
+    try {
+      if (onSave) {
+        await onSave('comprobantes', { id: comp.id, _delete: true });
+        showToast?.('Comprobante eliminado permanentemente de PostgreSQL.', 'success');
+      }
+    } catch (e: any) {
+      showToast?.(e?.message || 'Error al eliminar el comprobante contable.', 'error');
+    } finally {
+      setDeletingEntryId(null);
+    }
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (isSubmitting) return;
+    
+    if (workingYear && form.fecha) {
+      const year = form.fecha.substring(0, 4);
+      if (year !== workingYear) {
+        showToast?.(`No se puede registrar este comprobante porque el año de la fecha (${year}) no coincide con el período contable seleccionado (${workingYear}).`, 'error');
+        return;
+      }
+    }
+
+    if (!form.fecha || !form.numero?.trim() || !form.descripcion?.trim()) {
+      showToast?.('Por favor completa los campos requeridos (Fecha, Número y Concepto).', 'error');
+      return;
+    }
+
+    if (invalidLines) {
+      showToast?.('Todas las líneas del asiento deben tener una cuenta contable seleccionada y un monto mayor a cero en Debe o Haber.', 'error');
+      return;
+    }
+
+    if (!isBalanced) {
+      showToast?.(`El comprobante está descuadrado (Diferencia: $${formatoES(diferencia)}). En contabilidad NIIF el Total Debe debe ser igual al Total Haber.`, 'error');
+      return;
+    }
+
+    const finalLines = lines.map(l => ({
+      ...l,
+      descripcion: (l.descripcion && l.descripcion.trim()) ? l.descripcion.trim() : form.descripcion.trim()
+    }));
+
+    const newEntry = {
+      id: editingId || crypto.randomUUID(),
+      empresa_id: activeCompanyId,
+      ...form,
+      numero: form.numero.trim(),
+      descripcion: form.descripcion.trim(),
+      referencia: (form.referencia || '').trim(),
+      total: Number(totalDebe.toFixed(2)),
+      estado: 'Contabilizado',
+      lineas: finalLines
+    };
+
+    setIsSubmitting(true);
+    try {
+      await onSave?.('comprobantes', newEntry);
+      showToast?.(`Comprobante ${editingId ? 'actualizado' : 'contabilizado'} exitosamente en PostgreSQL`, 'success');
+      handleCloseModal();
+    } catch (error: any) {
+      console.error('[AccountingEntries] Error al guardar comprobante:', error);
+      showToast?.(error?.message || 'Error al registrar el comprobante en la base de datos.', 'error');
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const formatSafeDate = (d?: string) => {
+    if (!d) return '';
+    const parts = d.includes('T') ? d.split('T')[0].split('-') : d.split('-');
+    if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
+    return d;
+  };
+
+  const viewingLines = useMemo(() => {
+    if (!viewingEntry) return [];
+    const raw = (viewingEntry.lineas && viewingEntry.lineas.length > 0)
+      ? viewingEntry.lineas
+      : ((viewingEntry.detalles && viewingEntry.detalles.length > 0)
+        ? viewingEntry.detalles
+        : ((viewingEntry.asientos && viewingEntry.asientos.length > 0) ? viewingEntry.asientos : []));
+
+    return raw.map((l: any, idx: number) => {
+      const cuentaId = l.cuentaId || l.cuenta_id || l.cuenta_codigo || l.cuentaCodigo;
+      const matched = cuentasContables.find(c => c.id === cuentaId || c.codigo === cuentaId);
+      return {
+        id: l.id || `line-${idx}`,
+        codigo: matched ? matched.codigo : (l.cuenta_codigo || l.cuentaCodigo || cuentaId || '---'),
+        nombre: matched ? (matched.nombre || matched.name) : (l.nombreCuenta || l.cuenta_nombre || 'Cuenta Contable'),
+        descripcion: l.descripcion || viewingEntry.descripcion || viewingEntry.concepto || '',
+        debe: Number(l.debe) || 0,
+        haber: Number(l.haber) || 0
+      };
+    });
+  }, [viewingEntry, cuentasContables]);
+
+  const viewingTotalDebe = useMemo(() => {
+    return viewingLines.reduce((acc, l) => acc + (Number(l.debe) || 0), 0);
+  }, [viewingLines]);
+
+  const viewingTotalHaber = useMemo(() => {
+    return viewingLines.reduce((acc, l) => acc + (Number(l.haber) || 0), 0);
+  }, [viewingLines]);
+
+  const viewingDiff = Math.abs(viewingTotalDebe - viewingTotalHaber);
+  const viewingIsBalanced = viewingDiff < 0.01;
+
+  // Estado bimonetario y tasa en vivo
+  const [currencyView, setCurrencyView] = useState<'USD' | 'VES'>('USD');
+  const liveTasa = useMemo(() => getTasaForDate(getTodayLocalDate()) || 1.0, []);
+
+  // Métricas financieras calculadas para Bento Grid
+  const metrics = useMemo(() => {
+    let debeTotal = 0;
+    let haberTotal = 0;
+    let descuadradosCount = 0;
+    let cuadradosCount = 0;
+    let countDiario = 0;
+    let countIngreso = 0;
+    let countEgreso = 0;
+
+    for (const c of sortedEntries) {
+      const cLines = Array.isArray(c.lineas) ? c.lineas : (Array.isArray(c.detalles) ? c.detalles : []);
+      let compDebe = 0;
+      let compHaber = 0;
+      if (cLines.length > 0) {
+        for (const l of cLines) {
+          compDebe += Number(l.debe) || 0;
+          compHaber += Number(l.haber) || 0;
+        }
+      } else {
+        compDebe = Number(c.total) || 0;
+        compHaber = Number(c.total) || 0;
+      }
+
+      debeTotal += compDebe;
+      haberTotal += compHaber;
+
+      const diff = Math.abs(compDebe - compHaber);
+      const isUnbalanced = c.estado === 'Descuadrado' || diff >= 0.01;
+      if (isUnbalanced) descuadradosCount++;
+      else cuadradosCount++;
+
+      const t = (c.tipo || '').toLowerCase();
+      if (t === 'diario') countDiario++;
+      else if (t === 'ingreso') countIngreso++;
+      else if (t === 'egreso') countEgreso++;
+    }
+
+    return {
+      totalEntries: sortedEntries.length,
+      totalComprobantes: sortedEntries.length,
+      debeTotalUSD: debeTotal,
+      totalDebeUSD: debeTotal,
+      debeTotalBs: debeTotal * liveTasa,
+      haberTotalUSD: haberTotal,
+      totalHaberUSD: haberTotal,
+      haberTotalBs: haberTotal * liveTasa,
+      descuadradosCount,
+      cuadradosCount,
+      countDiario,
+      diarioCount: countDiario,
+      countIngreso,
+      ingresoCount: countIngreso,
+      countEgreso,
+      egresoCount: countEgreso,
+      isPeriodBalanced: Math.abs(debeTotal - haberTotal) < 0.01 && debeTotal > 0
+    };
+  }, [sortedEntries, liveTasa]);
+
+  const handleExportCSV = () => {
+    if (sortedEntries.length === 0) {
+      showToast?.('No hay comprobantes para exportar en este período', 'info');
+      return;
+    }
+    const headers = ['Fecha', 'Numero', 'Tipo', 'Descripcion', 'Referencia', 'Total Debe ($)', 'Total Haber ($)', 'Estado'];
+    const rows = sortedEntries.map(c => {
+      const cLines = Array.isArray(c.lineas) ? c.lineas : (Array.isArray(c.detalles) ? c.detalles : []);
+      const d = cLines.reduce((acc: number, l: any) => acc + (Number(l.debe) || 0), 0) || Number(c.total) || 0;
+      const h = cLines.reduce((acc: number, l: any) => acc + (Number(l.haber) || 0), 0) || Number(c.total) || 0;
+      return [
+        c.fecha,
+        c.numero,
+        c.tipo || 'Diario',
+        `"${(c.descripcion || '').replace(/"/g, '""')}"`,
+        c.referencia || '',
+        d.toFixed(2),
+        h.toFixed(2),
+        c.estado || 'Contabilizado'
+      ];
+    });
+
+    const csvContent = 'data:text/csv;charset=utf-8,' + [headers.join(','), ...rows.map(e => e.join(','))].join('\n');
+    const encodedUri = encodeURI(csvContent);
+    const link = document.createElement('a');
+    link.setAttribute('href', encodedUri);
+    link.setAttribute('download', `comprobantes_contables_${dateFilters.ano || 'periodo'}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+    showToast?.('Comprobantes exportados en formato CSV exitosamente', 'success');
+  };
+
+  return (
+    <div className="w-full max-w-[1920px] mx-auto px-3 sm:px-6 lg:px-8 pt-1 pb-6 space-y-5">
+      {/* Top Header & Actions Toolbar */}
+      <div className="flex flex-col gap-3">
+        <div className="flex items-center justify-between">
+          <BackButton to="/accounting" label="Volver a Contabilidad" />
+          <div className="hidden sm:flex items-center gap-2">
+            <span className="inline-flex items-center gap-1.5 px-3 py-1 rounded-full bg-slate-100 text-slate-700 text-xs font-semibold border border-slate-200">
+              <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+              Tasa Oficial BCV: <strong className="font-mono text-slate-900 font-black">Bs. {liveTasa.toFixed(2)}</strong> / $
+            </span>
+          </div>
+        </div>
+
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-indigo-50 text-indigo-600 rounded-xl">
+                <BookOpen className="w-6 h-6" />
+              </div>
+              <div>
+                <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">Comprobantes y Asientos Contables</h1>
+                <p className="text-xs sm:text-sm text-slate-500 font-medium">Libro Diario Multimoneda, Balance de Partida Doble y Control NIIF</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto justify-end">
+            {/* Currency Selector */}
+            <div className="flex items-center bg-slate-100 p-1 rounded-xl border border-slate-200/70">
+              <button
+                type="button"
+                onClick={() => setCurrencyView('USD')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all ${
+                  currencyView === 'USD'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Mostrar valores en Dólares (USD)"
+              >
+                <DollarSign size={13} /> USD ($)
+              </button>
+              <button
+                type="button"
+                onClick={() => setCurrencyView('VES')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-extrabold flex items-center gap-1.5 transition-all ${
+                  currencyView === 'VES'
+                    ? 'bg-white text-indigo-700 shadow-xs'
+                    : 'text-slate-500 hover:text-slate-800'
+                }`}
+                title="Mostrar valores en Bolívares (VES)"
+              >
+                <Coins size={13} /> VES (Bs.)
+              </button>
+            </div>
+
+            {/* Export CSV */}
+            <button
+              type="button"
+              onClick={handleExportCSV}
+              className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-colors shadow-2xs"
+              title="Descargar listado en formato CSV"
+            >
+              <Download size={14} />
+              <span className="hidden md:inline">Exportar CSV</span>
+            </button>
+
+            {/* Print */}
+            <button
+              type="button"
+              onClick={() => window.print()}
+              className="px-3 py-2 bg-slate-50 hover:bg-slate-100 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 flex items-center gap-1.5 transition-colors shadow-2xs"
+              title="Imprimir o generar PDF del listado"
+            >
+              <Printer size={14} />
+              <span className="hidden md:inline">Imprimir</span>
+            </button>
+
+            {/* New Entry Button */}
+            <button
+              type="button"
+              onClick={() => handleOpenModal()}
+              className="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-xl text-xs sm:text-sm font-bold flex items-center gap-2 transition-all shadow-sm shadow-indigo-200 hover:shadow-indigo-300 active:scale-[0.98]"
+            >
+              <Plus size={16} />
+              Nuevo Comprobante
+            </button>
+          </div>
+        </div>
+      </div>
+
+      {/* Bento Grid Financial Metrics */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3.5">
+        {/* Card 1: Total Comprobantes */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Comprobantes</span>
+            <div className="mt-1 flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-900 font-mono">{metrics.totalComprobantes}</span>
+              <span className="text-xs font-bold text-slate-500">asientos</span>
+            </div>
+            <p className="text-[11px] text-slate-400 mt-0.5">{sortedEntries.length} visibles en filtro</p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-indigo-50 border border-indigo-100 flex items-center justify-center text-indigo-600">
+            <Layers className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card 2: Total Débitos (Debe) */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Débitos (Debe)</span>
+            <div className="mt-1 flex items-baseline gap-1.5 font-mono">
+              <span className="text-lg sm:text-xl font-black text-emerald-600">
+                {currencyView === 'USD' ? `$${formatoES(metrics.totalDebeUSD)}` : `Bs. ${formatoES(metrics.totalDebeUSD * liveTasa)}`}
+              </span>
+            </div>
+            <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+              ≈ {currencyView === 'USD' ? `Bs. ${formatoES(metrics.totalDebeUSD * liveTasa)}` : `$${formatoES(metrics.totalDebeUSD)}`}
+            </p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-emerald-50 border border-emerald-100 flex items-center justify-center text-emerald-600">
+            <TrendingUp className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card 3: Total Créditos (Haber) */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Total Créditos (Haber)</span>
+            <div className="mt-1 flex items-baseline gap-1.5 font-mono">
+              <span className="text-lg sm:text-xl font-black text-sky-600">
+                {currencyView === 'USD' ? `$${formatoES(metrics.totalHaberUSD)}` : `Bs. ${formatoES(metrics.totalHaberUSD * liveTasa)}`}
+              </span>
+            </div>
+            <p className="text-[11px] font-mono text-slate-400 mt-0.5">
+              ≈ {currencyView === 'USD' ? `Bs. ${formatoES(metrics.totalHaberUSD * liveTasa)}` : `$${formatoES(metrics.totalHaberUSD)}`}
+            </p>
+          </div>
+          <div className="w-11 h-11 rounded-xl bg-sky-50 border border-sky-100 flex items-center justify-center text-sky-600">
+            <TrendingDown className="w-5 h-5" />
+          </div>
+        </div>
+
+        {/* Card 4: Balance NIIF */}
+        <div className="bg-white p-4 rounded-2xl border border-slate-200/80 shadow-xs flex items-center justify-between">
+          <div>
+            <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">Balance NIIF</span>
+            <div className="mt-1">
+              {metrics.descuadradosCount === 0 ? (
+                <span className="inline-flex items-center gap-1.5 text-sm font-black text-emerald-700 bg-emerald-50 px-2.5 py-1 rounded-lg border border-emerald-200">
+                  <CheckCircle2 size={14} className="text-emerald-600" />
+                  100% Cuadrados
+                </span>
+              ) : (
+                <span className="inline-flex items-center gap-1.5 text-sm font-black text-rose-700 bg-rose-50 px-2.5 py-1 rounded-lg border border-rose-200">
+                  <AlertCircle size={14} className="text-rose-600" />
+                  {metrics.descuadradosCount} Descuadrados
+                </span>
+              )}
+            </div>
+            <p className="text-[11px] text-slate-400 mt-1">Partida doble verificada</p>
+          </div>
+          <div className={`w-11 h-11 rounded-xl border flex items-center justify-center ${
+            metrics.descuadradosCount === 0 
+              ? 'bg-emerald-50 border-emerald-100 text-emerald-600' 
+              : 'bg-rose-50 border-rose-100 text-rose-600'
+          }`}>
+            <Sparkles className="w-5 h-5" />
+          </div>
+        </div>
+      </div>
+
+      {/* Filter Toolbar & Search */}
+      <div className="bg-white p-4 sm:p-5 rounded-2xl border border-slate-200/80 shadow-xs space-y-4">
+        <div className="flex flex-col lg:flex-row justify-between items-stretch lg:items-center gap-3">
+          {/* Status Tabs Pills */}
+          <div className="flex items-center gap-1.5 bg-slate-100/80 p-1 rounded-xl overflow-x-auto w-full lg:w-auto border border-slate-200/50">
+            <button 
+              onClick={() => setFilterType('all')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                filterType === 'all'
+                  ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80 font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Todos
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterType === 'all' ? 'bg-indigo-50 text-indigo-700 font-mono font-black' : 'bg-slate-200/70 text-slate-600 font-mono'}`}>
+                {metrics.totalComprobantes}
+              </span>
+            </button>
+            <button 
+              onClick={() => setFilterType('Diario')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                filterType === 'Diario'
+                  ? 'bg-white text-indigo-700 shadow-xs border border-slate-200/80 font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Diario
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterType === 'Diario' ? 'bg-indigo-50 text-indigo-700 font-mono font-black' : 'bg-slate-200/70 text-slate-600 font-mono'}`}>
+                {metrics.diarioCount}
+              </span>
+            </button>
+            <button 
+              onClick={() => setFilterType('Ingreso')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                filterType === 'Ingreso'
+                  ? 'bg-white text-emerald-700 shadow-xs border border-slate-200/80 font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Ingresos
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterType === 'Ingreso' ? 'bg-emerald-50 text-emerald-700 font-mono font-black' : 'bg-slate-200/70 text-slate-600 font-mono'}`}>
+                {metrics.ingresoCount}
+              </span>
+            </button>
+            <button 
+              onClick={() => setFilterType('Egreso')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                filterType === 'Egreso'
+                  ? 'bg-white text-rose-700 shadow-xs border border-slate-200/80 font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Egresos
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterType === 'Egreso' ? 'bg-rose-50 text-rose-700 font-mono font-black' : 'bg-slate-200/70 text-slate-600 font-mono'}`}>
+                {metrics.egresoCount}
+              </span>
+            </button>
+            <button 
+              onClick={() => setFilterType('Descuadrado')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-2 whitespace-nowrap ${
+                filterType === 'Descuadrado'
+                  ? 'bg-white text-amber-700 shadow-xs border border-slate-200/80 font-black'
+                  : 'text-slate-600 hover:text-slate-900'
+              }`}
+            >
+              Descuadrados
+              <span className={`px-1.5 py-0.2 rounded-md text-[10px] ${filterType === 'Descuadrado' ? 'bg-amber-100 text-amber-800 font-mono font-black' : 'bg-slate-200/70 text-slate-600 font-mono'}`}>
+                {metrics.descuadradosCount}
+              </span>
+            </button>
+          </div>
+
+          {/* Search Box */}
+          <div className="relative w-full lg:w-80">
+            <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 text-slate-400 w-4 h-4" />
+            <input 
+              type="text" 
+              placeholder="Buscar por número, descripción, monto..." 
+              className="w-full pl-10 pr-4 py-2 bg-slate-50 hover:bg-slate-100/60 focus:bg-white border border-slate-200 rounded-xl text-xs sm:text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 transition-all placeholder:text-slate-400"
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+            />
+          </div>
+        </div>
+
+        {/* Date / Period Filters */}
+        <div className="pt-3.5 border-t border-slate-100 flex flex-wrap gap-3 items-end">
+          <div className="flex flex-col">
+            <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Período Fiscal</label>
+            <select 
+              className="h-9 w-[160px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/10 cursor-pointer" 
+              value={dateFilters.tipo} 
+              onChange={e => setDateFilters({ ...dateFilters, tipo: e.target.value })}
+            >
+              <option value="todo">Historial Completo</option>
+              <option value="mes">Mes Específico</option>
+              <option value="ano">Año Completo</option>
+              <option value="rango">Rango de Fechas</option>
+            </select>
+          </div>
+
+          {dateFilters.tipo === 'mes' && (
+            <>
+              <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-200">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Mes</label>
+                <select 
+                  className="h-9 w-[130px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/10 cursor-pointer" 
+                  value={dateFilters.mes} 
+                  onChange={e => setDateFilters({ ...dateFilters, mes: e.target.value })}
+                >
+                  {["Enero","Febrero","Marzo","Abril","Mayo","Junio","Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"].map((m, i) => (
+                    <option key={i} value={String(i + 1).padStart(2, '0')}>{m}</option>
+                  ))}
+                </select>
+              </div>
+
+              <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-200">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Año</label>
+                <select 
+                  className="h-9 w-[110px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/10 cursor-pointer" 
+                  value={dateFilters.ano} 
+                  onChange={e => setDateFilters({ ...dateFilters, ano: e.target.value })}
+                >
+                  {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+                    <option key={y} value={y}>{y}</option>
+                  ))}
+                </select>
+              </div>
+            </>
+          )}
+
+          {dateFilters.tipo === 'ano' && (
+            <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-200">
+              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Año</label>
+              <select 
+                className="h-9 w-[110px] rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/10 cursor-pointer" 
+                value={dateFilters.ano} 
+                onChange={e => setDateFilters({ ...dateFilters, ano: e.target.value })}
+              >
+                {[2024, 2025, 2026, 2027, 2028, 2029, 2030].map(y => (
+                  <option key={y} value={y}>{y}</option>
+                ))}
+              </select>
+            </div>
+          )}
+
+          {dateFilters.tipo === 'rango' && (
+            <>
+              <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-200">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Fecha Desde</label>
+                <input 
+                  type="date" 
+                  className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/10 cursor-pointer" 
+                  value={dateFilters.desde} 
+                  onChange={e => setDateFilters({ ...dateFilters, desde: e.target.value })}
+                />
+              </div>
+
+              <div className="flex flex-col animate-in fade-in slide-in-from-left-2 duration-200">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest mb-1">Fecha Hasta</label>
+                <input 
+                  type="date" 
+                  className="h-9 rounded-xl border border-slate-200 bg-slate-50 px-3 py-1 text-xs font-bold text-slate-700 shadow-xs transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500/10 cursor-pointer" 
+                  value={dateFilters.hasta} 
+                  onChange={e => setDateFilters({ ...dateFilters, hasta: e.target.value })}
+                />
+              </div>
+            </>
+          )}
+        </div>
+      </div>
+
+      {/* Entries List - High-Density Sticky Table */}
+      <div className="bg-white rounded-2xl border border-slate-200/80 shadow-xs overflow-hidden">
+        <div className="overflow-x-auto max-h-[600px] relative">
+          <table className="w-full text-left text-sm border-collapse">
+            <thead className="sticky top-0 bg-slate-50/95 backdrop-blur-md z-10 border-b border-slate-200/90 text-slate-500 text-[11px] font-black uppercase tracking-wider select-none">
+              <tr>
+                <th className="px-4 py-3.5">Fecha</th>
+                <th className="px-4 py-3.5">Número Asiento</th>
+                <th className="px-4 py-3.5">Tipo</th>
+                <th className="px-4 py-3.5">Descripción / Concepto</th>
+                <th className="px-4 py-3.5 text-right">Total ({currencyView})</th>
+                <th className="px-4 py-3.5 text-center">Estado NIIF</th>
+                <th className="px-4 py-3.5 text-right">Acciones</th>
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-slate-100 bg-white">
+              {paginatedEntries.map((comp) => {
+                const totalUSD = Number(comp.total) || (Array.isArray(comp.lineas) && comp.lineas.length > 0 ? comp.lineas.reduce((acc: number, l: any) => acc + (Number(l.debe) || 0), 0) : (Array.isArray(comp.detalles) ? comp.detalles.reduce((acc: number, l: any) => acc + (Number(l.debe) || 0), 0) : 0));
+                const tasaComp = getTasaForDate(comp.fecha) || liveTasa;
+                const totalVES = totalUSD * tasaComp;
+                const isDescuadrado = comp.estado === 'Descuadrado';
+
+                return (
+                  <tr key={comp.id} className="hover:bg-indigo-50/30 transition-colors group">
+                    <td className="px-4 py-3 text-slate-600 text-xs font-semibold whitespace-nowrap">
+                      {formatSafeDate(comp.fecha)}
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <div className="flex items-center gap-1.5">
+                        <FileText className="w-4 h-4 text-indigo-500 shrink-0" />
+                        <span className="font-mono font-bold text-slate-900 text-xs">{comp.numero}</span>
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 whitespace-nowrap">
+                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                        comp.tipo === 'Ingreso' ? 'bg-emerald-50 text-emerald-800 border border-emerald-200' :
+                        comp.tipo === 'Egreso' ? 'bg-rose-50 text-rose-800 border border-rose-200' :
+                        'bg-indigo-50 text-indigo-800 border border-indigo-200'
+                      }`}>
+                        {comp.tipo}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-slate-700 text-xs max-w-xs font-medium truncate" title={comp.descripcion}>
+                      {comp.descripcion}
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap font-mono">
+                      <div className="font-black text-slate-900 text-xs sm:text-sm">
+                        {currencyView === 'USD' ? `$${formatoES(totalUSD)}` : `Bs. ${formatoES(totalVES)}`}
+                      </div>
+                      <div className="text-[10px] text-slate-400 font-medium">
+                        ≈ {currencyView === 'USD' ? `Bs. ${formatoES(totalVES)}` : `$${formatoES(totalUSD)}`}
+                      </div>
+                    </td>
+                    <td className="px-4 py-3 text-center whitespace-nowrap">
+                      <span className={`inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-xs font-bold ${
+                        isDescuadrado ? 'bg-rose-50 text-rose-700 border border-rose-200' : 'bg-emerald-50 text-emerald-700 border border-emerald-200'
+                      }`}>
+                        <span className={`w-1.5 h-1.5 rounded-full ${isDescuadrado ? 'bg-rose-500 animate-ping' : 'bg-emerald-500'}`} />
+                        {comp.estado}
+                      </span>
+                    </td>
+                    <td className="px-4 py-3 text-right whitespace-nowrap">
+                      <div className="flex items-center justify-end gap-1">
+                        <button 
+                          type="button"
+                          onClick={() => setViewingEntry(comp)}
+                          className="p-1.5 text-indigo-600 hover:text-indigo-800 bg-indigo-50/70 hover:bg-indigo-100 rounded-lg transition-colors cursor-pointer shadow-2xs"
+                          title="Ver Asiento Contable (Detalles y Líneas)"
+                        >
+                          <Eye size={15} />
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => handleOpenModal(comp)}
+                          className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-slate-100 rounded-lg transition-colors cursor-pointer"
+                          title="Editar Comprobante"
+                        >
+                          <Edit2 size={15} />
+                        </button>
+                        <button 
+                          type="button"
+                          onClick={() => handleDeleteEntry(comp)}
+                          disabled={deletingEntryId === comp.id}
+                          className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer disabled:opacity-50"
+                          title="Eliminar Comprobante"
+                        >
+                          <Trash2 size={15} />
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+              {sortedEntries.length === 0 && (
+                <tr>
+                   <td colSpan={7} className="px-6 py-12 text-center text-slate-500">
+                    <BookOpen className="w-12 h-12 mx-auto text-slate-300 mb-3" />
+                    <p className="text-base font-bold text-slate-800 mb-1">No se encontraron comprobantes contables</p>
+                    <p className="text-xs text-slate-400">Crea un nuevo comprobante o ajusta los filtros de búsqueda o fecha.</p>
+                  </td>
+                </tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+
+        {/* Pagination Controls */}
+        {sortedEntries.length > 0 && (
+          <div className="bg-white border-t border-slate-200 px-6 py-4 flex flex-col sm:flex-row justify-between items-center gap-4 text-xs font-semibold text-slate-500">
+            <div>
+              Mostrando <span className="font-bold text-slate-800">{Math.min(totalItems, (safeCurrentPage - 1) * itemsPerPage + 1)}</span> a{' '}
+              <span className="font-bold text-slate-800">{Math.min(totalItems, safeCurrentPage * itemsPerPage)}</span> de{' '}
+              <span className="font-bold text-slate-800">{totalItems}</span> comprobantes
+            </div>
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                disabled={safeCurrentPage === 1}
+                className={`px-3 py-1.5 rounded-lg border border-slate-200 transition-all duration-200 cursor-pointer ${
+                  safeCurrentPage === 1 
+                    ? 'bg-slate-50 text-slate-300 cursor-not-allowed opacity-60' 
+                    : 'bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm'
+                }`}
+              >
+                Anterior
+              </button>
+              
+              {(() => {
+                const pages: number[] = [];
+                const windowSize = 2;
+                for (let i = 1; i <= totalPages; i++) {
+                  if (
+                    i === 1 || 
+                    i === totalPages || 
+                    (i >= safeCurrentPage - windowSize && i <= safeCurrentPage + windowSize)
+                  ) {
+                    pages.push(i);
+                  } else if (pages[pages.length - 1] !== -1) {
+                    pages.push(-1); // ellipsis
+                  }
+                }
+                
+                return pages.map((page, index) => {
+                  if (page === -1) {
+                    return (
+                      <span key={`ellipsis-${index}`} className="px-2 text-slate-400 select-none">
+                        ...
+                      </span>
+                    );
+                  }
+                  
+                  return (
+                    <button
+                      key={`page-${page}`}
+                      onClick={() => setCurrentPage(page)}
+                      className={`px-3 py-1.5 rounded-lg border text-xs font-bold transition-all duration-200 cursor-pointer ${
+                        safeCurrentPage === page 
+                          ? 'bg-indigo-600 text-white border-indigo-600 shadow-sm' 
+                          : 'bg-white text-slate-600 hover:bg-slate-50 border-slate-200 hover:text-slate-800'
+                      }`}
+                    >
+                      {page}
+                    </button>
+                  );
+                });
+              })()}
+
+              <button
+                onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                disabled={safeCurrentPage === totalPages}
+                className={`px-3 py-1.5 rounded-lg border border-slate-200 transition-all duration-200 cursor-pointer ${
+                  safeCurrentPage === totalPages 
+                    ? 'bg-slate-50 text-slate-300 cursor-not-allowed opacity-60' 
+                    : 'bg-white text-slate-700 hover:bg-slate-50 hover:text-slate-900 shadow-sm'
+                }`}
+              >
+                Siguiente
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Modal Nuevo/Editar Comprobante */}
+      {isModalOpen && (
+        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+          <div className="bg-white rounded-2xl shadow-xl w-full max-w-5xl max-h-[90vh] flex flex-col overflow-hidden animate-in fade-in zoom-in-95 duration-200">
+            <div className="px-6 py-4 border-b border-slate-100 flex justify-between items-center bg-slate-50/50 shrink-0">
+              <h2 className="text-lg font-bold text-slate-800">
+                {editingId ? 'Editar Comprobante' : 'Nuevo Comprobante'}
+              </h2>
+              <button 
+                onClick={handleCloseModal}
+                className="text-slate-400 hover:text-slate-600 transition-colors"
+              >
+                <XCircle size={24} />
+              </button>
+            </div>
+            
+            <div className="p-6 overflow-y-auto flex-1">
+              <form id="entry-form" onSubmit={handleSubmit} className="space-y-6">
+                {/* Header Fields */}
+                <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Fecha *
+                    </label>
+                    <input 
+                      type="date" 
+                      required
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={form.fecha}
+                      onChange={e => setForm({...form, fecha: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Número *
+                    </label>
+                    <input 
+                      type="text" 
+                      required
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={form.numero}
+                      onChange={e => setForm({...form, numero: e.target.value})}
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Tipo
+                    </label>
+                    <select 
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      value={form.tipo}
+                      onChange={e => setForm({...form, tipo: e.target.value})}
+                    >
+                      <option value="Diario">Diario</option>
+                      <option value="Ingreso">Ingreso</option>
+                      <option value="Egreso">Egreso</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Referencia
+                    </label>
+                    <input 
+                      type="text" 
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      placeholder="Ej. CHQ-1234"
+                      value={form.referencia}
+                      onChange={e => setForm({...form, referencia: e.target.value})}
+                    />
+                  </div>
+                  <div className="md:col-span-4">
+                    <label className="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                      Concepto / Descripción *
+                    </label>
+                    <input 
+                      type="text" 
+                      required
+                      className="w-full px-3 py-2 bg-slate-50 border border-slate-200 rounded-lg text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500"
+                      placeholder="Concepto general del comprobante..."
+                      value={form.descripcion}
+                      onChange={e => handleConceptoChange(e.target.value)}
+                    />
+                  </div>
+                </div>
+
+                {/* Lines */}
+                <div className="mt-8">
+                  <h3 className="text-sm font-bold text-slate-800 mb-4 border-b border-slate-200 pb-2">Detalle del Asiento</h3>
+                  
+                  <div className="bg-slate-50 border border-slate-200 rounded-xl overflow-hidden">
+                    <table className="w-full text-left text-sm">
+                      <thead className="bg-slate-100/50 border-b border-slate-200 text-slate-500">
+                        <tr>
+                          <th className="px-4 py-3 font-medium w-1/3">Cuenta Contable</th>
+                          <th className="px-4 py-3 font-medium w-1/3">
+                            <div className="flex items-center justify-between">
+                              <span>Descripción (Opcional)</span>
+                              {form.descripcion?.trim() && (
+                                <button
+                                  type="button"
+                                  onClick={() => setLines(prev => prev.map(l => ({ ...l, descripcion: form.descripcion.trim() })))}
+                                  className="text-[11px] font-medium text-indigo-600 hover:text-indigo-800 bg-indigo-50 hover:bg-indigo-100 px-2 py-0.5 rounded transition-colors"
+                                  title="Copiar el concepto / descripción general a todas las líneas"
+                                >
+                                  Igual al concepto
+                                </button>
+                              )}
+                            </div>
+                          </th>
+                          <th className="px-4 py-3 font-medium text-right w-32">Debe</th>
+                          <th className="px-4 py-3 font-medium text-right w-32">Haber</th>
+                          <th className="px-4 py-3 w-12"></th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-200">
+                        {lines.map((line, index) => (
+                          <tr key={line.id} className="bg-white">
+                            <td className="px-4 py-2 relative">
+                              <div 
+                                onClick={() => setActiveLineId(line.id)}
+                                className="w-full px-2 py-1.5 border border-transparent hover:border-slate-200 rounded cursor-pointer flex justify-between items-center group transition-all"
+                              >
+                                {(line.cuentaId || line.cuenta_id || line.cuentaCodigo) ? (() => {
+                                  const c = cuentasContables.find(x => 
+                                    x.id === line.cuentaId || 
+                                    x.codigo === line.cuentaId || 
+                                    (line.cuenta_id && (x.id === line.cuenta_id || x.codigo === line.cuenta_id)) ||
+                                    (line.cuentaCodigo && (x.codigo === line.cuentaCodigo || x.id === line.cuentaCodigo))
+                                  );
+                                  return c ? (
+                                    <div className="flex flex-col">
+                                      <span className="text-[10px] font-mono font-bold text-indigo-600 leading-none mb-0.5">{c.codigo}</span>
+                                      <span className="text-sm text-slate-800 leading-tight truncate">{c.nombre}</span>
+                                    </div>
+                                  ) : <span className="text-sm text-slate-400">Seleccionar cuenta...</span>;
+                                })() : (
+                                  <span className="text-sm text-slate-400">Seleccionar cuenta...</span>
+                                )}
+                              </div>
+                            </td>
+                            <td className="px-4 py-2">
+                              <input 
+                                type="text" 
+                                className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-500 rounded text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                placeholder={form.descripcion || "Descripción de la línea..."}
+                                value={line.descripcion}
+                                onChange={e => handleLineChange(line.id, 'descripcion', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input 
+                                type="number" 
+                                min="0" step="0.01"
+                                className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-500 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                placeholder="0.00"
+                                value={line.debe || ''}
+                                onChange={e => handleLineChange(line.id, 'debe', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-4 py-2">
+                              <input 
+                                type="number" 
+                                min="0" step="0.01"
+                                className="w-full px-2 py-1.5 bg-transparent border border-transparent hover:border-slate-200 focus:border-indigo-500 rounded text-sm text-right focus:outline-none focus:ring-1 focus:ring-indigo-500"
+                                placeholder="0.00"
+                                value={line.haber || ''}
+                                onChange={e => handleLineChange(line.id, 'haber', e.target.value)}
+                              />
+                            </td>
+                            <td className="px-4 py-2 text-center">
+                              <button 
+                                type="button"
+                                onClick={() => handleRemoveLine(line.id)}
+                                className="p-1 text-slate-400 hover:text-rose-500 rounded transition-colors"
+                              >
+                                <Trash2 size={16} />
+                              </button>
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                    <div className="p-3 border-t border-slate-200 bg-white">
+                      <button 
+                        type="button"
+                        onClick={handleAddLine}
+                        className="text-sm font-medium text-indigo-600 hover:text-indigo-700 flex items-center gap-1"
+                      >
+                        <Plus size={16} />
+                        Agregar Línea
+                      </button>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Totals */}
+                <div className="flex justify-end mt-6">
+                  <div className="w-full max-w-md bg-slate-50 rounded-xl p-4 border border-slate-200">
+                    <div className="flex justify-between items-center mb-2 text-sm">
+                      <span className="text-slate-500 font-medium">Total Debe:</span>
+                      <span className="font-mono font-medium text-slate-800">${formatoES(totalDebe)}</span>
+                    </div>
+                    <div className="flex justify-between items-center mb-3 text-sm">
+                      <span className="text-slate-500 font-medium">Total Haber:</span>
+                      <span className="font-mono font-medium text-slate-800">${formatoES(totalHaber)}</span>
+                    </div>
+                    <div className={`flex justify-between items-center pt-3 border-t ${isBalanced ? 'border-emerald-200' : 'border-rose-200'}`}>
+                      <span className={`font-bold ${isBalanced ? 'text-emerald-700' : 'text-rose-600'}`}>Diferencia:</span>
+                      <span className={`font-mono font-bold ${isBalanced ? 'text-emerald-700' : 'text-rose-600'}`}>
+                        ${formatoES(diferencia)}
+                      </span>
+                    </div>
+                    {isDescuadrado && (
+                      <div className="mt-3 flex items-start gap-2 text-xs text-rose-600 bg-rose-50 p-2 rounded-lg">
+                        <AlertCircle size={14} className="shrink-0 mt-0.5" />
+                        <p>
+                          {!isBalanced && "El comprobante está descuadrado (Debe ≠ Haber). "}
+                          {invalidLines && "Faltan cuentas contables por seleccionar o hay líneas en cero. "}
+                          Debe cuadrar el asiento para poder contabilizarlo en la base de datos.
+                        </p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </form>
+            </div>
+
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-3 bg-slate-50/50 shrink-0">
+              <button 
+                type="button"
+                onClick={handleCloseModal}
+                disabled={isSubmitting}
+                className="px-4 py-2 text-sm font-medium text-slate-600 hover:text-slate-800 hover:bg-slate-100 rounded-lg transition-colors disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button 
+                type="submit"
+                form="entry-form"
+                disabled={isSubmitting || isDescuadrado}
+                className="px-4 py-2 text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-lg transition-colors shadow-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                {isSubmitting ? 'Contabilizando...' : (editingId ? 'Guardar Cambios' : 'Contabilizar')}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Modal para seleccionar cuenta contable */}
+      <CuentaContableModal
+        isOpen={!!activeLineId}
+        onClose={() => setActiveLineId(null)}
+        onSelect={(cuenta) => {
+          if (activeLineId) {
+            handleLineChange(activeLineId, 'cuentaId', cuenta.id);
+          }
+          setActiveLineId(null);
+        }}
+        cuentasContables={cuentasContables}
+        selectedCuentaId={activeLineId ? lines.find(l => l.id === activeLineId)?.cuentaId : ''}
+      />
+
+      {/* ========================================================================= */}
+      {/* MODAL DE SOLO LECTURA: DETALLE DEL ASIENTO CONTABLE YA REGISTRADO */}
+      {/* ========================================================================= */}
+      {viewingEntry && (
+        <div className="fixed inset-0 bg-slate-900/60 backdrop-blur-xs z-50 flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+          <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200">
+            {/* Header del Asiento */}
+            <div className="bg-slate-900 px-6 py-4 text-white flex justify-between items-center shrink-0 border-b border-slate-800">
+              <div className="flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+                  <Scale size={20} />
+                </div>
+                <div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-sm sm:text-base font-black tracking-tight text-white font-mono">
+                      {viewingEntry.numero}
+                    </span>
+                    <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
+                      SOLO LECTURA
+                    </span>
+                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider border ${
+                      viewingEntry.estado === 'Descuadrado'
+                        ? 'bg-rose-500/20 text-rose-300 border-rose-500/30'
+                        : 'bg-emerald-500/20 text-emerald-300 border-emerald-500/30'
+                    }`}>
+                      {viewingEntry.estado || 'CONTABILIZADO'}
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Comprobante de {viewingEntry.tipo || 'Diario'} • Fecha: <b className="text-slate-300 font-bold">{formatSafeDate(viewingEntry.fecha)}</b>
+                  </p>
+                </div>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => setViewingEntry(null)}
+                className="w-8 h-8 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white flex items-center justify-center transition cursor-pointer"
+                title="Cerrar vista"
+              >
+                <X size={18} />
+              </button>
+            </div>
+
+            {/* Contenido / Detalle */}
+            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+              {/* Metadatos en Ficha */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-50 p-3.5 rounded-2xl border border-slate-200/80 text-xs">
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Fecha Contable</span>
+                  <span className="font-bold text-slate-800 mt-0.5 block">{formatSafeDate(viewingEntry.fecha)}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Tipo de Asiento</span>
+                  <span className="font-bold text-slate-800 mt-0.5 block">{viewingEntry.tipo || 'Diario'}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Número Correlativo</span>
+                  <span className="font-bold font-mono text-indigo-700 mt-0.5 block">{viewingEntry.numero}</span>
+                </div>
+                <div>
+                  <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">Referencia / Origen</span>
+                  <span className="font-semibold text-slate-700 mt-0.5 block">{viewingEntry.referencia || 'Sin referencia'}</span>
+                </div>
+              </div>
+
+              {/* Concepto / Descripción General */}
+              <div className="bg-slate-50/70 p-3.5 rounded-2xl border border-slate-200/80 text-xs">
+                <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                  Concepto / Glosa General
+                </span>
+                <p className="text-slate-800 font-semibold leading-relaxed">
+                  {viewingEntry.descripcion || viewingEntry.concepto || 'Sin concepto especificado'}
+                </p>
+              </div>
+
+              {/* Tabla de Cuentas y Partida Doble */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <h3 className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
+                    <FileText size={14} className="text-indigo-600" />
+                    <span>Líneas del Asiento ({viewingLines.length} {viewingLines.length === 1 ? 'cuenta' : 'cuentas'})</span>
+                  </h3>
+                  <span className="text-[11px] font-bold text-slate-400 font-mono">
+                    Partida Doble NIIF
+                  </span>
+                </div>
+
+                <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
+                  <table className="w-full text-left text-xs border-collapse">
+                    <thead className="bg-slate-100 text-slate-700 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200 select-none">
+                      <tr>
+                        <th className="px-3.5 py-2.5 w-10 text-center">#</th>
+                        <th className="px-3.5 py-2.5 w-28">Código</th>
+                        <th className="px-3.5 py-2.5">Cuenta Contable</th>
+                        <th className="px-3.5 py-2.5">Descripción / Glosa</th>
+                        <th className="px-3.5 py-2.5 text-right w-32">Debe ($)</th>
+                        <th className="px-3.5 py-2.5 text-right w-32">Haber ($)</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-slate-100 bg-white">
+                      {viewingLines.map((line, idx) => (
+                        <tr key={line.id || idx} className="hover:bg-slate-50/60 transition-colors">
+                          <td className="px-3.5 py-2.5 text-center text-slate-400 font-mono font-bold text-[11px]">
+                            {idx + 1}
+                          </td>
+                          <td className="px-3.5 py-2.5 font-mono font-bold text-indigo-700 text-xs">
+                            {line.codigo}
+                          </td>
+                          <td className="px-3.5 py-2.5 font-bold text-slate-900 text-xs">
+                            {line.nombre}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-slate-600 text-xs">
+                            {line.descripcion || '-'}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-right font-mono font-black text-xs text-emerald-700">
+                            {line.debe > 0 ? `$ ${formatoES(line.debe)}` : <span className="text-slate-300 font-normal">-</span>}
+                          </td>
+                          <td className="px-3.5 py-2.5 text-right font-mono font-black text-xs text-violet-700">
+                            {line.haber > 0 ? `$ ${formatoES(line.haber)}` : <span className="text-slate-300 font-normal">-</span>}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Totales y Estado de Balance */}
+              <div className="bg-slate-50 p-4 rounded-2xl border border-slate-200 flex flex-col sm:flex-row items-center justify-between gap-4">
+                <div className="flex items-center gap-2">
+                  {viewingIsBalanced ? (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-emerald-100 text-emerald-800 border border-emerald-300 text-xs font-black">
+                      <Check size={14} />
+                      <span>ASIENTO CUADRADO</span>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5 px-3 py-1 rounded-xl bg-rose-100 text-rose-800 border border-rose-300 text-xs font-black">
+                      <AlertCircle size={14} />
+                      <span>ASIENTO DESCUADRADO</span>
+                    </div>
+                  )}
+                  {viewingDiff > 0 && (
+                    <span className="text-xs font-mono font-bold text-rose-600 ml-2">
+                      Diferencia: $ {formatoES(viewingDiff)}
+                    </span>
+                  )}
+                </div>
+
+                <div className="flex items-center gap-6">
+                  <div className="text-right">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      TOTAL DEBE (DÉBITO)
+                    </span>
+                    <span className="font-mono font-black text-sm text-emerald-700 block">
+                      $ {formatoES(viewingTotalDebe)}
+                    </span>
+                  </div>
+                  <div className="w-px h-8 bg-slate-200" />
+                  <div className="text-right">
+                    <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 block">
+                      TOTAL HABER (CRÉDITO)
+                    </span>
+                    <span className="font-mono font-black text-sm text-violet-700 block">
+                      $ {formatoES(viewingTotalHaber)}
+                    </span>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Footer de solo lectura */}
+            <div className="px-6 py-4 border-t border-slate-100 bg-slate-50/70 flex items-center justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-1.5 text-xs text-slate-500 font-medium">
+                <ShieldCheck size={16} className="text-emerald-600 shrink-0" />
+                <span>Vista de auditoría protegida. No se permiten modificaciones en este modo.</span>
+              </div>
+
+              <div className="flex items-center gap-2">
+                <button
+                  type="button"
+                  onClick={() => setViewingEntry(null)}
+                  className="px-5 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold transition cursor-pointer shadow-xs"
+                >
+                  Cerrar Vista
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

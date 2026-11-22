@@ -185,6 +185,12 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
         textToCopy += `\nPago Móvil: ${request.bank_details.pago_movil_phone}`;
       if (request.bank_details.pago_movil_ci)
         textToCopy += `\nCédula/RIF PM: ${request.bank_details.pago_movil_ci}`;
+    } else if (request.bank_details.payment_method === 'transferencia_usd') {
+      if (request.bank_details.rif) textToCopy += `\nRIF/Tax ID: ${request.bank_details.rif}`;
+      if (request.bank_details.bank) textToCopy += `\nBanco Internacional: ${request.bank_details.bank}`;
+      if (request.bank_details.account_number) textToCopy += `\nCuenta / IBAN: ${request.bank_details.account_number}`;
+      if (request.bank_details.swift_or_aba) textToCopy += `\nSWIFT/ABA: ${request.bank_details.swift_or_aba}`;
+      if (request.bank_details.bank_country_or_address) textToCopy += `\nPaís/Dir: ${request.bank_details.bank_country_or_address}`;
     } else if (
       request.bank_details.payment_method === 'efectivo_usd' ||
       request.bank_details.payment_method === 'efectivo_bs'
@@ -804,6 +810,46 @@ export const RequestDetailModal: React.FC<RequestDetailModalProps> = ({
                   <p className="text-[#009b8b] font-black pt-1 border-t border-teal-200 text-xs">
                     <strong className="text-teal-800 font-sans font-bold">Monto a Transferir:</strong>{' '}
                     Bs. {formatBS(request.amount_bs || 0)}
+                  </p>
+                </div>
+              )}
+
+              {/* TRANSFERENCIA INTERNACIONAL USD DETAILS */}
+              {request.bank_details.payment_method === 'transferencia_usd' && (
+                <div className="bg-emerald-50 p-2.5 rounded-xl border border-emerald-200 space-y-1 font-mono">
+                  {request.bank_details.bank && (
+                    <p className="text-emerald-900 font-bold">
+                      <strong className="text-emerald-700 font-normal font-sans">Banco Internacional:</strong>{' '}
+                      {request.bank_details.bank}
+                    </p>
+                  )}
+                  {request.bank_details.account_number && (
+                    <p className="text-emerald-900 font-bold select-all">
+                      <strong className="text-emerald-700 font-normal font-sans">Cuenta / IBAN:</strong>{' '}
+                      {request.bank_details.account_number}
+                    </p>
+                  )}
+                  {request.bank_details.swift_or_aba && (
+                    <p className="text-emerald-900 font-bold">
+                      <strong className="text-emerald-700 font-normal font-sans">SWIFT / ABA:</strong>{' '}
+                      {request.bank_details.swift_or_aba}
+                    </p>
+                  )}
+                  {request.bank_details.bank_country_or_address && (
+                    <p className="text-emerald-800 font-semibold font-sans">
+                      <strong className="text-emerald-700 font-normal">País / Dirección:</strong>{' '}
+                      {request.bank_details.bank_country_or_address}
+                    </p>
+                  )}
+                  {request.bank_details.intermediary_bank_or_notes && (
+                    <p className="text-emerald-800 font-semibold font-sans">
+                      <strong className="text-emerald-700 font-normal">Intermediario / Nota:</strong>{' '}
+                      {request.bank_details.intermediary_bank_or_notes}
+                    </p>
+                  )}
+                  <p className="text-emerald-950 font-black pt-1 border-t border-emerald-200 text-xs">
+                    <strong className="text-emerald-800 font-sans font-bold">Monto a Transferir:</strong>{' '}
+                    {formatUSD(request.amount_usd)} USD
                   </p>
                 </div>
               )}
