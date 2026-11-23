@@ -53,19 +53,19 @@ const item = {
 
 export const AccountingLedgerPage: React.FC<AccountingLedgerPageProps> = () => {
   return (
-    <div className="w-full min-h-[calc(100vh-2.5rem)] relative overflow-hidden flex flex-col justify-between p-4 sm:p-6 bg-gradient-to-b from-slate-50 via-white to-slate-50 rounded-3xl border border-slate-200/80 shadow-2xs">
+    <div className="w-full relative overflow-hidden flex flex-col p-3.5 sm:p-5 bg-gradient-to-b from-slate-50 via-white to-slate-50 rounded-2xl border border-slate-200/80 shadow-2xs">
       {/* Ambient Glows */}
       <div className="absolute top-0 left-0 w-96 h-96 bg-sky-500/5 blur-[120px] rounded-full pointer-events-none" />
       <div className="absolute bottom-0 right-0 w-96 h-96 bg-violet-500/5 blur-[120px] rounded-full pointer-events-none" />
 
-      <div className="w-full z-10 space-y-5">
-        {/* Cabecera alineada a la izquierda ocupando todo el ancho */}
+      <div className="w-full z-10 space-y-4">
+        {/* Cabecera alineada a la izquierda */}
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 pb-3 border-b border-slate-200/80">
           <div>
             <span className="badge-modern-neutral mb-1.5">
               Módulo Financiero &amp; Contable
             </span>
-            <h1 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+            <h1 className="text-lg sm:text-xl font-black text-slate-900 tracking-tight">
               Cuentas &amp; Mayor
             </h1>
             <p className="text-slate-500 text-xs font-medium mt-0.5">
@@ -79,7 +79,7 @@ export const AccountingLedgerPage: React.FC<AccountingLedgerPageProps> = () => {
           variants={container as any}
           initial="hidden"
           animate="show"
-          className="flex flex-wrap items-stretch gap-3.5"
+          className="flex flex-wrap items-stretch gap-3"
         >
           {mainModules.map((mod) => {
             const Icon = mod.icon;
@@ -87,21 +87,21 @@ export const AccountingLedgerPage: React.FC<AccountingLedgerPageProps> = () => {
               <motion.div
                 key={mod.name}
                 variants={item as any}
-                className="w-full sm:w-[250px]"
+                className="w-full sm:w-[270px]"
               >
                 <Link
                   to={mod.path}
                   draggable={false}
                   onDragStart={(e) => e.preventDefault()}
-                  className={`group flex flex-col justify-between h-full p-4 rounded-2xl bg-white hover:bg-slate-50/90 border border-slate-200/90 ${mod.hoverBorder} shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-200 cursor-pointer select-none`}
+                  className={`group flex flex-col justify-between h-full p-3.5 rounded-xl bg-white hover:bg-slate-50/90 border border-slate-200/90 ${mod.hoverBorder} shadow-2xs hover:shadow-md hover:-translate-y-0.5 transition-all duration-150 cursor-pointer select-none`}
                 >
                   <div className="flex items-start justify-between gap-2.5">
                     <div
-                      className={`relative w-10 h-10 rounded-xl flex items-center justify-center bg-gradient-to-br ${mod.gradient} shadow-md ${mod.shadow} group-hover:scale-105 transition-all duration-200 ease-out shrink-0`}
+                      className={`relative w-9 h-9 rounded-lg flex items-center justify-center bg-gradient-to-br ${mod.gradient} shadow-sm ${mod.shadow} group-hover:scale-105 transition-transform duration-150 ease-out shrink-0`}
                     >
-                      <div className="absolute inset-0 bg-white/20 rounded-xl opacity-0 group-hover:opacity-100 transition-opacity duration-200 mix-blend-overlay" />
+                      <div className="absolute inset-0 bg-white/20 rounded-lg opacity-0 group-hover:opacity-100 transition-opacity duration-150 mix-blend-overlay" />
                       <Icon
-                        size={20}
+                        size={17}
                         strokeWidth={2}
                         className="text-white relative z-10"
                       />
@@ -111,9 +111,9 @@ export const AccountingLedgerPage: React.FC<AccountingLedgerPageProps> = () => {
                     </span>
                   </div>
 
-                  <div className="mt-3">
+                  <div className="mt-2.5">
                     <h2
-                      className={`text-base font-black text-slate-900 ${mod.hoverText} transition-colors leading-tight`}
+                      className={`text-sm font-black text-slate-900 ${mod.hoverText} transition-colors leading-tight`}
                     >
                       {mod.name}
                     </h2>
@@ -122,7 +122,7 @@ export const AccountingLedgerPage: React.FC<AccountingLedgerPageProps> = () => {
                     </p>
                   </div>
 
-                  <div className="mt-3 pt-2.5 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500 group-hover:text-slate-900 transition-colors">
+                  <div className="mt-2.5 pt-2 border-t border-slate-100 flex items-center justify-between text-[11px] font-bold text-slate-500 group-hover:text-slate-900 transition-colors">
                     <span>Ingresar</span>
                     <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-0.5 transition-transform" />
                   </div>
@@ -134,7 +134,7 @@ export const AccountingLedgerPage: React.FC<AccountingLedgerPageProps> = () => {
       </div>
 
       {/* Footer Info */}
-      <div className="z-10 shrink-0 pt-6 text-[11px] font-semibold text-slate-400 flex items-center gap-2">
+      <div className="z-10 shrink-0 pt-4 mt-5 border-t border-slate-100 text-[11px] font-semibold text-slate-400 flex items-center gap-2">
         <span className="w-2 h-2 rounded-full bg-sky-500" />
         <span className="w-2 h-2 rounded-full bg-violet-500" />
         <span>TP PAGOS PRO • Tesorería &amp; Contabilidad General</span>

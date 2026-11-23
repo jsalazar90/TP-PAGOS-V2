@@ -218,9 +218,9 @@ export default function AccountingConfig({
   };
 
   return (
-    <div className="px-3 sm:px-6 pt-1 pb-6 max-w-6xl mx-auto animate-in fade-in duration-300">
+    <div className="px-1 sm:px-6 pt-1 pb-6 max-w-6xl mx-auto animate-in fade-in duration-300">
       {/* Top Breadcrumb & Status */}
-      <div className="mb-3.5 flex items-center justify-between">
+      <div className="mb-3.5 flex flex-wrap items-center justify-between gap-2">
         <BackButton to="/accounting" label="Volver a Contabilidad" />
         <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 bg-emerald-50 text-emerald-700 rounded-full border border-emerald-200/80">
           <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
@@ -229,11 +229,11 @@ export default function AccountingConfig({
       </div>
 
       {/* Main Header Toolbar */}
-      <div className="mb-8 flex flex-col md:flex-row md:items-center justify-between gap-4 pb-4 border-b border-slate-200">
+      <div className="mb-5 sm:mb-8 flex flex-col md:flex-row md:items-center justify-between gap-3.5 sm:gap-4 pb-4 border-b border-slate-200">
         <div>
-          <h1 className="text-2xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-md shadow-emerald-500/20">
-              <Lock className="w-5 h-5" />
+          <h1 className="text-xl sm:text-3xl font-black text-slate-900 tracking-tight flex items-center gap-2.5 sm:gap-3">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-gradient-to-br from-emerald-600 to-teal-700 text-white flex items-center justify-center shadow-md shadow-emerald-500/20 shrink-0">
+              <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
             </div>
             Cierre de Ejercicio Fiscal
           </h1>
@@ -242,10 +242,10 @@ export default function AccountingConfig({
           </p>
         </div>
 
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-3 w-full md:w-auto">
           <button 
             onClick={prepareClosure}
-            className="inline-flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 h-10 px-5 cursor-pointer active:scale-95"
+            className="w-full md:w-auto inline-flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all bg-emerald-600 hover:bg-emerald-700 text-white shadow-md shadow-emerald-600/20 h-10 px-5 cursor-pointer active:scale-95"
           >
             <Lock size={15} /> 
             <span>Ejecutar Cierre del Año {workingYear}</span>
@@ -254,8 +254,8 @@ export default function AccountingConfig({
       </div>
 
       {/* Helper Banner */}
-      <div className="p-4 bg-slate-50 rounded-2xl border border-slate-200 mb-8 flex items-start justify-between gap-4">
-        <div className="flex items-start gap-3">
+      <div className="p-3.5 sm:p-4 bg-slate-50 rounded-2xl border border-slate-200 mb-5 sm:mb-8 flex flex-col sm:flex-row sm:items-start justify-between gap-3 sm:gap-4">
+        <div className="flex items-start gap-2.5 sm:gap-3">
           <BookOpen className="w-5 h-5 text-indigo-600 shrink-0 mt-0.5" />
           <div className="text-xs text-slate-600 font-medium leading-relaxed">
             <span className="font-bold text-slate-900">¿Cómo funciona el Cierre Fiscal NIIF?</span> Al ejecutar el cierre, el sistema calcula los saldos acumulados de todas las cuentas de Ingresos, Costos y Gastos del año <strong className="text-slate-900">{workingYear}</strong>, saldándolas a cero y transfiriendo el Resultado Neto a la cuenta de <strong className="text-slate-900">Utilidad/Pérdida de Ejercicios Anteriores</strong>.
@@ -263,7 +263,7 @@ export default function AccountingConfig({
         </div>
         <Link 
           to="/accounting/config"
-          className="shrink-0 text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-1.5 rounded-xl border border-indigo-100 transition-colors flex items-center gap-1.5 cursor-pointer"
+          className="shrink-0 w-full sm:w-auto justify-center text-xs font-bold text-indigo-600 hover:text-indigo-700 bg-indigo-50 hover:bg-indigo-100 px-3 py-2 sm:py-1.5 rounded-xl border border-indigo-100 transition-colors flex items-center gap-1.5 cursor-pointer"
         >
           <SettingsIcon size={13} />
           <span>Ajustes en Configuración Global</span>
@@ -271,83 +271,83 @@ export default function AccountingConfig({
       </div>
 
       {/* KPI Cards Strip */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4 mb-5 sm:mb-8">
         {/* Total Ingresos */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Total Ingresos</span>
-            <div className="w-7 h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center">
-              <TrendingUp size={14} />
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Total Ingresos</span>
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+              <TrendingUp size={13} />
             </div>
           </div>
-          <div className="text-xl font-black text-slate-900">
+          <div className="text-base sm:text-xl font-black text-slate-900 font-mono truncate">
             ${nominalSummary.sumIngresos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <span className="text-[10px] text-emerald-600 font-bold mt-1 block">Saldos acreedores del ejercicio</span>
+          <span className="text-[10px] text-emerald-600 font-bold mt-1 hidden sm:block">Saldos acreedores del ejercicio</span>
         </div>
 
         {/* Total Gastos & Costos */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Total Costos / Egresos</span>
-            <div className="w-7 h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center">
-              <TrendingDown size={14} />
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Total Egresos</span>
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-rose-50 text-rose-600 flex items-center justify-center shrink-0">
+              <TrendingDown size={13} />
             </div>
           </div>
-          <div className="text-xl font-black text-slate-900">
+          <div className="text-base sm:text-xl font-black text-slate-900 font-mono truncate">
             ${nominalSummary.sumEgresos.toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
-          <span className="text-[10px] text-rose-600 font-bold mt-1 block">Saldos deudores del ejercicio</span>
+          <span className="text-[10px] text-rose-600 font-bold mt-1 hidden sm:block">Saldos deudores del ejercicio</span>
         </div>
 
         {/* Resultado Neto */}
-        <div className={`p-5 rounded-2xl border shadow-xs ${
+        <div className={`p-3.5 sm:p-5 rounded-2xl border shadow-xs ${
           nominalSummary.netResult >= 0 
             ? 'bg-emerald-50/50 border-emerald-200/80 text-emerald-950' 
             : 'bg-rose-50/50 border-rose-200/80 text-rose-950'
         }`}>
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider opacity-70">Resultado del Ejercicio</span>
-            <div className={`w-7 h-7 rounded-lg flex items-center justify-center ${
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider opacity-70">Resultado Neto</span>
+            <div className={`w-6 h-6 sm:w-7 sm:h-7 rounded-lg flex items-center justify-center shrink-0 ${
               nominalSummary.netResult >= 0 ? 'bg-emerald-100 text-emerald-700' : 'bg-rose-100 text-rose-700'
             }`}>
-              <Scale size={14} />
+              <Scale size={13} />
             </div>
           </div>
-          <div className="text-xl font-black">
+          <div className="text-base sm:text-xl font-black font-mono truncate">
             ${Math.abs(nominalSummary.netResult).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
           </div>
           <span className="text-[10px] font-black uppercase tracking-wider mt-1 block">
-            {nominalSummary.netResult >= 0 ? '🟢 Utilidad Neta del Ejercicio' : '🔴 Pérdida Neta del Ejercicio'}
+            {nominalSummary.netResult >= 0 ? '🟢 Utilidad Neta' : '🔴 Pérdida Neta'}
           </span>
         </div>
 
         {/* Cuenta de Traspaso */}
-        <div className="bg-white p-5 rounded-2xl border border-slate-200/90 shadow-xs">
-          <div className="flex items-center justify-between mb-2">
-            <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Cuenta de Destino</span>
-            <div className="w-7 h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center">
-              <ShieldCheck size={14} />
+        <div className="bg-white p-3.5 sm:p-5 rounded-2xl border border-slate-200/90 shadow-xs">
+          <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+            <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-wider text-slate-400">Cuenta Destino</span>
+            <div className="w-6 h-6 sm:w-7 sm:h-7 rounded-lg bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+              <ShieldCheck size={13} />
             </div>
           </div>
           {cuentaDestinoPatrimonial ? (
             <div>
-              <span className="font-mono text-xs font-black text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 inline-block mb-1">
+              <span className="font-mono text-[11px] sm:text-xs font-black text-indigo-700 bg-indigo-50 px-1.5 py-0.5 rounded border border-indigo-100 inline-block mb-1">
                 {cuentaDestinoPatrimonial.codigo}
               </span>
-              <span className="text-xs font-black text-slate-800 truncate block" title={cuentaDestinoPatrimonial.nombre}>
+              <span className="text-[11px] sm:text-xs font-black text-slate-800 truncate block" title={cuentaDestinoPatrimonial.nombre}>
                 {cuentaDestinoPatrimonial.nombre}
               </span>
             </div>
           ) : (
-            <span className="text-xs font-bold text-rose-500">No asignada en Configuración</span>
+            <span className="text-xs font-bold text-rose-500">No asignada</span>
           )}
         </div>
       </div>
 
       {/* Tabla de Cuentas Nominales a Liquidar */}
       <div className="bg-white rounded-2xl border border-slate-200/90 shadow-xs overflow-hidden">
-        <div className="p-5 border-b border-slate-100 flex items-center justify-between">
+        <div className="p-4 sm:p-5 border-b border-slate-100 flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-black text-slate-900">Cuentas Nominales del Período {workingYear}</h3>
             <p className="text-xs text-slate-400 mt-0.5">Saldos pendientes de cancelación al cierre anual.</p>
@@ -358,49 +358,89 @@ export default function AccountingConfig({
         </div>
 
         {nominalSummary.accountBalances.length > 0 ? (
-          <table className="w-full text-xs text-left">
-            <thead>
-              <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
-                <th className="py-3 px-5">Código & Cuenta</th>
-                <th className="py-3 px-4">Tipo / Naturaleza</th>
-                <th className="py-3 px-4 text-right">Saldo Acumulado</th>
-                <th className="py-3 px-4 text-right">Debe (Cierre)</th>
-                <th className="py-3 px-5 text-right">Haber (Cierre)</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-slate-100 font-medium">
+          <>
+            {/* Mobile Nominal Cards (< md) */}
+            <div className="md:hidden divide-y divide-slate-100">
               {nominalSummary.accountBalances.map((item, idx) => (
-                <tr key={item.cuenta.id || idx} className="hover:bg-indigo-50/20 transition-colors">
-                  <td className="py-3 px-5">
-                    <div className="flex items-center gap-2.5">
-                      <span className="font-mono text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                <div key={item.cuenta.id || idx} className="p-3.5 space-y-2">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="font-mono text-[11px] font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100 shrink-0">
                         {item.cuenta.codigo}
                       </span>
-                      <span className="font-black text-slate-800">{item.cuenta.nombre}</span>
+                      <span className="font-black text-xs text-slate-800 truncate">{item.cuenta.nombre}</span>
                     </div>
-                  </td>
-                  <td className="py-3 px-4">
-                    <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                    <span className={`shrink-0 px-2 py-0.5 rounded text-[10px] font-bold ${
                       item.isIncome ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
                     }`}>
-                      {item.isIncome ? 'Ingreso (Acreedora)' : 'Egreso / Costo (Deudora)'}
+                      {item.isIncome ? 'Ingreso' : 'Egreso'}
                     </span>
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
-                    ${Math.abs(item.saldo).toFixed(2)}
-                  </td>
-                  <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">
-                    {item.debeCierre > 0 ? `$${item.debeCierre.toFixed(2)}` : '-'}
-                  </td>
-                  <td className="py-3 px-5 text-right font-mono font-bold text-rose-600">
-                    {item.haberCierre > 0 ? `$${item.haberCierre.toFixed(2)}` : '-'}
-                  </td>
-                </tr>
+                  </div>
+                  <div className="grid grid-cols-3 gap-2 pt-1 text-[11px] font-mono">
+                    <div>
+                      <span className="block text-[9px] text-slate-400 uppercase font-sans font-bold">Saldo</span>
+                      <span className="font-bold text-slate-900">${Math.abs(item.saldo).toFixed(2)}</span>
+                    </div>
+                    <div>
+                      <span className="block text-[9px] text-slate-400 uppercase font-sans font-bold">Debe Cierre</span>
+                      <span className="font-bold text-emerald-600">{item.debeCierre > 0 ? `$${item.debeCierre.toFixed(2)}` : '-'}</span>
+                    </div>
+                    <div className="text-right">
+                      <span className="block text-[9px] text-slate-400 uppercase font-sans font-bold">Haber Cierre</span>
+                      <span className="font-bold text-rose-600">{item.haberCierre > 0 ? `$${item.haberCierre.toFixed(2)}` : '-'}</span>
+                    </div>
+                  </div>
+                </div>
               ))}
-            </tbody>
-          </table>
+            </div>
+
+            {/* Desktop Nominal Table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
+              <table className="w-full text-xs text-left">
+                <thead>
+                  <tr className="bg-slate-50/90 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
+                    <th className="py-3 px-5">Código & Cuenta</th>
+                    <th className="py-3 px-4">Tipo / Naturaleza</th>
+                    <th className="py-3 px-4 text-right">Saldo Acumulado</th>
+                    <th className="py-3 px-4 text-right">Debe (Cierre)</th>
+                    <th className="py-3 px-5 text-right">Haber (Cierre)</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100 font-medium">
+                  {nominalSummary.accountBalances.map((item, idx) => (
+                    <tr key={item.cuenta.id || idx} className="hover:bg-indigo-50/20 transition-colors">
+                      <td className="py-3 px-5">
+                        <div className="flex items-center gap-2.5">
+                          <span className="font-mono text-xs font-black text-indigo-700 bg-indigo-50 px-2 py-0.5 rounded border border-indigo-100">
+                            {item.cuenta.codigo}
+                          </span>
+                          <span className="font-black text-slate-800">{item.cuenta.nombre}</span>
+                        </div>
+                      </td>
+                      <td className="py-3 px-4">
+                        <span className={`inline-block px-2 py-0.5 rounded text-[10px] font-bold ${
+                          item.isIncome ? 'bg-emerald-50 text-emerald-700' : 'bg-rose-50 text-rose-700'
+                        }`}>
+                          {item.isIncome ? 'Ingreso (Acreedora)' : 'Egreso / Costo (Deudora)'}
+                        </span>
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-slate-900">
+                        ${Math.abs(item.saldo).toFixed(2)}
+                      </td>
+                      <td className="py-3 px-4 text-right font-mono font-bold text-emerald-600">
+                        {item.debeCierre > 0 ? `$${item.debeCierre.toFixed(2)}` : '-'}
+                      </td>
+                      <td className="py-3 px-5 text-right font-mono font-bold text-rose-600">
+                        {item.haberCierre > 0 ? `$${item.haberCierre.toFixed(2)}` : '-'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </>
         ) : (
-          <div className="p-12 text-center text-slate-400">
+          <div className="p-8 sm:p-12 text-center text-slate-400">
             <CheckCircle2 className="w-10 h-10 text-emerald-500 mx-auto mb-2 opacity-60" />
             <p className="text-xs font-bold text-slate-600">No hay cuentas nominales pendientes por cerrar</p>
             <p className="text-[11px] text-slate-400 mt-0.5">El ejercicio fiscal {workingYear} se encuentra liquidado o no tiene movimientos asentados.</p>
@@ -410,23 +450,23 @@ export default function AccountingConfig({
 
       {/* Modal de Confirmación y Previsualización del Asiento */}
       {showClosureReview && (
-        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-4 animate-in fade-in">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden max-h-[90vh] animate-in zoom-in-95">
-            <div className="p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center">
+        <div className="fixed inset-0 z-[200] flex items-center justify-center bg-slate-900/50 backdrop-blur-xs p-2.5 sm:p-4 animate-in fade-in">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-3xl flex flex-col overflow-hidden max-h-[92vh] animate-in zoom-in-95">
+            <div className="p-4 sm:p-5 border-b border-slate-100 bg-slate-50 flex justify-between items-center shrink-0">
               <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center">
-                  <Lock className="w-5 h-5" />
+                <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-100 text-emerald-600 flex items-center justify-center shrink-0">
+                  <Lock className="w-4 h-4 sm:w-5 sm:h-5" />
                 </div>
                 <div>
-                  <h3 className="text-base font-black text-slate-800">Previsualización del Asiento de Cierre Anual</h3>
+                  <h3 className="text-sm sm:text-base font-black text-slate-800">Previsualización del Asiento de Cierre Anual</h3>
                   <p className="text-xs text-slate-500 font-medium">Comprobante de Diario: CIERRE-{workingYear}</p>
                 </div>
               </div>
             </div>
 
-            <div className="p-6 overflow-y-auto flex-1 space-y-5">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1 space-y-4 sm:space-y-5">
               {/* Resumen */}
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 sm:gap-3">
                 <div className="p-3 bg-emerald-50 rounded-xl border border-emerald-100 text-center">
                   <span className="text-[10px] font-bold text-emerald-700 uppercase block">Ingresos</span>
                   <span className="text-base font-black text-emerald-900">${closureTotalIngresos.toFixed(2)}</span>
@@ -442,8 +482,8 @@ export default function AccountingConfig({
               </div>
 
               {/* Detalle de Líneas */}
-              <div className="border border-slate-200 rounded-xl overflow-hidden max-h-[300px] overflow-y-auto">
-                <table className="w-full text-xs text-left">
+              <div className="border border-slate-200 rounded-xl overflow-x-auto max-h-[300px] overflow-y-auto">
+                <table className="w-full min-w-[540px] text-xs text-left">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-[10px] font-extrabold uppercase text-slate-500">
                       <th className="py-2.5 px-4">Cuenta</th>
@@ -457,16 +497,16 @@ export default function AccountingConfig({
                       const acc = cuentasContables.find(c => c.id === l.cuentaId || c.codigo === l.cuentaId);
                       return (
                         <tr key={l.id || idx} className="hover:bg-slate-50">
-                          <td className="py-2.5 px-4 font-mono font-bold text-indigo-700">
+                          <td className="py-2.5 px-4 font-mono font-bold text-indigo-700 whitespace-nowrap">
                             {acc?.codigo || l.cuentaId}
                           </td>
                           <td className="py-2.5 px-3 text-slate-700 truncate max-w-[220px]">
                             {l.descripcion}
                           </td>
-                          <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600">
+                          <td className="py-2.5 px-3 text-right font-mono font-bold text-emerald-600 whitespace-nowrap">
                             {l.debe > 0 ? `$${l.debe.toFixed(2)}` : '-'}
                           </td>
-                          <td className="py-2.5 px-4 text-right font-mono font-bold text-rose-600">
+                          <td className="py-2.5 px-4 text-right font-mono font-bold text-rose-600 whitespace-nowrap">
                             {l.haber > 0 ? `$${l.haber.toFixed(2)}` : '-'}
                           </td>
                         </tr>
@@ -484,12 +524,12 @@ export default function AccountingConfig({
               </div>
             </div>
 
-            <div className="p-4 border-t border-slate-100 bg-slate-50 flex justify-end gap-3">
+            <div className="p-4 border-t border-slate-100 bg-slate-50 flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3 shrink-0">
               <button 
                 type="button"
                 onClick={() => setShowClosureReview(false)}
                 disabled={isExecutingClosure}
-                className="px-4 py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer disabled:opacity-50"
+                className="w-full sm:w-auto px-4 py-2.5 sm:py-2 text-xs font-bold text-slate-600 hover:bg-slate-200 rounded-xl cursor-pointer disabled:opacity-50"
               >
                 Cancelar
               </button>
@@ -497,7 +537,7 @@ export default function AccountingConfig({
                 type="button"
                 onClick={executeClosure}
                 disabled={isExecutingClosure}
-                className="px-5 py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
+                className="w-full sm:w-auto justify-center px-5 py-2.5 sm:py-2 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-bold shadow-md flex items-center gap-1.5 cursor-pointer disabled:opacity-60 disabled:cursor-not-allowed"
               >
                 <Check size={14} />
                 <span>{isExecutingClosure ? 'Contabilizando Cierre...' : 'Confirmar y Asentar Cierre'}</span>

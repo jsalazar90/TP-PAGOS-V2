@@ -5,7 +5,9 @@ import { isSupabaseConfigured, supabase } from '../../services/supabase';
 import {
   ERP_STORAGE_KEYS,
   SAMPLE_FULL_BALANCE_CUENTAS,
+  dbBulkSaveCuentasContables,
   deleteErpRowFromSupabase,
+  ensureBaseHierarchyTitles,
   normalizeErpRow,
   syncErpTableFromSupabase,
   upsertErpRowToSupabase
@@ -94,6 +96,10 @@ const INITIAL_CONFIG_CONTABLE = {
   cuentaGananciaDiferencialCambiario: '4.1.01.002',
   cuentaPerdidaDiferencialCambiario: '5.2.01.002',
   cuentaIngresos: '4.1.01.001',
+  cuentaUtilidadAnteriores: '3.1.03.001',
+  cuentaResultadoEjercicio: '3.1.03.003',
+  cuentaPagosPorIdentificar: '2.1.01.003',
+  workingYear: String(new Date().getFullYear()),
   retencionIvaPorcentaje: 75,
   retencionIslrPorcentaje: 2
 };
@@ -130,13 +136,19 @@ export const ErpCompanyProvider: React.FC<{
   children: React.ReactNode;
 }> = ({ currentUser, onShowToast, children }) => {
 
-  const [workingYear, setWorkingYear] = useState<string>(() =>
-    String(new Date().getFullYear())
-  );
+  const [workingYear, setWorkingYear] = useState<string>(() => {
+    const savedCfg = loadFromStorage<any>(ERP_STORAGE_KEYS.CONFIG_CONTABLE, INITIAL_CONFIG_CONTABLE);
+    return String(savedCfg?.workingYear || new Date().getFullYear());
+  });
 
-  const [cuentasContables, setCuentasContables] = useState<any[]>(() =>
-    loadFromStorage(ERP_STORAGE_KEYS.CUENTAS, SAMPLE_FULL_BALANCE_CUENTAS)
-  );
+  const [cuentasContables, setCuentasContables] = useState<any[]>(() => {
+    const loaded = loadFromStorage(ERP_STORAGE_KEYS.CUENTAS, SAMPLE_FULL_BALANCE_CUENTAS);
+    const repaired = ensureBaseHierarchyTitles(loaded);
+    if (repaired !== loaded) {
+      saveToStorage(ERP_STORAGE_KEYS.CUENTAS, repaired);
+    }
+    return repaired;
+  });
   const [bancos, setBancos] = useState<any[]>(() =>
     loadFromStorage(ERP_STORAGE_KEYS.BANCOS, INITIAL_BANCOS)
   );
@@ -205,7 +217,11 @@ export const ErpCompanyProvider: React.FC<{
         ]);
 
         if (!active) return;
-        setCuentasContables(remCuentas);
+        const normalizedRemCuentas = ensureBaseHierarchyTitles(remCuentas);
+        if (normalizedRemCuentas !== remCuentas) {
+          saveToStorage(ERP_STORAGE_KEYS.CUENTAS, normalizedRemCuentas);
+        }
+        setCuentasContables(normalizedRemCuentas);
         setBancos(remBancos);
         setMovimientosBancos(remMovs);
         setComprobantes(remComps);
@@ -229,6 +245,9 @@ export const ErpCompanyProvider: React.FC<{
             ...normalizeErpRow(cfgData)
           };
           setConfigContable(normalizedCfg);
+          if (normalizedCfg.workingYear) {
+            setWorkingYear(String(normalizedCfg.workingYear));
+          }
           saveToStorage(ERP_STORAGE_KEYS.CONFIG_CONTABLE, normalizedCfg);
         }
       } catch (err) {
@@ -362,22 +381,30 @@ export const ErpCompanyProvider: React.FC<{
         break;
       case 'cuentasContables':
       case 'cuentas_contables':
-        updateCollection(
-          ERP_STORAGE_KEYS.CUENTAS,
-          setCuentasContables,
-          data,
-          'cuentas_contables',
-          (c) => ({
-            codigo: c.codigo || '',
-            nombre: c.nombre || '',
-            nivel: Number(c.nivel) || 4,
-            tipo: c.tipo || 'Movimiento',
-            grupo: c.grupo || 'Activo',
-            naturaleza: c.naturaleza || 'Deudora',
-            area_flujo_caja: c.areaFlujoCaja || c.area_flujo_caja || null,
-            saldo: Number(c.saldo ?? c.saldoActual) || 0
-          })
-        );
+        if (data && typeof data === 'object' && !Array.isArray(data) && data._bulk && Array.isArray(data.items)) {
+          setCuentasContables(data.items);
+          await dbBulkSaveCuentasContables(data.items, Boolean(data.replaceAll));
+        } else if (Array.isArray(data)) {
+          setCuentasContables(data);
+          await dbBulkSaveCuentasContables(data, false);
+        } else {
+          updateCollection(
+            ERP_STORAGE_KEYS.CUENTAS,
+            setCuentasContables,
+            data,
+            'cuentas_contables',
+            (c) => ({
+              codigo: c.codigo || '',
+              nombre: c.nombre || '',
+              nivel: Number(c.nivel) || 4,
+              tipo: c.tipo || 'Movimiento',
+              grupo: c.grupo || 'Activo',
+              naturaleza: c.naturaleza || 'Deudora',
+              area_flujo_caja: c.areaFlujoCaja || c.area_flujo_caja || null,
+              saldo: Number(c.saldo ?? c.saldoActual) || 0
+            })
+          );
+        }
         break;
       case 'comprobantes':
       case 'comprobantes_diario':
@@ -405,6 +432,9 @@ export const ErpCompanyProvider: React.FC<{
       case 'configuracion_contable': {
         const merged = { ...configContable, ...data };
         setConfigContable(merged);
+        if (merged?.workingYear) {
+          setWorkingYear(String(merged.workingYear));
+        }
         saveToStorage(ERP_STORAGE_KEYS.CONFIG_CONTABLE, merged);
         void upsertErpRowToSupabase('configuracion_contable', { ...merged, id: 'default' });
         break;

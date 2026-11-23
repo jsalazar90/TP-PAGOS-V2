@@ -43,6 +43,7 @@ import ChartOfAccounts from './opticavision/pages/ChartOfAccounts';
 import AccountingEntries from './opticavision/pages/AccountingEntries';
 import FixedAssetsModule from './opticavision/pages/FixedAssetsModule';
 import AccountingConfig from './opticavision/pages/AccountingConfig';
+import AccountingSettings from './opticavision/pages/AccountingSettings';
 import Reports from './opticavision/pages/Reports';
 import { Navbar } from './components/Navbar';
 import { Dashboard } from './components/Dashboard';
@@ -1241,10 +1242,13 @@ function AppContent({ currentUser, setCurrentUser, toast, showToast }: AppConten
 
       {/* Supabase Status Banner Indicator if not configured */}
       {!isSupabaseConfigured && (
-        <div className="bg-indigo-50/90 border-b border-indigo-100 px-4 py-1.5 text-center text-[11px] text-indigo-700 flex items-center justify-center gap-1.5">
-          <Sparkles className="w-3.5 h-3.5 text-indigo-600" />
-          <span>
-            <strong>Modo Local de Pruebas Activo</strong> • Para conectar Supabase en producción, agrega tus variables <code className="bg-white border border-indigo-200 px-1 py-0.5 rounded text-indigo-800 font-mono">VITE_SUPABASE_URL</code> en <code className="bg-white border border-indigo-200 px-1 py-0.5 rounded text-indigo-800 font-mono">.env</code>.
+        <div className="bg-indigo-50/90 border-b border-indigo-100 px-2.5 py-1 text-center text-[10px] sm:text-[11px] text-indigo-700 flex items-center justify-center gap-1.5">
+          <Sparkles className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+          <span className="truncate">
+            <strong>Modo Local de Pruebas Activo</strong>
+            <span className="hidden sm:inline">
+              {' '}• Para conectar Supabase en producción, agrega tus variables <code className="bg-white border border-indigo-200 px-1 py-0.5 rounded text-indigo-800 font-mono">VITE_SUPABASE_URL</code> en <code className="bg-white border border-indigo-200 px-1 py-0.5 rounded text-indigo-800 font-mono">.env</code>.
+            </span>
           </span>
         </div>
       )}
@@ -1253,8 +1257,8 @@ function AppContent({ currentUser, setCurrentUser, toast, showToast }: AppConten
       <main
         className={`flex-1 w-full ${
           isErpRoute && isAdmin
-            ? 'max-w-none px-3 sm:px-5 pt-3 pb-6'
-            : 'max-w-7xl mx-auto px-4 sm:px-6 pt-5'
+            ? 'max-w-none px-2.5 sm:px-5 pt-2.5 pb-6'
+            : 'max-w-7xl mx-auto px-3 sm:px-6 pt-3.5 sm:pt-5 pb-6'
         }`}
       >
         <PWAInstallBanner />
@@ -1339,10 +1343,9 @@ function AppContent({ currentUser, setCurrentUser, toast, showToast }: AppConten
             <Route
               path="/accounting/config"
               element={
-                <AccountingConfig
+                <AccountingSettings
                   configContable={configContable}
                   cuentasContables={cuentasContables}
-                  comprobantes={comprobantes}
                   onSave={handleSave}
                   showToast={erpShowToast}
                 />
@@ -1453,7 +1456,7 @@ function AppContent({ currentUser, setCurrentUser, toast, showToast }: AppConten
 
       {/* Toast Notification Floating Alert */}
       {toast && (
-        <div className="fixed bottom-16 sm:bottom-6 right-4 z-50 animate-bounce">
+        <div className="fixed bottom-4 left-3 right-3 sm:left-auto sm:right-4 sm:bottom-6 z-50 max-w-md sm:w-auto animate-bounce">
           <div
             className={`flex items-center gap-2.5 px-4 py-3 rounded-2xl shadow-2xl border text-xs font-semibold backdrop-blur-xl ${
               toast.type === 'success'

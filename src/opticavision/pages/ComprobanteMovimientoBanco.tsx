@@ -542,19 +542,19 @@ export default function ComprobanteMovimientoBanco({
   };
 
   return (
-    <div className="min-h-screen bg-slate-50/30 font-sans print:bg-white pb-16">
+    <div className="w-full font-sans print:bg-white pb-8">
       {/* Search and control bar (hidden in print) */}
-      <div className="bg-white border-b border-slate-200 py-2 sm:py-2.5 px-4 sm:px-6 sticky top-0 z-50 print:hidden shadow-xs">
+      <div className="bg-white border border-slate-200 rounded-2xl py-2.5 px-3 sm:px-5 mb-3 print:hidden shadow-xs">
         <div className="w-full max-w-[1920px] mx-auto flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-          <div className="flex items-center gap-3">
+          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
             <BackButton onClick={() => navigate(-1)} label="Volver a Tesorería" />
             <div>
-              <h1 className="text-xl font-extrabold text-slate-800 select-none">Comprobante de Caja y Bancos</h1>
-              <p className="text-xs text-slate-400 font-medium">Soporte y validador de transacciones autorizadas</p>
+              <h1 className="text-base sm:text-xl font-extrabold text-slate-800 select-none">Comprobante de Caja y Bancos</h1>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium">Soporte y validador de transacciones autorizadas</p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <div className="flex flex-col md:flex-row md:items-center gap-2.5 w-full md:w-auto">
             {/* Quick selectors for matching movements */}
             <div className="relative w-full md:w-72">
               <span className="absolute inset-y-0 left-0 flex items-center pl-3 text-slate-400 pointer-events-none">
@@ -563,7 +563,7 @@ export default function ComprobanteMovimientoBanco({
               <select
                 value={selectedMovId}
                 onChange={(e) => setSelectedMovId(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 border border-slate-200 bg-white rounded-xl text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-300 transition-colors shadow-sm"
+                className="w-full pl-9 pr-4 py-2 border border-slate-200 bg-white rounded-xl text-xs sm:text-sm font-semibold text-slate-700 focus:outline-none focus:ring-2 focus:ring-indigo-500 hover:border-slate-300 transition-colors shadow-sm"
               >
                 <option value="" disabled>Seleccione un movimiento...</option>
                 {movimientosBancos && [...movimientosBancos]
@@ -580,30 +580,32 @@ export default function ComprobanteMovimientoBanco({
               </select>
             </div>
 
-            {/* Ledger View Action */}
-            <button
-              onClick={() => navigate('/banks', { state: { subView: 'mayor_analitico', selectedBancoId: selectedMov?.banco_id } })}
-              className="bg-indigo-600 border border-indigo-700 hover:bg-indigo-700 text-white font-bold px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-2 text-sm justify-center w-full md:w-auto cursor-pointer"
-              title="Ir al Mayor Analítico de esta Cuenta"
-            >
-              <BookOpen className="w-4 h-4" />
-              Mayor Analítico
-            </button>
+            <div className="grid grid-cols-2 md:flex items-center gap-2 w-full md:w-auto">
+              {/* Ledger View Action */}
+              <button
+                onClick={() => navigate('/banks', { state: { subView: 'mayor_analitico', selectedBancoId: selectedMov?.banco_id } })}
+                className="bg-indigo-600 border border-indigo-700 hover:bg-indigo-700 text-white font-bold px-3 sm:px-4 py-2 rounded-xl transition-all shadow-md flex items-center gap-1.5 text-xs sm:text-sm justify-center whitespace-nowrap cursor-pointer"
+                title="Ir al Mayor Analítico de esta Cuenta"
+              >
+                <BookOpen className="w-4 h-4 shrink-0" />
+                <span>Mayor Analítico</span>
+              </button>
 
-            {/* Print Action */}
-            <button
-              onClick={handlePrint}
-              className="bg-slate-900 border border-slate-800 text-white font-bold px-4.5 py-2 rounded-xl transition-all shadow-md hover:bg-slate-800 flex items-center gap-2 text-sm justify-center w-full md:w-auto cursor-pointer"
-            >
-              <Printer className="w-4 h-4" />
-              Imprimir / PDF
-            </button>
+              {/* Print Action */}
+              <button
+                onClick={handlePrint}
+                className="bg-slate-900 border border-slate-800 text-white font-bold px-3 sm:px-4.5 py-2 rounded-xl transition-all shadow-md hover:bg-slate-800 flex items-center gap-1.5 text-xs sm:text-sm justify-center whitespace-nowrap cursor-pointer"
+              >
+                <Printer className="w-4 h-4 shrink-0" />
+                <span>Imprimir / PDF</span>
+              </button>
+            </div>
           </div>
         </div>
       </div>
 
       {/* Main dashboard view layout */}
-      <div className="w-full max-w-[1920px] mx-auto px-4 md:px-6 pt-2 grid grid-cols-1 xl:grid-cols-4 gap-6 print:block print:p-0">
+      <div className="w-full max-w-[1920px] mx-auto px-0 md:px-2 pt-1 grid grid-cols-1 xl:grid-cols-4 gap-4 sm:gap-6 print:block print:p-0">
         
         {/* Formatting Settings panel (hidden in print) */}
         <div className="xl:col-span-1 space-y-4 print:hidden">

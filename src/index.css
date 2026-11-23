@@ -8,7 +8,16 @@
     touch-action: manipulation;
     background-color: #f8fafc;
     color: #0f172a;
+    overflow-x: clip;
   }
+}
+
+.no-scrollbar {
+  scrollbar-width: none;
+  -ms-overflow-style: none;
+}
+.no-scrollbar::-webkit-scrollbar {
+  display: none;
 }
 
 /* Clear Light Glassmorphism & List Utilities */

@@ -1905,9 +1905,9 @@ export default function Reports({
   
 
   return (
-    <div className="min-h-screen bg-slate-50 px-3 sm:px-6 pt-1 pb-8">
+    <div className="min-h-screen bg-slate-50 px-1 sm:px-6 pt-1 pb-8">
       {/* Top Navigation */}
-      <div className="w-full max-w-[1920px] mx-auto mb-3 flex items-center justify-between no-print">
+      <div className="w-full max-w-[1920px] mx-auto mb-3 flex flex-wrap items-center justify-between gap-2 no-print">
         <BackButton to="/accounting" label="Volver a Contabilidad" />
         <span className="inline-flex items-center gap-1.5 text-[11px] font-bold px-3 py-1 bg-slate-100 text-slate-600 rounded-full border border-slate-200/80">
           Informes & Balances
@@ -1917,7 +1917,7 @@ export default function Reports({
       {/* HEADER DE MÓDULO */}
       <div className="w-full max-w-[1920px] mx-auto mb-3 flex flex-col md:flex-row md:items-center justify-between gap-3">
         <div>
-          <h1 className="text-xl sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
+          <h1 className="text-lg sm:text-2xl font-black text-slate-800 tracking-tight flex items-center gap-2">
             <div className="p-1.5 rounded-xl bg-indigo-50 border border-indigo-100 text-indigo-600 shrink-0">
               <BarChart3 className="w-5 h-5" />
             </div>
@@ -1929,54 +1929,54 @@ export default function Reports({
         </div>
 
         {/* SELECTOR DE SUBMÓDULO PRINCIPAL */}
-        <div className="flex bg-slate-200/70 p-1 rounded-xl border border-slate-300/40 w-fit shrink-0">
+        <div className="grid grid-cols-2 sm:flex bg-slate-200/70 p-1 rounded-xl border border-slate-300/40 w-full sm:w-fit shrink-0">
           <button
             onClick={() => { setActiveTab('contables'); setActiveReport(null); }}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 ${
+            className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'contables' 
                 ? 'bg-white text-indigo-600 shadow-2xs' 
                 : 'text-slate-600 hover:text-indigo-600'
             }`}
           >
-            <BookOpen className="w-3.5 h-3.5" />
-            Informes Contables
+            <BookOpen className="w-3.5 h-3.5 shrink-0" />
+            <span>Informes Contables</span>
           </button>
           <button
             onClick={() => { setActiveTab('flujo_caja'); setActiveReport(null); }}
-            className={`px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all duration-200 flex items-center gap-1.5 ${
+            className={`px-3 sm:px-3.5 py-1.5 rounded-lg text-xs font-bold tracking-wide transition-all duration-200 flex items-center justify-center gap-1.5 whitespace-nowrap cursor-pointer ${
               activeTab === 'flujo_caja' 
                 ? 'bg-white text-indigo-600 shadow-2xs' 
                 : 'text-slate-600 hover:text-indigo-600'
             }`}
           >
-            <Landmark className="w-3.5 h-3.5" />
-            Flujo de Caja
+            <Landmark className="w-3.5 h-3.5 shrink-0" />
+            <span>Flujo de Caja</span>
           </button>
         </div>
       </div>
 
       {/* COMPONENTE DE FILTROS GENERALES (Omitido en impresión) */}
-      <div className="w-full max-w-[1920px] mx-auto mb-4 bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-2xs flex flex-wrap items-center justify-between gap-3 no-print">
-        <div className="flex flex-wrap items-center gap-3 sm:gap-4">
-          <div className="flex items-center gap-1.5 text-slate-700">
+      <div className="w-full max-w-[1920px] mx-auto mb-4 bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/90 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 no-print">
+        <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4 w-full lg:w-auto">
+          <div className="flex items-center gap-1.5 text-slate-700 shrink-0">
             <CalendarDays className="w-4 h-4 text-indigo-500" />
             <span className="text-xs font-bold">Rango de fechas:</span>
           </div>
-          <div className="flex items-center gap-2">
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">Desde</span>
+          <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg border border-slate-200 min-w-0">
+              <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0">Desde</span>
               <input
                 type="date"
-                className="bg-transparent text-xs font-semibold text-slate-700 outline-hidden cursor-pointer"
+                className="w-full min-w-0 bg-transparent text-xs font-semibold text-slate-700 outline-hidden cursor-pointer"
                 value={startDate}
                 onChange={e => setStartDate(e.target.value)}
               />
             </div>
-            <div className="flex items-center gap-1.5 bg-slate-50 px-2.5 py-1 rounded-lg border border-slate-200">
-              <span className="text-[10px] text-slate-400 font-bold uppercase">Hasta</span>
+            <div className="flex items-center gap-1.5 bg-slate-50 px-2 sm:px-2.5 py-1.5 sm:py-1 rounded-lg border border-slate-200 min-w-0">
+              <span className="text-[10px] text-slate-400 font-bold uppercase shrink-0">Hasta</span>
               <input
                 type="date"
-                className="bg-transparent text-xs font-semibold text-slate-700 outline-hidden cursor-pointer"
+                className="w-full min-w-0 bg-transparent text-xs font-semibold text-slate-700 outline-hidden cursor-pointer"
                 value={endDate}
                 onChange={e => setEndDate(e.target.value)}
               />
@@ -1984,18 +1984,18 @@ export default function Reports({
           </div>
         </div>
 
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center justify-between sm:justify-end gap-2 w-full lg:w-auto">
           <button
             type="button"
             onClick={() => setShowSignaturesModal(true)}
-            className="flex items-center gap-1.5 px-3 py-1.5 border border-indigo-200 hover:border-indigo-400 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
+            className="flex items-center justify-center gap-1.5 px-3 py-1.5 border border-indigo-200 hover:border-indigo-400 text-indigo-700 bg-indigo-50 hover:bg-indigo-100 rounded-lg text-xs font-bold transition-all shadow-2xs cursor-pointer"
           >
             <Edit className="w-3.5 h-3.5" />
             <span>Responsables de Firma</span>
           </button>
 
-          <div className="text-[11px] text-indigo-600 font-bold bg-indigo-50 px-2.5 py-1 rounded-lg border border-indigo-100 uppercase tracking-wider">
-            Filtrado Activo: {startDate} 👉 {endDate}
+          <div className="text-[10px] sm:text-[11px] text-indigo-600 font-bold bg-indigo-50 px-2.5 py-1.5 sm:py-1 rounded-lg border border-indigo-100 uppercase tracking-wider">
+            {startDate} → {endDate}
           </div>
         </div>
       </div>

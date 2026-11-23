@@ -243,17 +243,17 @@ export default function VoucherPreviewModal({
   };
 
   return (
-    <div className="fixed inset-0 z-[500] flex items-center justify-center p-3 sm:p-5 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200">
+    <div className="fixed inset-0 z-[500] flex items-center justify-center p-2 sm:p-5 bg-slate-950/75 backdrop-blur-md animate-in fade-in duration-200">
       <div className="bg-white rounded-2xl shadow-2xl w-full max-w-6xl max-h-[94vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-200 font-sans">
         
         {/* 1. HEADER NIIF / IFRS */}
-        <div className="bg-slate-900 px-6 py-4 text-white flex justify-between items-center shrink-0 border-b border-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400">
-              <Scale size={22} />
+        <div className="bg-slate-900 px-3.5 py-3 sm:px-6 sm:py-4 text-white flex justify-between items-start sm:items-center gap-2 shrink-0 border-b border-slate-800">
+          <div className="flex items-start sm:items-center gap-2.5 sm:gap-3 min-w-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-indigo-600/30 border border-indigo-500/40 flex items-center justify-center text-indigo-400 shrink-0">
+              <Scale size={20} />
             </div>
-            <div>
-              <div className="flex items-center gap-2">
+            <div className="min-w-0">
+              <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
                 <span className="bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider">
                   NIIF / IFRS • LIBRO DIARIO
                 </span>
@@ -267,8 +267,8 @@ export default function VoucherPreviewModal({
                   </span>
                 )}
               </div>
-              <h3 className="text-lg sm:text-xl font-black text-white tracking-tight mt-0.5">{title}</h3>
-              <p className="text-xs text-slate-400 font-medium">{subtitle}</p>
+              <h3 className="text-base sm:text-xl font-black text-white tracking-tight mt-0.5 truncate">{title}</h3>
+              <p className="text-[11px] sm:text-xs text-slate-400 font-medium line-clamp-2">{subtitle}</p>
             </div>
           </div>
 
@@ -276,7 +276,7 @@ export default function VoucherPreviewModal({
             type="button"
             onClick={onClose} 
             disabled={isSaving}
-            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 cursor-pointer"
+            className="p-2 text-slate-400 hover:text-white hover:bg-slate-800 rounded-xl transition-colors disabled:opacity-50 cursor-pointer shrink-0"
             title="Cerrar ventana"
           >
             <X size={20} />
@@ -284,21 +284,21 @@ export default function VoucherPreviewModal({
         </div>
 
         {/* 2. METADATOS Y GLOSA PRINCIPAL (TARJETA SUPERIOR) */}
-        <div className="bg-slate-50 border-b border-slate-200/80 px-6 py-4 shrink-0 space-y-3">
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-xs">
+        <div className="bg-slate-50 border-b border-slate-200/80 px-3.5 py-3 sm:px-6 sm:py-4 shrink-0 space-y-2.5 sm:space-y-3">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-xs">
             
             {/* N° Comprobante */}
-            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
+            <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 N° Comprobante
               </span>
-              <span className="font-mono font-black text-indigo-700 text-sm block mt-0.5">
+              <span className="font-mono font-black text-indigo-700 text-xs sm:text-sm block mt-0.5 truncate">
                 {comprobante.numero || 'Generado autom.'}
               </span>
             </div>
 
             {/* Fecha Contable */}
-            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
+            <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 Fecha Contable
               </span>
@@ -312,7 +312,7 @@ export default function VoucherPreviewModal({
             </div>
 
             {/* Referencia Documento Fuente */}
-            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
+            <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-slate-200/80 shadow-2xs">
               <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                 Referencia Origen
               </span>
@@ -322,16 +322,16 @@ export default function VoucherPreviewModal({
             </div>
 
             {/* Moneda y Estado */}
-            <div className="bg-white p-2.5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between">
-              <div>
+            <div className="bg-white p-2 sm:p-2.5 rounded-xl border border-slate-200/80 shadow-2xs flex items-center justify-between gap-1">
+              <div className="min-w-0">
                 <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider block">
                   Moneda Base
                 </span>
-                <span className="font-bold text-slate-800 text-xs block mt-0.5">
+                <span className="font-bold text-slate-800 text-xs block mt-0.5 truncate">
                   USD ($) {effectiveTasa > 0 && <span className="text-[10px] text-slate-500 font-normal">@ Bs. {formatES(effectiveTasa)}</span>}
                 </span>
               </div>
-              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border ${isBalanced ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
+              <span className={`px-2 py-0.5 rounded-full text-[10px] font-bold border shrink-0 ${isBalanced ? 'bg-emerald-50 text-emerald-700 border-emerald-200' : 'bg-rose-50 text-rose-700 border-rose-200'}`}>
                 {isBalanced ? 'Cuadrado' : 'Descuadre'}
               </span>
             </div>
@@ -339,8 +339,8 @@ export default function VoucherPreviewModal({
           </div>
 
           {/* Glosa / Concepto General del Asiento */}
-          <div className="bg-white p-3 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2">
-            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider shrink-0 flex items-center gap-1.5 min-w-[170px]">
+          <div className="bg-white p-2.5 sm:p-3 rounded-xl border border-slate-200/80 shadow-2xs flex flex-col sm:flex-row items-start sm:items-center gap-2">
+            <label className="text-[11px] font-black text-slate-700 uppercase tracking-wider shrink-0 flex items-center gap-1.5 sm:min-w-[170px]">
               <FileText size={14} className="text-indigo-600" />
               Glosa / Concepto General:
             </label>
@@ -356,8 +356,8 @@ export default function VoucherPreviewModal({
         </div>
 
         {/* 3. TABLA DE ASIENTO CONTABLE (PARTIDA DOBLE) */}
-        <div className="flex-1 overflow-hidden flex flex-col p-4 sm:p-6 bg-slate-100/60">
-          <div className="flex items-center justify-between pb-3 shrink-0">
+        <div className="flex-1 overflow-hidden flex flex-col p-3 sm:p-6 bg-slate-100/60">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2.5 sm:pb-3 shrink-0">
             <div className="flex items-center gap-2">
               <span className="text-xs font-extrabold text-slate-700 uppercase tracking-wider">
                 Detalle de Cuentas y Partida Doble
@@ -367,7 +367,7 @@ export default function VoucherPreviewModal({
               </span>
             </div>
 
-            <div className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center gap-2">
               {!isBalanced && (
                 <button
                   type="button"
@@ -393,7 +393,7 @@ export default function VoucherPreviewModal({
 
           {/* Contenedor con Scroll de la Tabla */}
           <div className="bg-white rounded-xl border border-slate-200/90 shadow-sm overflow-hidden flex-1 flex flex-col">
-            <div className="overflow-y-auto flex-1 max-h-[46vh]">
+            <div className="overflow-x-auto overflow-y-auto flex-1 max-h-[42vh]">
               <table className="w-full text-left border-collapse text-xs">
                 <thead className="sticky top-0 z-10 bg-slate-50/95 backdrop-blur-xs text-slate-600 font-extrabold border-b border-slate-200 text-[11px] uppercase tracking-wider select-none shadow-2xs">
                   <tr>
@@ -512,10 +512,10 @@ export default function VoucherPreviewModal({
             </div>
 
             {/* 4. PIE DE TABLA: TOTALES FIJOS INTERNACIONALES */}
-            <div className="bg-slate-50 px-5 py-3.5 border-t border-slate-200 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-4 select-none">
+            <div className="bg-slate-50 px-3.5 sm:px-5 py-3 sm:py-3.5 border-t border-slate-200 shrink-0 flex flex-col sm:flex-row items-center justify-between gap-3 sm:gap-4 select-none">
               
               {/* Estado y Diferencia */}
-              <div className="flex items-center gap-4 text-xs">
+              <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2.5 sm:gap-4 text-xs">
                 <div className="flex items-center gap-2">
                   <span className="text-[11px] font-black uppercase tracking-wider text-slate-400">
                     Estado de Balance:
@@ -531,7 +531,7 @@ export default function VoucherPreviewModal({
                   )}
                 </div>
 
-                <div className="border-l border-slate-200 pl-4">
+                <div className="sm:border-l sm:border-slate-200 sm:pl-4">
                   <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Diferencia:</span>
                   <span className={`font-mono font-black text-sm ml-1.5 ${isBalanced ? 'text-emerald-700' : 'text-rose-700'}`}>
                     $ {formatES(Math.abs(diff))}
@@ -540,7 +540,7 @@ export default function VoucherPreviewModal({
               </div>
 
               {/* Totales Debe y Haber */}
-              <div className="flex items-center gap-6">
+              <div className="flex items-center gap-4 sm:gap-6">
                 <div className="text-right">
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">
                     TOTAL DEBE (DÉBITO)

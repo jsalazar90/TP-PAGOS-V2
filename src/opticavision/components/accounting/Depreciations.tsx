@@ -382,15 +382,15 @@ export default function Depreciations({
   });
 
   return (
-    <div className="p-6 w-full">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div className="p-3 sm:p-6 w-full">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Depreciaciones</h2>
-          <p className="text-slate-500 text-sm">Cálculo y registro de la depreciación de activos fijos</p>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800">Depreciaciones</h2>
+          <p className="text-slate-500 text-xs sm:text-sm">Cálculo y registro de la depreciación de activos fijos</p>
         </div>
         <button 
           onClick={() => setShowModal(true)}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer"
         >
           <Play className="w-4 h-4" />
           <span className="text-sm font-medium">Ejecutar Depreciación</span>
@@ -533,11 +533,11 @@ export default function Depreciations({
                 </div>
               </div>
             </div>
-            <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-              <button onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">
+            <div className="p-4 sm:p-6 border-t border-slate-200 bg-slate-50 flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3 shrink-0">
+              <button onClick={() => setShowModal(false)} className="w-full sm:w-auto px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors">
                 Cancelar
               </button>
-              <button onClick={handleExecute} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors flex items-center gap-2">
+              <button onClick={handleExecute} className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors flex items-center justify-center gap-2">
                 <Play className="w-4 h-4" /> Ejecutar
               </button>
             </div>
@@ -561,8 +561,8 @@ export default function Depreciations({
               </button>
             </div>
             
-            <div className="overflow-y-auto p-0 flex-1">
-              <table className="w-full text-left border-collapse">
+            <div className="overflow-x-auto overflow-y-auto p-0 flex-1">
+              <table className="w-full min-w-[540px] text-left border-collapse">
                 <thead className="sticky top-0 bg-white shadow-sm z-10">
                   <tr className="bg-slate-50 border-b border-slate-200">
                     <th className="px-4 py-3 text-xs font-bold text-slate-700 uppercase tracking-wider">Código</th>

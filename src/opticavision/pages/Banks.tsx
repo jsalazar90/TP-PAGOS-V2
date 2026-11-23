@@ -601,33 +601,33 @@ export default function BancosView({
   const renderTraspasoModal = () => {
     if (!transferForm.showModal) return null;
     return (
-      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-4" onClick={()=>setTransferForm({...transferForm, showModal:false})}>
-        <div className="bg-white rounded-3xl shadow-2xl w-full max-w-4xl overflow-hidden animate-in zoom-in-95" onClick={e=>e.stopPropagation()}>
-          <div className="p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50"><h3 className="text-xl font-bold text-slate-800 flex items-center gap-2"><ArrowRightLeft className="w-6 h-6 text-blue-600"/> Nuevo Traspaso Bancario</h3><button className="text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm" onClick={()=>setTransferForm({...transferForm, showModal:false})}><X className="w-5 h-5"/></button></div>
-          <div className="p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-8 relative">
-            <div className="space-y-5">
-              <h4 className="font-bold text-red-600 uppercase tracking-widest text-[11px] mb-4 flex items-center gap-2 bg-red-50 p-2 rounded-lg w-max"><LogOut className="w-4 h-4"/> Origen (Egreso)</h4>
-              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Banco a debitar</label><select className="input-modern bg-slate-50" value={transferForm.origenId} onChange={e=>setTransferForm({...transferForm, origenId: e.target.value})}><option value="">Seleccione cuenta origen...</option>{bancos.map(b=><option key={b.id} value={b.id}>{b.banco} ({b.moneda})</option>)}</select></div>
-              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Monto a Traspasar (USD)</label><input type="number" step="0.01" className="input-modern font-black text-2xl text-slate-800" value={transferForm.monto} onChange={e=>setTransferForm({...transferForm, monto: e.target.value})} placeholder="0.00" /></div>
+      <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[100] flex items-center justify-center p-2.5 sm:p-4" onClick={()=>setTransferForm({...transferForm, showModal:false})}>
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-4xl max-h-[92vh] flex flex-col overflow-hidden animate-in zoom-in-95" onClick={e=>e.stopPropagation()}>
+          <div className="p-4 sm:p-6 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0"><h3 className="text-base sm:text-xl font-bold text-slate-800 flex items-center gap-2"><ArrowRightLeft className="w-5 h-5 sm:w-6 sm:h-6 text-blue-600"/> Nuevo Traspaso Bancario</h3><button className="text-slate-400 hover:text-red-500 bg-white p-2 rounded-full shadow-sm" onClick={()=>setTransferForm({...transferForm, showModal:false})}><X className="w-5 h-5"/></button></div>
+          <div className="p-4 sm:p-6 md:p-8 grid grid-cols-1 md:grid-cols-2 gap-5 md:gap-8 relative overflow-y-auto flex-1">
+            <div className="space-y-4 sm:space-y-5">
+              <h4 className="font-bold text-red-600 uppercase tracking-widest text-[11px] mb-2 sm:mb-4 flex items-center gap-2 bg-red-50 p-2 rounded-lg w-max"><LogOut className="w-4 h-4"/> Origen (Egreso)</h4>
+              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">Banco a debitar</label><select className="input-modern bg-slate-50" value={transferForm.origenId} onChange={e=>setTransferForm({...transferForm, origenId: e.target.value})}><option value="">Seleccione cuenta origen...</option>{bancos.map(b=><option key={b.id} value={b.id}>{b.banco} ({b.moneda})</option>)}</select></div>
+              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">Monto a Traspasar (USD)</label><input type="number" step="0.01" className="input-modern font-black text-xl sm:text-2xl text-slate-800" value={transferForm.monto} onChange={e=>setTransferForm({...transferForm, monto: e.target.value})} placeholder="0.00" /></div>
               {bancos.find(b=>String(b.id)===transferForm.origenId)?.moneda==='Bolivares' && (
-                <div className="flex flex-col bg-red-50/50 p-4 rounded-xl border border-red-100 animate-in fade-in"><label className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Calculator className="w-3 h-3"/> Tasa de Cambio Origen</label><input type="number" step="0.01" className="input-modern bg-white" value={transferForm.tasaOrigen} onChange={e=>setTransferForm({...transferForm, tasaOrigen: e.target.value})} />
+                <div className="flex flex-col bg-red-50/50 p-3.5 sm:p-4 rounded-xl border border-red-100 animate-in fade-in"><label className="text-[10px] font-bold text-red-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Calculator className="w-3 h-3"/> Tasa de Cambio Origen</label><input type="number" step="0.01" className="input-modern bg-white" value={transferForm.tasaOrigen} onChange={e=>setTransferForm({...transferForm, tasaOrigen: e.target.value})} />
                 <span className="text-[10px] font-bold text-red-700 mt-2 bg-white px-2 py-1 rounded shadow-sm w-max">Eq. Físico: Bs. {formatoES((parseFloat(transferForm.monto.toString())||0)*(parseFloat(transferForm.tasaOrigen.toString())||1))}</span>
                 </div>
               )}
-              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Concepto del Movimiento</label><input type="text" className="input-modern" value={transferForm.concepto} onChange={e=>setTransferForm({...transferForm, concepto: e.target.value})} placeholder="Ej. Reposición caja..." /></div>
+              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">Concepto del Movimiento</label><input type="text" className="input-modern" value={transferForm.concepto} onChange={e=>setTransferForm({...transferForm, concepto: e.target.value})} placeholder="Ej. Reposición caja..." /></div>
             </div>
-            <div className="space-y-5">
-              <h4 className="font-bold text-green-600 uppercase tracking-widest text-[11px] mb-4 flex items-center gap-2 bg-green-50 p-2 rounded-lg w-max"><LogIn className="w-4 h-4"/> Destino (Ingreso)</h4>
-              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Banco acreditar</label><select className="input-modern bg-slate-50" value={transferForm.destinoId} onChange={e=>setTransferForm({...transferForm, destinoId: e.target.value})}><option value="">Seleccione cuenta destino...</option>{bancos.map(b=><option key={b.id} value={b.id}>{b.banco} ({b.moneda})</option>)}</select></div>
-              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Monto que ingresará (USD)</label><div className="h-[52px] bg-green-50 border border-green-200 rounded-xl flex items-center justify-center font-black text-2xl text-green-600 shadow-inner">$ {formatoES(parseFloat(transferForm.monto.toString())||0)}</div></div>
+            <div className="space-y-4 sm:space-y-5">
+              <h4 className="font-bold text-green-600 uppercase tracking-widest text-[11px] mb-2 sm:mb-4 flex items-center gap-2 bg-green-50 p-2 rounded-lg w-max"><LogIn className="w-4 h-4"/> Destino (Ingreso)</h4>
+              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">Banco acreditar</label><select className="input-modern bg-slate-50" value={transferForm.destinoId} onChange={e=>setTransferForm({...transferForm, destinoId: e.target.value})}><option value="">Seleccione cuenta destino...</option>{bancos.map(b=><option key={b.id} value={b.id}>{b.banco} ({b.moneda})</option>)}</select></div>
+              <div className="flex flex-col"><label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">Monto que ingresará (USD)</label><div className="h-[46px] sm:h-[52px] bg-green-50 border border-green-200 rounded-xl flex items-center justify-center font-black text-xl sm:text-2xl text-green-600 shadow-inner">$ {formatoES(parseFloat(transferForm.monto.toString())||0)}</div></div>
               {bancos.find(b=>String(b.id)===transferForm.destinoId)?.moneda==='Bolivares' && (
-                <div className="flex flex-col bg-green-50/50 p-4 rounded-xl border border-green-100 animate-in fade-in"><label className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Calculator className="w-3 h-3"/> Tasa de Cambio Destino</label><input type="number" step="0.01" className="input-modern bg-white" value={transferForm.tasaDestino} onChange={e=>setTransferForm({...transferForm, tasaDestino: e.target.value})} />
+                <div className="flex flex-col bg-green-50/50 p-3.5 sm:p-4 rounded-xl border border-green-100 animate-in fade-in"><label className="text-[10px] font-bold text-green-600 uppercase tracking-wider mb-2 flex items-center gap-1"><Calculator className="w-3 h-3"/> Tasa de Cambio Destino</label><input type="number" step="0.01" className="input-modern bg-white" value={transferForm.tasaDestino} onChange={e=>setTransferForm({...transferForm, tasaDestino: e.target.value})} />
                 <span className="text-[10px] font-bold text-green-700 mt-2 bg-white px-2 py-1 rounded shadow-sm w-max">Eq. Físico: Bs. {formatoES((parseFloat(transferForm.monto.toString())||0)*(parseFloat(transferForm.tasaDestino.toString())||1))}</span>
                 </div>
               )}
             </div>
           </div>
-          <div className="p-5 border-t border-slate-100 bg-slate-50 flex flex-col-reverse md:flex-row justify-end gap-3">
+          <div className="p-4 sm:p-5 border-t border-slate-100 bg-slate-50 flex flex-col-reverse md:flex-row justify-end gap-2.5 sm:gap-3 shrink-0">
             <button className="btn-secondary w-full md:w-auto" onClick={()=>setTransferForm({...transferForm, showModal:false})}>Cancelar</button>
             <button className="btn-primary bg-blue-600 hover:bg-blue-700 w-full md:w-auto" onClick={handleEjecutarTraspaso}><CheckCircle className="w-4 h-4"/> Procesar Traspaso Seguro</button>
           </div>
@@ -2402,8 +2402,8 @@ export default function BancosView({
   const renderTabs = () => (
     <div className="mb-3.5 flex flex-col gap-2.5">
       {/* Top Navigation & Actions Toolbar (Unified Header) */}
-      <div className="flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 sm:px-4 sm:py-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
-        <div className="flex items-center gap-3">
+      <div className="flex flex-col sm:flex-row sm:flex-wrap sm:items-center justify-between gap-2.5 sm:gap-3 bg-white p-2.5 sm:px-4 sm:py-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
+        <div className="flex flex-wrap items-center gap-2 sm:gap-3">
           {subView !== 'cuentas' ? (
             <BackButton onClick={() => setSubView('cuentas')} label="Volver a Cuentas" />
           ) : (
@@ -2412,8 +2412,8 @@ export default function BancosView({
 
           <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex items-center justify-center shadow-xs">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-gradient-to-br from-indigo-600 to-blue-600 text-white flex items-center justify-center shadow-xs shrink-0">
               <Landmark className="w-4 h-4" />
             </div>
             <div>
@@ -2425,35 +2425,30 @@ export default function BancosView({
         </div>
 
         {subView === 'cuentas' ? (
-          <div className="flex flex-wrap items-center gap-1.5 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-200/80 ml-auto">
+          <div className="w-full sm:w-auto sm:ml-auto grid grid-cols-3 sm:flex items-center gap-1.5 bg-slate-50/80 p-1.5 rounded-2xl border border-slate-200/80">
             <button 
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all border border-emerald-200 bg-emerald-50/90 hover:bg-emerald-100 text-emerald-800 h-8 sm:h-9 px-3 cursor-pointer active:scale-95 shadow-2xs" 
-              onClick={() => setTransferForm({...transferForm, showModal: true})}
-              title="Realizar nuevo traspaso entre cuentas bancarias"
-            >
-              <ArrowRightLeft className="w-3.5 h-3.5 text-emerald-600" /> 
-              <span>Nuevo Traspaso</span>
-            </button>
-            <button 
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all border border-slate-200 bg-white shadow-2xs hover:bg-slate-50 text-slate-700 h-8 sm:h-9 px-3 cursor-pointer active:scale-95" 
+              className="inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all border border-slate-200 bg-white shadow-2xs hover:bg-slate-50 text-slate-700 h-9 px-2 sm:px-3 cursor-pointer active:scale-95 whitespace-nowrap" 
               onClick={() => setSubView('historial_traspasos')}
             >
-              <History className="w-3.5 h-3.5 text-indigo-600" /> 
-              <span>Historial Traspasos</span>
+              <History className="w-3.5 h-3.5 text-indigo-600 shrink-0" /> 
+              <span className="sm:hidden">Traspasos</span>
+              <span className="hidden sm:inline">Historial Traspasos</span>
             </button>
             <button 
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all border border-slate-200 bg-white shadow-2xs hover:bg-slate-50 text-slate-700 h-8 sm:h-9 px-3 cursor-pointer active:scale-95" 
+              className="inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all border border-slate-200 bg-white shadow-2xs hover:bg-slate-50 text-slate-700 h-9 px-2 sm:px-3 cursor-pointer active:scale-95 whitespace-nowrap" 
               onClick={() => {setSapsResult(null); setSubView('saps');}}
             >
-              <BarChart3 className="w-3.5 h-3.5 text-purple-600" /> 
-              <span>Ajuste SAPS (FX)</span>
+              <BarChart3 className="w-3.5 h-3.5 text-purple-600 shrink-0" /> 
+              <span className="sm:hidden">SAPS FX</span>
+              <span className="hidden sm:inline">Ajuste SAPS (FX)</span>
             </button>
             <button 
-              className="inline-flex items-center justify-center gap-1.5 rounded-xl text-xs font-bold transition-all bg-gradient-to-r from-[#00b4a2] to-[#009b8b] hover:from-[#009b8b] hover:to-teal-700 text-white shadow-xs shadow-teal-600/20 h-8 sm:h-9 px-3.5 cursor-pointer active:scale-95" 
+              className="inline-flex items-center justify-center gap-1 sm:gap-1.5 rounded-xl text-[11px] sm:text-xs font-bold transition-all bg-gradient-to-r from-[#00b4a2] to-[#009b8b] hover:from-[#009b8b] hover:to-teal-700 text-white shadow-xs shadow-teal-600/20 h-9 px-2 sm:px-3.5 cursor-pointer active:scale-95 whitespace-nowrap" 
               onClick={() => {setEditBancoId(null); setCuentaForm({banco:'', cuenta:'', tipo:'Corriente', moneda:'USD', tasa:'1', saldo:'0', saldoBs:'0', cuenta_contable_id:'', es_caja: false, tipo_cuenta: 'nacional'}); setSubView('nueva_cuenta');}}
             >
-              <Plus className="w-3.5 h-3.5 stroke-[2.5]" /> 
-              <span>Añadir Cuenta</span>
+              <Plus className="w-3.5 h-3.5 stroke-[2.5] shrink-0" /> 
+              <span className="sm:hidden">Cuenta</span>
+              <span className="hidden sm:inline">Añadir Cuenta</span>
             </button>
           </div>
         ) : (
@@ -2465,54 +2460,54 @@ export default function BancosView({
 
       {/* KPI Stats Strip */}
       {subView === 'cuentas' && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 animate-in fade-in duration-300">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-2 sm:gap-3 animate-in fade-in duration-300">
           {/* KPI 1: Liquidez Global USD */}
-          <div className="bg-white p-3 sm:px-4 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between group hover:border-emerald-200 transition-all">
+          <div className="bg-white p-2.5 sm:px-4 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between group hover:border-emerald-200 transition-all">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
-                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Liquidez Global (USD)</p>
+                <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse shrink-0" />
+                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider truncate">Liquidez (USD)</p>
               </div>
-              <p className={`text-lg sm:text-xl font-black tracking-tight mt-0.5 truncate ${totalLiquidez < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+              <p className={`text-sm sm:text-xl font-black tracking-tight mt-0.5 truncate font-mono ${totalLiquidez < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
                 {totalLiquidez < 0 ? '-' : ''}$ {formatoES(Math.abs(totalLiquidez))}
               </p>
-              <span className="text-[10px] text-slate-400 font-medium">Consolidado en divisas</span>
+              <span className="text-[10px] text-slate-400 font-medium hidden sm:block">Consolidado en divisas</span>
             </div>
-            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-emerald-50 text-emerald-600 hidden sm:flex items-center justify-center shrink-0">
               <Wallet className="w-4 h-4" />
             </div>
           </div>
 
           {/* KPI 2: Saldo Consolidado VES */}
-          <div className="bg-white p-3 sm:px-4 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between group hover:border-blue-200 transition-all">
+          <div className="bg-white p-2.5 sm:px-4 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between group hover:border-blue-200 transition-all">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-blue-500" />
-                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Saldo en Bolívares (VES)</p>
+                <span className="w-2 h-2 rounded-full bg-blue-500 shrink-0" />
+                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider truncate">Saldo VES</p>
               </div>
-              <p className={`text-lg sm:text-xl font-black tracking-tight mt-0.5 truncate ${totalLiquidezVES < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+              <p className={`text-sm sm:text-xl font-black tracking-tight mt-0.5 truncate font-mono ${totalLiquidezVES < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
                 {totalLiquidezVES < 0 ? '-' : ''}Bs. {formatoES(Math.abs(totalLiquidezVES))}
               </p>
-              <span className="text-[10px] text-slate-400 font-medium">Cuentas moneda nacional</span>
+              <span className="text-[10px] text-slate-400 font-medium hidden sm:block">Cuentas moneda nacional</span>
             </div>
-            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-blue-50 text-blue-600 hidden sm:flex items-center justify-center shrink-0">
               <Coins className="w-4 h-4" />
             </div>
           </div>
 
           {/* KPI 3: Cuentas Registradas */}
-          <div className="bg-white p-3 sm:px-4 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between group hover:border-indigo-200 transition-all">
+          <div className="bg-white p-2.5 sm:px-4 sm:py-3 rounded-2xl border border-slate-200/90 shadow-xs flex items-center justify-between group hover:border-indigo-200 transition-all">
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className="w-2 h-2 rounded-full bg-indigo-500" />
-                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Cuentas Bancarias</p>
+                <span className="w-2 h-2 rounded-full bg-indigo-500 shrink-0" />
+                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider truncate">Cuentas</p>
               </div>
-              <p className="text-lg sm:text-xl font-black tracking-tight text-slate-900 mt-0.5">
+              <p className="text-sm sm:text-xl font-black tracking-tight text-slate-900 mt-0.5">
                 {bancosConSaldos.length} {bancosConSaldos.length === 1 ? 'Cuenta' : 'Cuentas'}
               </p>
-              <span className="text-[10px] text-slate-400 font-medium">Activas y operativas</span>
+              <span className="text-[10px] text-slate-400 font-medium hidden sm:block">Activas y operativas</span>
             </div>
-            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 flex items-center justify-center shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-indigo-50 text-indigo-600 hidden sm:flex items-center justify-center shrink-0">
               <Landmark className="w-4 h-4" />
             </div>
           </div>
@@ -2520,7 +2515,7 @@ export default function BancosView({
           {/* KPI 4: Cuarentena / Pagos por Identificar */}
           <div 
             onClick={() => cuarentenaMovs.length > 0 && setSubView('cuarentena')}
-            className={`p-3 sm:px-4 sm:py-3 rounded-2xl border shadow-xs flex items-center justify-between transition-all ${
+            className={`p-2.5 sm:px-4 sm:py-3 rounded-2xl border shadow-xs flex items-center justify-between transition-all ${
               cuarentenaMovs.length > 0 
                 ? 'bg-orange-50/60 border-orange-200 text-orange-900 cursor-pointer hover:bg-orange-100/70' 
                 : 'bg-white border-slate-200/90'
@@ -2528,17 +2523,17 @@ export default function BancosView({
           >
             <div className="min-w-0">
               <div className="flex items-center gap-1.5">
-                <span className={`w-2 h-2 rounded-full ${cuarentenaMovs.length > 0 ? 'bg-orange-500 animate-pulse' : 'bg-slate-300'}`} />
-                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider">Pagos en Cuarentena</p>
+                <span className={`w-2 h-2 rounded-full shrink-0 ${cuarentenaMovs.length > 0 ? 'bg-orange-500 animate-pulse' : 'bg-slate-300'}`} />
+                <p className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider truncate">Cuarentena</p>
               </div>
-              <p className={`text-lg sm:text-xl font-black tracking-tight mt-0.5 ${cuarentenaMovs.length > 0 ? 'text-orange-700' : 'text-slate-900'}`}>
+              <p className={`text-sm sm:text-xl font-black tracking-tight mt-0.5 ${cuarentenaMovs.length > 0 ? 'text-orange-700' : 'text-slate-900'}`}>
                 {cuarentenaMovs.length} {cuarentenaMovs.length === 1 ? 'Depósito' : 'Depósitos'}
               </p>
-              <span className="text-[10px] text-slate-400 font-medium">
+              <span className="text-[10px] text-slate-400 font-medium hidden sm:block">
                 {cuarentenaMovs.length > 0 ? 'Haga clic para identificar' : 'Sin pagos pendientes'}
               </span>
             </div>
-            <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${
+            <div className={`w-8 h-8 rounded-xl hidden sm:flex items-center justify-center shrink-0 ${
               cuarentenaMovs.length > 0 ? 'bg-orange-100 text-orange-600' : 'bg-slate-100 text-slate-400'
             }`}>
               <ShieldAlert className="w-4 h-4" />
@@ -2549,9 +2544,9 @@ export default function BancosView({
 
       {/* Barra de Filtros y Búsqueda Estilo Foto 2 (Limpio & Profesional) */}
       {subView === 'cuentas' && (
-        <div className="bg-white p-2.5 sm:px-4 sm:py-2.5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-wrap items-center justify-between gap-3 animate-in fade-in duration-300">
+        <div className="bg-white p-2.5 sm:px-4 sm:py-2.5 rounded-2xl border border-slate-200/90 shadow-2xs flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 animate-in fade-in duration-300">
           {/* Input de Búsqueda */}
-          <div className="relative flex-1 min-w-[200px] sm:max-w-xs">
+          <div className="relative w-full lg:flex-1 lg:max-w-xs">
             <Search className="w-4 h-4 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
             <input 
               type="text"
@@ -2571,11 +2566,11 @@ export default function BancosView({
           </div>
 
           {/* Pastillas de Filtro */}
-          <div className="flex items-center gap-1.5 flex-wrap">
+          <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar w-full lg:w-auto pb-0.5 lg:pb-0">
             <button
               type="button"
               onClick={() => setFilterType('todas')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'todas'
                   ? 'bg-slate-900 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -2586,7 +2581,7 @@ export default function BancosView({
             <button
               type="button"
               onClick={() => setFilterType('bancos')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'bancos'
                   ? 'bg-indigo-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -2597,7 +2592,7 @@ export default function BancosView({
             <button
               type="button"
               onClick={() => setFilterType('cajas')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'cajas'
                   ? 'bg-indigo-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -2608,7 +2603,7 @@ export default function BancosView({
             <button
               type="button"
               onClick={() => setFilterType('USD')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'USD'
                   ? 'bg-emerald-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -2619,7 +2614,7 @@ export default function BancosView({
             <button
               type="button"
               onClick={() => setFilterType('VES')}
-              className={`px-3 py-1 rounded-xl text-xs font-bold transition cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition cursor-pointer whitespace-nowrap shrink-0 ${
                 filterType === 'VES'
                   ? 'bg-blue-600 text-white shadow-xs'
                   : 'bg-white text-slate-600 border border-slate-200 hover:bg-slate-50'
@@ -2630,11 +2625,11 @@ export default function BancosView({
           </div>
 
           {/* Conmutador de Vista: Lista vs Tarjetas */}
-          <div className="flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/80">
+          <div className="w-full sm:w-auto grid grid-cols-2 sm:flex items-center gap-1 bg-slate-100 p-0.5 rounded-xl border border-slate-200/80">
             <button
               type="button"
               onClick={() => setViewMode('lista')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 viewMode === 'lista'
                   ? 'bg-white text-slate-900 shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
@@ -2647,7 +2642,7 @@ export default function BancosView({
             <button
               type="button"
               onClick={() => setViewMode('tarjetas')}
-              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center gap-1.5 transition cursor-pointer ${
+              className={`px-2.5 py-1 rounded-lg text-xs font-bold flex items-center justify-center gap-1.5 transition cursor-pointer ${
                 viewMode === 'tarjetas'
                   ? 'bg-white text-slate-900 shadow-2xs'
                   : 'text-slate-500 hover:text-slate-800'
@@ -2665,12 +2660,12 @@ export default function BancosView({
 
   if (subView === 'nueva_cuenta') {
     return (
-      <div className="px-3 sm:px-6 pt-1 pb-6 max-w-5xl mx-auto w-full animate-in slide-in-from-bottom-4">
+      <div className="px-1 sm:px-6 pt-1 pb-6 max-w-5xl mx-auto w-full animate-in slide-in-from-bottom-4">
         {renderTabs()}
-        <div className="odoo-card p-5 md:p-8">
-          <div className="mb-6 pb-4 border-b border-slate-100 flex justify-between items-center"><h3 className="text-xl font-bold text-slate-800">{editBancoId ? 'Editar Cuenta' : 'Nueva Cuenta Bancaria'}</h3><button onClick={()=>setSubView('cuentas')} className="text-slate-400 hover:text-red-500 bg-slate-100 p-2 rounded-full"><X className="w-5 h-5"/></button></div>
-          <div className="space-y-6">
-            <div className="flex flex-col"><label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Institución Bancaria</label><input type="text" className="text-xl md:text-3xl font-black text-slate-800 border border-slate-200 bg-slate-50 hover:bg-white focus:bg-white focus:border-indigo-600 outline-none p-3 md:p-4 w-full transition-colors rounded-xl placeholder-slate-300 shadow-sm" placeholder="Ej. Banco Banesco" value={cuentaForm.banco} onChange={e=>setCuentaForm({...cuentaForm, banco: e.target.value})} /></div>
+        <div className="odoo-card p-4 sm:p-6 md:p-8">
+          <div className="mb-4 sm:mb-6 pb-3 sm:pb-4 border-b border-slate-100 flex justify-between items-center"><h3 className="text-base sm:text-xl font-bold text-slate-800">{editBancoId ? 'Editar Cuenta' : 'Nueva Cuenta Bancaria'}</h3><button onClick={()=>setSubView('cuentas')} className="text-slate-400 hover:text-red-500 bg-slate-100 p-2 rounded-full"><X className="w-5 h-5"/></button></div>
+          <div className="space-y-4 sm:space-y-6">
+            <div className="flex flex-col"><label className="text-[10px] md:text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5">Institución Bancaria</label><input type="text" className="text-base sm:text-xl md:text-3xl font-black text-slate-800 border border-slate-200 bg-slate-50 hover:bg-white focus:bg-white focus:border-indigo-600 outline-none p-2.5 sm:p-3 md:p-4 w-full transition-colors rounded-xl placeholder-slate-300 shadow-sm" placeholder="Ej. Banco Banesco" value={cuentaForm.banco} onChange={e=>setCuentaForm({...cuentaForm, banco: e.target.value})} /></div>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
               {/* Checkbox / Tilde: ¿Es una Caja? */}
               <div className="flex items-start gap-3 p-3.5 bg-indigo-50/60 border border-indigo-200/80 rounded-2xl md:col-span-2">
@@ -2873,39 +2868,37 @@ export default function BancosView({
     ).sort((a,b) => (a.codigo||'').localeCompare(b.codigo||''));
 
     return (
-      <div className="px-3 sm:px-6 pt-1 pb-6 max-w-5xl mx-auto w-full animate-in slide-in-from-bottom-4">
+      <div className="px-1 sm:px-6 pt-1 pb-6 max-w-5xl mx-auto w-full animate-in slide-in-from-bottom-4">
         {/* Top Header */}
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 sm:gap-4 mb-3.5 sm:mb-4">
           <BackButton onClick={() => { resetMovForm(); setSubView('mayor_analitico'); }} label="Volver al Mayor" />
           <div className="flex flex-wrap items-center gap-2 sm:justify-end">
-            <div className="flex items-center gap-2">
-              <span className="text-sm font-bold text-slate-800 bg-white border border-slate-200 shadow-xs px-3 py-1 rounded-lg">
-                {b?.banco} - {b?.moneda}
-              </span>
-              <span className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-lg text-xs font-black uppercase tracking-wider border shadow-xs ${
-                isIngreso 
-                  ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
-                  : 'bg-rose-50 text-rose-700 border-rose-200'
-              }`}>
-                <span className={`w-2 h-2 rounded-full ${isIngreso ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
-                {isIngreso ? '🟢 Entrada de Dinero (Ingreso +)' : '🔴 Salida de Dinero (Egreso -)'}
-              </span>
-            </div>
+            <span className="text-xs sm:text-sm font-bold text-slate-800 bg-white border border-slate-200 shadow-xs px-2.5 sm:px-3 py-1 rounded-lg truncate max-w-full">
+              {b?.banco} - {b?.moneda}
+            </span>
+            <span className={`inline-flex items-center gap-1.5 px-2.5 sm:px-3 py-1 rounded-lg text-[11px] sm:text-xs font-black uppercase tracking-wider border shadow-xs ${
+              isIngreso 
+                ? 'bg-emerald-50 text-emerald-700 border-emerald-200' 
+                : 'bg-rose-50 text-rose-700 border-rose-200'
+            }`}>
+              <span className={`w-2 h-2 rounded-full ${isIngreso ? 'bg-emerald-500 animate-pulse' : 'bg-rose-500 animate-pulse'}`} />
+              {isIngreso ? 'Entrada (+)' : 'Salida (-)'}
+            </span>
           </div>
         </div>
         
-        <div className="bg-white rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
+        <div className="bg-white rounded-2xl sm:rounded-3xl shadow-xl border border-slate-200 overflow-hidden">
           {/* Visual Operation Type Banner */}
-          <div className={`p-4 sm:p-6 border-b transition-colors ${
+          <div className={`p-3.5 sm:p-6 border-b transition-colors ${
             isIngreso 
               ? 'bg-gradient-to-r from-emerald-500/10 via-emerald-500/5 to-transparent border-emerald-100' 
               : 'bg-gradient-to-r from-rose-500/10 via-rose-500/5 to-transparent border-rose-100'
           }`}>
-            <label className="text-xs font-black uppercase tracking-widest text-slate-500 block mb-3">
+            <label className="text-[11px] sm:text-xs font-black uppercase tracking-widest text-slate-500 block mb-2.5 sm:mb-3">
               1. Seleccione el Tipo de Operación:
             </label>
             
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="grid grid-cols-2 gap-2.5 sm:gap-4">
               {/* Card INGRESO (+) */}
               <div 
                 onClick={() => {
@@ -2913,36 +2906,36 @@ export default function BancosView({
                     setMovForm({...movForm, tipo: 'ingreso'});
                   }
                 }}
-                className={`relative p-4 sm:p-5 rounded-2xl cursor-pointer transition-all duration-200 flex items-start gap-4 ${
+                className={`relative p-3 sm:p-5 rounded-2xl cursor-pointer transition-all duration-200 flex flex-col sm:flex-row items-start gap-2.5 sm:gap-4 ${
                   isIngreso 
-                    ? 'bg-white border-2 border-emerald-500 shadow-lg shadow-emerald-500/10 ring-4 ring-emerald-500/15' 
+                    ? 'bg-white border-2 border-emerald-500 shadow-lg shadow-emerald-500/10 ring-2 sm:ring-4 ring-emerald-500/15' 
                     : 'bg-slate-50 border-2 border-slate-200 hover:bg-white hover:border-slate-300 opacity-60 hover:opacity-100'
                 } ${editMovId && oldMov?.isCuarentena ? 'cursor-not-allowed opacity-50' : ''}`}
               >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0 ${
                   isIngreso 
                     ? 'bg-emerald-500 text-white shadow-md shadow-emerald-500/30' 
                     : 'bg-slate-200 text-slate-500'
                 }`}>
-                  <ArrowDownLeft className="w-6 h-6 stroke-[2.5]" />
+                  <ArrowDownLeft className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-base font-black ${isIngreso ? 'text-emerald-900' : 'text-slate-700'}`}>
-                      INGRESO / ENTRADA (+)
+                  <div className="flex items-center flex-wrap justify-between gap-1">
+                    <span className={`text-xs sm:text-base font-black ${isIngreso ? 'text-emerald-900' : 'text-slate-700'}`}>
+                      INGRESO (+)
                     </span>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                    <span className={`hidden sm:inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
                       isIngreso ? 'bg-emerald-100 text-emerald-800' : 'bg-slate-200 text-slate-600'
                     }`}>
                       + Suma al Banco
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
+                  <p className="text-[11px] sm:text-xs text-slate-500 mt-1 font-medium leading-snug sm:leading-relaxed line-clamp-2 sm:line-clamp-none">
                     Cobro de clientes, aportes de socios, anticipos o depósitos recibidos.
                   </p>
                 </div>
                 {isIngreso && (
-                  <div className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-emerald-500" />
+                  <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 w-2.5 h-2.5 rounded-full bg-emerald-500" />
                 )}
               </div>
 
@@ -2953,36 +2946,36 @@ export default function BancosView({
                     setMovForm({...movForm, tipo: 'egreso', isCuarentena: false});
                   }
                 }}
-                className={`relative p-4 sm:p-5 rounded-2xl cursor-pointer transition-all duration-200 flex items-start gap-4 ${
+                className={`relative p-3 sm:p-5 rounded-2xl cursor-pointer transition-all duration-200 flex flex-col sm:flex-row items-start gap-2.5 sm:gap-4 ${
                   !isIngreso 
-                    ? 'bg-white border-2 border-rose-500 shadow-lg shadow-rose-500/10 ring-4 ring-rose-500/15' 
+                    ? 'bg-white border-2 border-rose-500 shadow-lg shadow-rose-500/10 ring-2 sm:ring-4 ring-rose-500/15' 
                     : 'bg-slate-50 border-2 border-slate-200 hover:bg-white hover:border-slate-300 opacity-60 hover:opacity-100'
                 } ${editMovId && oldMov?.isCuarentena ? 'cursor-not-allowed opacity-50' : ''}`}
               >
-                <div className={`w-12 h-12 rounded-xl flex items-center justify-center shrink-0 ${
+                <div className={`w-9 h-9 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center shrink-0 ${
                   !isIngreso 
                     ? 'bg-rose-500 text-white shadow-md shadow-rose-500/30' 
                     : 'bg-slate-200 text-slate-500'
                 }`}>
-                  <ArrowUpRight className="w-6 h-6 stroke-[2.5]" />
+                  <ArrowUpRight className="w-5 h-5 sm:w-6 sm:h-6 stroke-[2.5]" />
                 </div>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center justify-between gap-2">
-                    <span className={`text-base font-black ${!isIngreso ? 'text-rose-900' : 'text-slate-700'}`}>
-                      EGRESO / SALIDA (-)
+                  <div className="flex items-center flex-wrap justify-between gap-1">
+                    <span className={`text-xs sm:text-base font-black ${!isIngreso ? 'text-rose-900' : 'text-slate-700'}`}>
+                      EGRESO (-)
                     </span>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
+                    <span className={`hidden sm:inline-block text-[10px] font-black uppercase px-2 py-0.5 rounded-full ${
                       !isIngreso ? 'bg-rose-100 text-rose-800' : 'bg-slate-200 text-slate-600'
                     }`}>
                       - Resta del Banco
                     </span>
                   </div>
-                  <p className="text-xs text-slate-500 mt-1 font-medium leading-relaxed">
+                  <p className="text-[11px] sm:text-xs text-slate-500 mt-1 font-medium leading-snug sm:leading-relaxed line-clamp-2 sm:line-clamp-none">
                     Pagos a proveedores, gastos operativos, comisiones, compras o débitos.
                   </p>
                 </div>
                 {!isIngreso && (
-                  <div className="absolute top-3 right-3 w-2.5 h-2.5 rounded-full bg-rose-500" />
+                  <div className="absolute top-2.5 right-2.5 sm:top-3 sm:right-3 w-2.5 h-2.5 rounded-full bg-rose-500" />
                 )}
               </div>
             </div>
@@ -2990,22 +2983,22 @@ export default function BancosView({
 
           <div className="flex flex-col lg:flex-row">
             {/* Columna Izquierda: Detalles del Movimiento */}
-            <div className="flex-1 p-6 md:p-8 lg:border-r border-slate-100">
-              <div className="space-y-6">
+            <div className="flex-1 p-4 sm:p-6 md:p-8 lg:border-r border-slate-100">
+              <div className="space-y-4 sm:space-y-6">
                 <div className="flex flex-col">
-                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">
+                  <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-1.5 sm:mb-2">
                     Concepto / Descripción del Movimiento
                   </label>
                   <input 
                     type="text" 
-                    className="text-base md:text-lg font-bold text-slate-800 border-2 border-slate-200 bg-slate-50 hover:bg-white focus:bg-white focus:border-indigo-500 outline-none p-3.5 rounded-xl w-full transition-all shadow-xs" 
+                    className="text-sm sm:text-base md:text-lg font-bold text-slate-800 border-2 border-slate-200 bg-slate-50 hover:bg-white focus:bg-white focus:border-indigo-500 outline-none p-3 sm:p-3.5 rounded-xl w-full transition-all shadow-xs" 
                     placeholder={isIngreso ? "Ej. Cobro Factura F-1020, Depósito de Cliente..." : "Ej. Pago a Proveedor, Compra de Materiales, Transferencia..."} 
                     value={movForm.desc} 
                     onChange={e=>setMovForm({...movForm, desc:e.target.value})} 
                   />
                 </div>
                 
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
                   <div className="flex flex-col">
                     <label className="text-xs font-bold text-slate-500 uppercase tracking-wider mb-2">Fecha de Operación</label>
                     <input 
@@ -3129,20 +3122,20 @@ export default function BancosView({
             </div>
 
             {/* Columna Derecha: Montos y Contabilidad */}
-            <div className="w-full lg:w-[400px] bg-slate-50/50 p-6 md:p-8 flex flex-col gap-6">
+            <div className="w-full lg:w-[400px] bg-slate-50/50 p-4 sm:p-6 md:p-8 flex flex-col gap-4 sm:gap-6">
               {/* Sección de Monto Dinámica */}
-              <div className={`p-6 rounded-2xl shadow-xs border transition-all relative overflow-hidden ${
+              <div className={`p-4 sm:p-6 rounded-2xl shadow-xs border transition-all relative overflow-hidden ${
                 isIngreso 
                   ? 'bg-emerald-50/40 border-emerald-200' 
                   : 'bg-rose-50/40 border-rose-200'
               }`}>
-                <label className={`text-xs font-black uppercase tracking-widest mb-3 block relative z-10 ${
+                <label className={`text-xs font-black uppercase tracking-widest mb-2.5 sm:mb-3 block relative z-10 ${
                   isIngreso ? 'text-emerald-800' : 'text-rose-800'
                 }`}>
                   {isIngreso ? '+ Monto de Ingreso (USD)' : '- Monto de Egreso (USD)'}
                 </label>
                 <div className="relative z-10">
-                  <span className={`absolute left-4 top-1/2 -translate-y-1/2 text-2xl font-black ${
+                  <span className={`absolute left-3.5 sm:left-4 top-1/2 -translate-y-1/2 text-xl sm:text-2xl font-black ${
                     isIngreso ? 'text-emerald-500' : 'text-rose-500'
                   }`}>
                     {isIngreso ? '+$' : '-$'}
@@ -3150,7 +3143,7 @@ export default function BancosView({
                   <input 
                     type="number" 
                     step="0.01" 
-                    className={`w-full text-4xl font-black bg-white outline-none border-2 transition-all rounded-xl py-4 pl-14 pr-4 shadow-inner ${
+                    className={`w-full text-2xl sm:text-4xl font-black bg-white outline-none border-2 transition-all rounded-xl py-3 sm:py-4 pl-12 sm:pl-14 pr-4 shadow-inner ${
                       isIngreso 
                         ? 'text-emerald-700 border-emerald-200 focus:border-emerald-500' 
                         : 'text-rose-700 border-rose-200 focus:border-rose-500'
@@ -3346,14 +3339,14 @@ export default function BancosView({
     });
 
     return (
-      <div className="p-4 md:p-8 animate-in slide-in-from-right-4 duration-300 w-full max-w-[1920px] mx-auto">
+      <div className="px-1 sm:px-6 pt-1 pb-6 animate-in slide-in-from-right-4 duration-300 w-full max-w-[1920px] mx-auto">
          {asignarModal.open && (
-            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-4">
-               <div className="bg-white rounded-3xl shadow-2xl w-full max-w-md p-6 animate-in zoom-in-95">
-                  <div className="flex justify-between items-center mb-5"><h3 className="text-xl font-bold text-slate-800">Asignar a Cliente</h3><button className="text-slate-400 hover:bg-slate-100 rounded-full p-2" onClick={() => setAsignarModal({open: false, mov: null, clienteId: ''})}><X className="w-5 h-5"/></button></div>
-                  <div className="mb-6 p-4 bg-orange-50 rounded-xl border border-orange-100 text-sm"><p className="flex justify-between text-orange-900 mb-1"><span className="font-medium">Monto Recibido:</span><span className="font-black text-lg">${formatoES(asignarModal.mov.monto)}</span></p><p className="flex justify-between text-orange-800 opacity-80 font-mono text-xs"><span className="font-medium font-sans">Referencia:</span>{asignarModal.mov.ref}</p></div>
+            <div className="fixed inset-0 bg-slate-900/40 backdrop-blur-sm z-[200] flex items-center justify-center p-2.5 sm:p-4">
+               <div className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-md p-4 sm:p-6 animate-in zoom-in-95">
+                  <div className="flex justify-between items-center mb-4 sm:mb-5"><h3 className="text-lg sm:text-xl font-bold text-slate-800">Asignar a Cliente</h3><button className="text-slate-400 hover:bg-slate-100 rounded-full p-2" onClick={() => setAsignarModal({open: false, mov: null, clienteId: ''})}><X className="w-5 h-5"/></button></div>
+                  <div className="mb-5 p-3.5 sm:p-4 bg-orange-50 rounded-xl border border-orange-100 text-sm"><p className="flex justify-between text-orange-900 mb-1"><span className="font-medium">Monto Recibido:</span><span className="font-black text-base sm:text-lg">${formatoES(asignarModal.mov.monto)}</span></p><p className="flex justify-between text-orange-800 opacity-80 font-mono text-xs"><span className="font-medium font-sans">Referencia:</span>{asignarModal.mov.ref}</p></div>
                   
-                  <div className="flex flex-col mb-8">
+                  <div className="flex flex-col mb-6 sm:mb-8">
                     <label className="text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-2">Cruzar con Cliente</label>
                     <div 
                       className="input-modern shadow-sm flex items-center justify-between cursor-pointer"
@@ -3368,22 +3361,22 @@ export default function BancosView({
                     </div>
                   </div>
 
-                  <div className="flex flex-col-reverse md:flex-row justify-end gap-3"><button className="btn-secondary" disabled={isAssigningCuarentena} onClick={() => setAsignarModal({open: false, mov: null, clienteId: ''})}>Cancelar</button><button className="btn-primary !bg-orange-600 hover:!bg-orange-700 disabled:opacity-50" disabled={isAssigningCuarentena} onClick={handleAsignarCuarentena}><UserCheck className="w-4 h-4"/> {isAssigningCuarentena ? 'Asignando...' : 'Confirmar Asignación'}</button></div>
+                  <div className="flex flex-col-reverse md:flex-row justify-end gap-2.5 sm:gap-3"><button className="btn-secondary w-full md:w-auto" disabled={isAssigningCuarentena} onClick={() => setAsignarModal({open: false, mov: null, clienteId: ''})}>Cancelar</button><button className="btn-primary w-full md:w-auto !bg-orange-600 hover:!bg-orange-700 disabled:opacity-50" disabled={isAssigningCuarentena} onClick={handleAsignarCuarentena}><UserCheck className="w-4 h-4"/> {isAssigningCuarentena ? 'Asignando...' : 'Confirmar Asignación'}</button></div>
                </div>
             </div>
          )}
 
          {/* Modal de Búsqueda de Cliente */}
          {showClienteModal && (
-          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4 animate-in fade-in duration-200">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
-              <div className="p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50">
+          <div className="fixed inset-0 z-[300] flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-2.5 sm:p-4 animate-in fade-in duration-200">
+            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[88vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+              <div className="p-4 sm:p-5 border-b border-slate-100 flex justify-between items-center bg-slate-50 shrink-0">
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center">
+                  <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
                     <UserCheck className="w-5 h-5" />
                   </div>
                   <div>
-                    <h3 className="text-lg font-black text-slate-800">Seleccionar Cliente</h3>
+                    <h3 className="text-base sm:text-lg font-black text-slate-800">Seleccionar Cliente</h3>
                     <p className="text-xs font-medium text-slate-500">Busque y seleccione el cliente para cruzar el pago</p>
                   </div>
                 </div>
@@ -3395,21 +3388,21 @@ export default function BancosView({
                 </button>
               </div>
               
-              <div className="p-5 border-b border-slate-100">
+              <div className="p-3.5 sm:p-5 border-b border-slate-100 shrink-0">
                 <div className="relative">
-                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-5 h-5 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 sm:w-5 sm:h-5 text-slate-400" />
                   <input
                     type="text"
                     placeholder="Buscar por nombre o identificación..."
                     value={clienteSearchTerm}
                     onChange={(e) => setClienteSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all text-slate-700"
+                    className="w-full pl-9 sm:pl-10 pr-4 py-2.5 sm:py-3 bg-slate-50 border border-slate-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all text-sm text-slate-700"
                     autoFocus
                   />
                 </div>
               </div>
 
-              <div className="overflow-y-auto max-h-[400px] p-2">
+              <div className="overflow-y-auto flex-1 max-h-[400px] p-2">
                 {clientesFiltrados.length > 0 ? (
                   <div className="grid grid-cols-1 gap-1">
                     {clientesFiltrados.map((cliente) => {
@@ -3423,20 +3416,20 @@ export default function BancosView({
                           setShowClienteModal(false);
                           setClienteSearchTerm('');
                         }}
-                        className={`flex items-center justify-between p-4 rounded-xl transition-all text-left ${
+                        className={`flex items-center justify-between p-3 sm:p-4 rounded-xl transition-all text-left ${
                           String(asignarModal.clienteId) === String(cliente.id)
                             ? 'bg-orange-50 border border-orange-200'
                             : 'hover:bg-slate-50 border border-transparent'
                         }`}
                       >
                         <div>
-                          <p className="font-bold text-slate-800">{nombre}</p>
+                          <p className="font-bold text-sm text-slate-800">{nombre}</p>
                           {identificacion && (
                             <p className="text-xs text-slate-500 font-mono mt-0.5">{identificacion}</p>
                           )}
                         </div>
                         {String(asignarModal.clienteId) === String(cliente.id) && (
-                          <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center">
+                          <div className="w-6 h-6 rounded-full bg-orange-500 text-white flex items-center justify-center shrink-0">
                             <Check className="w-4 h-4" />
                           </div>
                         )}
@@ -3457,12 +3450,44 @@ export default function BancosView({
           </div>
         )}
 
-         <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+         <div className="mb-4 flex flex-col md:flex-row items-start md:items-center justify-between gap-3 sm:gap-4">
            <BackButton onClick={() => setSubView('mayor_analitico')} label="Volver al Mayor" />
-           <div className="flex items-center gap-3"><div className="bg-orange-100 text-orange-600 p-2.5 rounded-2xl"><ShieldAlert className="w-6 h-6" /></div><div><h3 className="text-2xl font-black text-slate-800">Pagos en Cuarentena</h3><p className="text-xs text-slate-500 uppercase tracking-widest font-bold">Depósitos Pendientes por Identificar</p></div></div></div>
+           <div className="flex items-center gap-3"><div className="bg-orange-100 text-orange-600 p-2 sm:p-2.5 rounded-xl sm:rounded-2xl shrink-0"><ShieldAlert className="w-5 h-5 sm:w-6 sm:h-6" /></div><div><h3 className="text-lg sm:text-2xl font-black text-slate-800">Pagos en Cuarentena</h3><p className="text-[11px] sm:text-xs text-slate-500 uppercase tracking-widest font-bold">Depósitos Pendientes por Identificar</p></div></div></div>
          <div className="odoo-card overflow-hidden shadow-md">
-            <div className="table-container">
-               <table className="table-odoo min-w-[950px]">
+            {/* Mobile Quarantine Cards (< md) */}
+            <div className="md:hidden divide-y divide-slate-100 bg-white">
+               {cuarentenaMovs.map(m => {
+                  const bName = bancos.find(x => String(x.id) === String(m.banco_id))?.banco || "Desconocido";
+                  return (
+                     <div key={m.id} className="p-3.5 space-y-2">
+                        <div className="flex items-start justify-between gap-2">
+                           <div className="min-w-0">
+                              <span className="text-[11px] font-semibold text-slate-500 block">
+                                {(m.fecha || '').split('T')[0].split('-').reverse().join('/')} • <strong className="font-mono text-indigo-600">{m.ref}</strong>
+                              </span>
+                              <p className="text-xs font-bold text-slate-800 truncate">{bName}</p>
+                           </div>
+                           <span className="font-mono font-black text-sm text-orange-700 bg-orange-50 px-2 py-0.5 rounded-lg border border-orange-100 shrink-0">
+                             ${formatoES(m.monto)}
+                           </span>
+                        </div>
+                        <p className="text-xs text-slate-600 leading-snug">{m.descripcion}</p>
+                        <div className="pt-1 flex justify-end">
+                           <button onClick={() => setAsignarModal({ open: true, mov: m, clienteId: '' })} className="inline-flex items-center gap-1.5 bg-orange-600 text-white px-3.5 py-1.5 rounded-xl text-xs font-bold uppercase hover:bg-orange-700 shadow-xs transition-all active:scale-95 cursor-pointer">
+                             <UserCheck className="w-3.5 h-3.5"/> Cobrar
+                           </button>
+                        </div>
+                     </div>
+                  );
+               })}
+               {cuarentenaMovs.length === 0 && (
+                  <div className="text-center py-10 text-xs text-slate-400 bg-slate-50/50">No hay pagos en cuarentena pendientes.</div>
+               )}
+            </div>
+
+            {/* Desktop Quarantine Table (>= md) */}
+            <div className="hidden md:block overflow-x-auto">
+               <table className="table-odoo w-full min-w-[780px]">
                   <thead><tr><th className="pl-6 w-24">Fecha</th><th className="w-32">Banco Emisor</th><th className="w-32">Ref</th><th>Descripción</th><th className="text-right w-32">Monto USD</th><th className="text-center w-36 pr-4">Acción</th></tr></thead>
                   <tbody>
                      {cuarentenaMovs.map(m => {
@@ -3558,13 +3583,13 @@ export default function BancosView({
         )}
 
         {/* Barra Superior Compacta: Identidad Bancaria, Saldo & Botones Rápidos de Movimiento */}
-        <div className="mb-2.5 flex flex-wrap items-center justify-between gap-3 bg-white p-2.5 sm:px-4 sm:py-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
-          <div className="flex flex-wrap items-center gap-2.5 sm:gap-3">
+        <div className="mb-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 sm:gap-3 bg-white p-3 sm:px-4 sm:py-2.5 rounded-2xl border border-slate-200/80 shadow-xs">
+          <div className="flex flex-wrap items-center gap-2 sm:gap-3 min-w-0">
             <BackButton onClick={() => setSubView('cuentas')} label="Volver a Cuentas" />
 
             <div className="h-5 w-px bg-slate-200 hidden sm:block" />
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-2 min-w-0">
               <div className={`w-8 h-8 rounded-lg flex items-center justify-center text-white shrink-0 shadow-xs ${
                 isVES 
                   ? 'bg-gradient-to-br from-blue-600 to-sky-600' 
@@ -3572,9 +3597,9 @@ export default function BancosView({
               }`}>
                 {(b?.tipo || '').includes('Ahorro') ? <PiggyBank className="w-4 h-4" /> : <Landmark className="w-4 h-4" />}
               </div>
-              <div className="flex items-center gap-1.5">
-                <h3 className="text-sm font-black text-slate-900 tracking-tight uppercase">{b?.banco}</h3>
-                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border ${
+              <div className="flex items-center gap-1.5 min-w-0">
+                <h3 className="text-xs sm:text-sm font-black text-slate-900 tracking-tight uppercase truncate">{b?.banco}</h3>
+                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${
                   isVES 
                     ? 'bg-blue-50 text-blue-700 border-blue-200' 
                     : 'bg-emerald-50 text-emerald-700 border-emerald-200'
@@ -3598,24 +3623,26 @@ export default function BancosView({
             )}
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 sm:gap-2.5 ml-auto">
+          <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto lg:ml-auto">
             {/* Saldo Final en Libros */}
-            <div className="flex items-center gap-2 bg-slate-900 text-white px-3.5 py-1.5 rounded-xl shadow-xs border border-slate-800">
-              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider hidden sm:inline">Saldo en Libros:</span>
-              <span className={`text-sm sm:text-base font-black font-mono tracking-tight ${
-                mayorData.saldoFinalUSD < 0 ? 'text-rose-400' : 'text-emerald-400'
-              }`}>
-                {mayorData.saldoFinalUSD < 0 ? '-' : ''}$ {formatoES(Math.abs(mayorData.saldoFinalUSD))}
-              </span>
-              {isVES && (
-                <span className="text-xs font-bold text-slate-400 font-mono hidden md:inline border-l border-slate-700 pl-2 ml-1">
-                  {mayorData.saldoFinalVES < 0 ? '-' : ''}Bs. {formatoES(Math.abs(mayorData.saldoFinalVES))}
+            <div className="w-full sm:w-auto flex items-center justify-between sm:justify-start gap-2 bg-slate-900 text-white px-3.5 py-2 sm:py-1.5 rounded-xl shadow-xs border border-slate-800">
+              <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Saldo en Libros:</span>
+              <div className="flex items-center gap-2 font-mono">
+                <span className={`text-sm sm:text-base font-black tracking-tight ${
+                  mayorData.saldoFinalUSD < 0 ? 'text-rose-400' : 'text-emerald-400'
+                }`}>
+                  {mayorData.saldoFinalUSD < 0 ? '-' : ''}$ {formatoES(Math.abs(mayorData.saldoFinalUSD))}
                 </span>
-              )}
+                {isVES && (
+                  <span className="text-[11px] sm:text-xs font-bold text-slate-400 border-l border-slate-700 pl-2">
+                    {mayorData.saldoFinalVES < 0 ? '-' : ''}Bs. {formatoES(Math.abs(mayorData.saldoFinalVES))}
+                  </span>
+                )}
+              </div>
             </div>
 
-            {/* Panel Agrupado de Botones de Movimiento (+ Ingreso, - Egreso, Traspaso) */}
-            <div className="flex items-center gap-1.5 bg-slate-50/90 p-1.5 rounded-2xl border border-slate-200/80">
+            {/* Panel Agrupado de Botones de Movimiento (+ Ingreso, - Egreso) */}
+            <div className="grid grid-cols-2 sm:flex items-center gap-1.5 bg-slate-50/90 p-1 sm:p-1.5 rounded-2xl border border-slate-200/80 w-full sm:w-auto">
               <button 
                 onClick={() => {
                   resetMovForm();
@@ -3623,7 +3650,7 @@ export default function BancosView({
                   setSubView('form_movimiento');
                 }}
                 title="Registrar entrada o depósito bancario (+)"
-                className="bg-gradient-to-r from-emerald-500 to-[#00b4a2] hover:from-emerald-600 hover:to-[#009b8b] text-white font-black px-3 py-1.5 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 text-xs cursor-pointer active:scale-95 shrink-0"
+                className="bg-gradient-to-r from-emerald-500 to-[#00b4a2] hover:from-emerald-600 hover:to-[#009b8b] text-white font-black px-3 py-2 sm:py-1.5 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 text-xs cursor-pointer active:scale-95 shrink-0"
               >
                 <ArrowDownLeft className="w-3.5 h-3.5 stroke-[2.5]"/> 
                 <span>+ Ingreso</span>
@@ -3636,21 +3663,10 @@ export default function BancosView({
                   setSubView('form_movimiento');
                 }}
                 title="Registrar salida o pago bancario (-)"
-                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold px-3 py-1.5 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 text-xs cursor-pointer active:scale-95 shrink-0"
+                className="bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200 font-bold px-3 py-2 sm:py-1.5 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1.5 text-xs cursor-pointer active:scale-95 shrink-0"
               >
                 <ArrowUpRight className="w-3.5 h-3.5 stroke-[2.5]"/> 
                 <span>- Egreso</span>
-              </button>
-
-              <button 
-                onClick={() => {
-                  setTransferForm(prev => ({ ...prev, bancoOrigen: String(selectedBancoId || ''), showModal: true }));
-                }}
-                title="Realizar traspaso desde esta cuenta hacia otra"
-                className="bg-white hover:bg-indigo-50 text-indigo-700 border border-indigo-200 font-bold px-2.5 py-1.5 rounded-xl transition-all shadow-2xs flex items-center justify-center gap-1 text-xs cursor-pointer active:scale-95 shrink-0"
-              >
-                <ArrowRightLeft className="w-3.5 h-3.5 text-indigo-600"/> 
-                <span className="hidden sm:inline">Traspaso</span>
               </button>
             </div>
           </div>
@@ -3661,17 +3677,17 @@ export default function BancosView({
           <div className="p-3 sm:p-4 border-b border-slate-200/80 flex flex-col gap-3">
             
             {/* Fila 1: Filtros de Período y Acciones Principales */}
-            <div className="flex flex-col xl:flex-row justify-between items-start xl:items-center gap-4">
+            <div className="flex flex-col xl:flex-row justify-between items-stretch xl:items-center gap-3 sm:gap-4">
               
               {/* Selectores de Período */}
-              <div className="flex flex-wrap items-center gap-3 w-full xl:w-auto">
-                <div className="flex items-center gap-2 bg-slate-100/70 p-1 rounded-2xl border border-slate-200/60">
-                  <div className="flex items-center gap-1.5 px-3 text-slate-500">
-                    <Calendar className="w-4 h-4 text-indigo-600" />
+              <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full xl:w-auto">
+                <div className="flex items-center justify-between sm:justify-start gap-2 bg-slate-100/70 p-1 rounded-2xl border border-slate-200/60 w-full sm:w-auto">
+                  <div className="flex items-center gap-1.5 px-2.5 sm:px-3 text-slate-500">
+                    <Calendar className="w-4 h-4 text-indigo-600 shrink-0" />
                     <span className="text-[11px] font-extrabold uppercase tracking-wider">Período:</span>
                   </div>
                   <select 
-                    className="h-8 rounded-xl border-none bg-white px-3 text-xs font-bold text-slate-800 shadow-2xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all cursor-pointer" 
+                    className="h-8 rounded-xl border-none bg-white px-3 text-xs font-bold text-slate-800 shadow-2xs focus:ring-2 focus:ring-indigo-500/20 outline-none transition-all cursor-pointer flex-1 sm:flex-none" 
                     value={filtros.tipo} 
                     onChange={e=>setFiltros({...filtros, tipo: e.target.value})}
                   >
@@ -3683,9 +3699,9 @@ export default function BancosView({
                 </div>
 
                 {filtros.tipo === 'mes' && (
-                  <div className="flex items-center gap-2">
+                  <div className="grid grid-cols-2 sm:flex items-center gap-2 w-full sm:w-auto">
                     <select 
-                      className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer" 
+                      className="h-9 sm:h-10 w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer" 
                       value={filtros.mes} 
                       onChange={e=>setFiltros({...filtros, mes: e.target.value})}
                     >
@@ -3694,7 +3710,7 @@ export default function BancosView({
                       ))}
                     </select>
                     <select 
-                      className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer" 
+                      className="h-9 sm:h-10 w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer" 
                       value={filtros.ano} 
                       onChange={e=>setFiltros({...filtros, ano: e.target.value})}
                     >
@@ -3705,7 +3721,7 @@ export default function BancosView({
 
                 {filtros.tipo === 'ano' && (
                   <select 
-                    className="h-10 rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer" 
+                    className="h-9 sm:h-10 w-full sm:w-auto rounded-xl border border-slate-200 bg-white px-3 text-xs font-bold text-slate-800 shadow-xs focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all cursor-pointer" 
                     value={filtros.ano} 
                     onChange={e=>setFiltros({...filtros, ano: e.target.value})}
                   >
@@ -3714,21 +3730,21 @@ export default function BancosView({
                 )}
 
                 {filtros.tipo === 'rango' && (
-                  <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 bg-white border border-slate-200 px-2.5 rounded-xl shadow-xs">
-                      <span className="text-[10px] font-bold text-slate-400">DESDE:</span>
+                  <div className="grid grid-cols-1 sm:flex items-center gap-2 w-full sm:w-auto">
+                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 rounded-xl shadow-xs">
+                      <span className="text-[10px] font-bold text-slate-400 shrink-0">DESDE:</span>
                       <input 
                         type="date" 
-                        className="h-9 bg-transparent text-xs font-bold text-slate-800 outline-none" 
+                        className="h-9 w-full bg-transparent text-xs font-bold text-slate-800 outline-none" 
                         value={filtros.desde} 
                         onChange={e=>setFiltros({...filtros, desde: e.target.value})}
                       />
                     </div>
-                    <div className="flex items-center gap-1 bg-white border border-slate-200 px-2.5 rounded-xl shadow-xs">
-                      <span className="text-[10px] font-bold text-slate-400">HASTA:</span>
+                    <div className="flex items-center gap-1.5 bg-white border border-slate-200 px-2.5 rounded-xl shadow-xs">
+                      <span className="text-[10px] font-bold text-slate-400 shrink-0">HASTA:</span>
                       <input 
                         type="date" 
-                        className="h-9 bg-transparent text-xs font-bold text-slate-800 outline-none" 
+                        className="h-9 w-full bg-transparent text-xs font-bold text-slate-800 outline-none" 
                         value={filtros.hasta} 
                         onChange={e=>setFiltros({...filtros, hasta: e.target.value})}
                       />
@@ -3738,17 +3754,17 @@ export default function BancosView({
               </div>
 
               {/* Botones de Acción (Cuarentena, Exportar, Imprimir) */}
-              <div className="flex flex-wrap items-center gap-2.5 w-full xl:w-auto">
+              <div className="grid grid-cols-3 sm:flex sm:flex-wrap items-center gap-1.5 sm:gap-2.5 w-full xl:w-auto">
                 <button 
                   onClick={() => setSubView('cuarentena')}
-                  className={`inline-flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all border h-10 px-4 cursor-pointer shadow-xs active:scale-95 ${
+                  className={`inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all border h-9 sm:h-10 px-2 sm:px-4 cursor-pointer shadow-xs active:scale-95 whitespace-nowrap ${
                     cuarentenaMovs.length > 0 
                       ? 'bg-amber-500/10 border-amber-300 text-amber-800 hover:bg-amber-500/20' 
                       : 'bg-slate-50 border-slate-200/80 text-slate-600 hover:bg-slate-100 hover:text-slate-800'
                   }`}
                   title="Ver movimientos en cuarentena pendientes por identificar"
                 >
-                  <ShieldAlert className={`w-4 h-4 ${cuarentenaMovs.length > 0 ? 'text-amber-600' : 'text-slate-400'}`}/> 
+                  <ShieldAlert className={`w-3.5 h-3.5 sm:w-4 sm:h-4 shrink-0 ${cuarentenaMovs.length > 0 ? 'text-amber-600' : 'text-slate-400'}`}/> 
                   <span>Cuarentena</span>
                   {cuarentenaMovs.length > 0 && (
                     <span className="bg-amber-500 text-white text-[10px] font-black px-1.5 py-0.5 rounded-full animate-pulse">
@@ -3759,35 +3775,37 @@ export default function BancosView({
 
                 <button 
                   onClick={exportarMayorCSV}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-xs h-10 px-4 cursor-pointer active:scale-95"
+                  className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all border border-slate-200 bg-white hover:bg-slate-50 text-slate-700 hover:text-slate-900 shadow-xs h-9 sm:h-10 px-2 sm:px-4 cursor-pointer active:scale-95 whitespace-nowrap"
                   title="Exportar movimientos del período a formato CSV/Excel"
                 >
-                  <FileSpreadsheet className="w-4 h-4 text-emerald-600"/> 
-                  <span>Exportar CSV</span>
+                  <FileSpreadsheet className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-emerald-600 shrink-0"/> 
+                  <span className="sm:hidden">CSV</span>
+                  <span className="hidden sm:inline">Exportar CSV</span>
                 </button>
 
                 <button 
                   onClick={handlePrintMayor}
-                  className="inline-flex items-center justify-center gap-2 rounded-xl text-xs font-bold transition-all border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 shadow-xs h-10 px-4 cursor-pointer active:scale-95"
+                  className="inline-flex items-center justify-center gap-1 sm:gap-2 rounded-xl text-[11px] sm:text-xs font-bold transition-all border border-indigo-200 bg-indigo-50/70 hover:bg-indigo-100 text-indigo-700 shadow-xs h-9 sm:h-10 px-2 sm:px-4 cursor-pointer active:scale-95 whitespace-nowrap"
                   title="Generar vista previa e imprimir reporte contable oficial"
                 >
-                  <Printer className="w-4 h-4 text-indigo-600"/> 
-                  <span>Imprimir Reporte</span>
+                  <Printer className="w-3.5 h-3.5 sm:w-4 sm:h-4 text-indigo-600 shrink-0"/> 
+                  <span className="sm:hidden">Imprimir</span>
+                  <span className="hidden sm:inline">Imprimir Reporte</span>
                 </button>
               </div>
             </div>
 
             {/* Fila 2: Buscador en Tiempo Real & Pestañas de Tipo */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 pt-2 border-t border-slate-100">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-2.5 sm:gap-3 pt-2 border-t border-slate-100">
               {/* Buscador */}
-              <div className="relative flex-1 max-w-md">
+              <div className="relative flex-1 sm:max-w-md">
                 <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
                 <input 
                   type="text"
                   placeholder="Buscar por referencia, descripción, usuario o monto..."
                   value={mayorSearch}
                   onChange={e => setMayorSearch(e.target.value)}
-                  className="w-full h-10 pl-9 pr-9 bg-slate-50/80 hover:bg-slate-100/60 focus:bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
+                  className="w-full h-9 sm:h-10 pl-9 pr-9 bg-slate-50/80 hover:bg-slate-100/60 focus:bg-white border border-slate-200 rounded-xl text-xs font-medium text-slate-800 placeholder-slate-400 focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500 outline-none transition-all"
                 />
                 {mayorSearch && (
                   <button 
@@ -3800,10 +3818,10 @@ export default function BancosView({
               </div>
 
               {/* Segmented Control / Tabs de Tipo */}
-              <div className="flex items-center p-1 bg-slate-100/80 rounded-xl border border-slate-200/60 self-start sm:self-auto">
+              <div className="w-full sm:w-auto grid grid-cols-3 sm:flex items-center p-1 bg-slate-100/80 rounded-xl border border-slate-200/60">
                 <button
                   onClick={() => setMayorTypeFilter('todos')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer ${
+                  className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center whitespace-nowrap ${
                     mayorTypeFilter === 'todos' 
                       ? 'bg-white text-slate-900 shadow-2xs' 
                       : 'text-slate-500 hover:text-slate-800'
@@ -3813,33 +3831,229 @@ export default function BancosView({
                 </button>
                 <button
                   onClick={() => setMayorTypeFilter('ingresos')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap ${
                     mayorTypeFilter === 'ingresos' 
                       ? 'bg-white text-emerald-700 shadow-2xs' 
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-emerald-500" />
-                  Ingresos <span className="text-[10px] opacity-70 ml-0.5">({mayorData.countIngresos})</span>
+                  <span className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                  Ingresos <span className="text-[10px] opacity-70">({mayorData.countIngresos})</span>
                 </button>
                 <button
                   onClick={() => setMayorTypeFilter('egresos')}
-                  className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 ${
+                  className={`px-2 sm:px-3 py-1.5 rounded-lg text-[11px] sm:text-xs font-bold transition-all cursor-pointer flex items-center justify-center gap-1 whitespace-nowrap ${
                     mayorTypeFilter === 'egresos' 
                       ? 'bg-white text-rose-700 shadow-2xs' 
                       : 'text-slate-500 hover:text-slate-800'
                   }`}
                 >
-                  <span className="w-2 h-2 rounded-full bg-rose-500" />
-                  Egresos <span className="text-[10px] opacity-70 ml-0.5">({mayorData.countEgresos})</span>
+                  <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0" />
+                  Egresos <span className="text-[10px] opacity-70">({mayorData.countEgresos})</span>
                 </button>
               </div>
             </div>
 
           </div>
 
-          {/* Tabla Estandarizada del Mayor Analítico */}
-          <div className="overflow-x-auto">
+          {/* Mobile Ledger Cards View (< md) */}
+          <div className="md:hidden divide-y divide-slate-100">
+            {filtros.tipo !== 'todo' && currentPage === 1 && !mayorSearch && (
+              <div className="p-3 bg-gradient-to-r from-slate-50/90 via-indigo-50/20 to-slate-50/90 border-b border-slate-200/80 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 min-w-0">
+                  <div className="w-6 h-6 rounded-lg bg-indigo-100 text-indigo-700 flex items-center justify-center shrink-0">
+                    <CornerDownRight className="w-3.5 h-3.5"/>
+                  </div>
+                  <span className="text-xs font-black text-slate-800 truncate">Saldo Arrastrado</span>
+                </div>
+                <div className="text-right font-mono shrink-0">
+                  <div className="font-black text-xs text-slate-900">$ {formatoES(mayorData.saldoInicialUSD)}</div>
+                  {isVES && <div className="text-[10px] font-bold text-slate-500">Bs. {formatoES(mayorData.saldoInicialVES)}</div>}
+                </div>
+              </div>
+            )}
+
+            {paginatedMayor.map(m => {
+              const isAnulado = m.estado === 'anulado'; 
+              const isIngreso = isBankIngreso(m.tipo);
+              const mAbs = Math.abs(Number(m.monto) || 0);
+              const mVES = isVES ? ((m.montoBs !== undefined && m.montoBs !== null && m.montoBs !== '') ? Math.abs(parseFloat(String(m.montoBs))) : mAbs*(m.tasa||1)) : 0;
+              const isAjuste = (m.tipo || '').startsWith('ajuste');
+              const isCobranza = m.ref?.startsWith('REC-');
+
+              return (
+                <div key={m.id} className={`p-3.5 space-y-2 ${isAnulado ? 'bg-slate-50/60 opacity-60' : 'bg-white'}`}>
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 space-y-0.5">
+                      <div className="flex items-center flex-wrap gap-1.5">
+                        <span className="text-[11px] font-semibold text-slate-500">
+                          {(m.fecha || '').split('T')[0].split('-').reverse().join('/')}
+                        </span>
+                        {isCobranza && !isAnulado ? (
+                          <button 
+                            onClick={() => abrirDetalleRecibo(m.ref)} 
+                            className="text-indigo-600 hover:underline inline-flex items-center gap-1 font-mono font-bold text-[11px] cursor-pointer"
+                          >
+                            <Receipt className="w-3 h-3" />
+                            <span>{m.ref}</span>
+                          </button>
+                        ) : (
+                          <span className="bg-slate-100 text-slate-700 border border-slate-200/80 px-1.5 py-0.5 rounded text-[10px] font-mono font-bold">
+                            {m.ref || 'S/R'}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="text-right shrink-0">
+                      {!isAnulado ? (
+                        <div className={`inline-flex flex-col items-end px-2 py-0.5 rounded-lg border font-mono ${
+                          isIngreso ? 'bg-emerald-50/70 border-emerald-100 text-emerald-700' : 'bg-rose-50/70 border-rose-100 text-rose-700'
+                        }`}>
+                          <span className="font-black text-xs">
+                            {isIngreso ? '+' : '-'}$ {formatoES(mAbs)}
+                          </span>
+                          {isVES && (
+                            <span className="text-[10px] font-bold opacity-85">
+                              {isAjuste ? 'Ajuste FX' : `${isIngreso ? '+' : '-'}Bs. ${formatoES(mVES)}`}
+                            </span>
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-[10px] font-black uppercase text-rose-600 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
+                          Anulado
+                        </span>
+                      )}
+                    </div>
+                  </div>
+
+                  <p className={`text-xs font-semibold leading-snug ${isAnulado ? 'line-through text-slate-400' : 'text-slate-800'}`}>
+                    {m.descripcion}
+                  </p>
+
+                  {(m.isCuarentena || m.soporteImagen || m.usuario) && (
+                    <div className="flex flex-wrap gap-1.5 items-center">
+                      {m.isCuarentena && (
+                        <span className="bg-amber-50 border border-amber-200 text-amber-700 px-2 py-0.5 rounded-md text-[9px] uppercase font-black inline-flex items-center gap-1">
+                          <ShieldAlert className="w-3 h-3 text-amber-600"/> Cuarentena
+                        </span>
+                      )}
+                      {m.soporteImagen && (
+                        <button 
+                          type="button"
+                          onClick={() => setLightboxImage(m.soporteImagen)}
+                          className="cursor-pointer bg-emerald-50 border border-emerald-200 text-emerald-700 px-2 py-0.5 rounded-md text-[9px] uppercase font-black inline-flex items-center gap-1"
+                        >
+                          <Image className="w-3 h-3 text-emerald-600" /> Ver Soporte
+                        </button>
+                      )}
+                      {m.usuario && (
+                        <span className="bg-slate-100 border border-slate-200/70 text-slate-600 px-2 py-0.5 rounded-md text-[9px] uppercase font-bold inline-flex items-center gap-1">
+                          <User className="w-2.5 h-2.5 text-slate-400" /> {m.usuario.split('@')[0]}
+                        </span>
+                      )}
+                    </div>
+                  )}
+
+                  <div className="flex items-center justify-between gap-2 pt-2 border-t border-slate-100">
+                    <div className="font-mono">
+                      <span className="text-[10px] text-slate-400 font-sans font-bold uppercase mr-1.5">Saldo:</span>
+                      <span className={`font-black text-xs ${m.saldoCalcUSD < 0 ? 'text-rose-600' : 'text-slate-900'}`}>
+                        {m.saldoCalcUSD < 0 ? '-' : ''}$ {formatoES(Math.abs(m.saldoCalcUSD))}
+                      </span>
+                      {isVES && (
+                        <span className={`block text-[10px] font-bold ${m.saldoCalcVES < 0 ? 'text-rose-500' : 'text-slate-500'}`}>
+                          {m.saldoCalcVES < 0 ? '-' : ''}Bs. {formatoES(Math.abs(m.saldoCalcVES))}
+                        </span>
+                      )}
+                    </div>
+
+                    <div className="flex items-center gap-1">
+                      <button 
+                        className="p-1.5 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg border border-slate-200/80 transition-colors cursor-pointer"
+                        onClick={() => {
+                          const bankObj = bancos.find(x => String(x.id) === String(m.banco_id));
+                          navigate('/reports/comprobante-movimiento-banco', { state: { movimiento: m, banco: bankObj } });
+                        }}
+                        title="Imprimir Comprobante Oficial"
+                      >
+                        <Printer className="w-3.5 h-3.5" />
+                      </button>
+                      {!isAnulado && (
+                        <>
+                          <button 
+                            className="p-1.5 text-slate-500 hover:text-indigo-600 bg-slate-50 hover:bg-indigo-50 rounded-lg border border-slate-200/80 transition-colors cursor-pointer" 
+                            onClick={() => handleEditMovimiento(m)} 
+                            title="Editar Movimiento"
+                          >
+                            <Pencil className="w-3.5 h-3.5"/>
+                          </button>
+                          <button 
+                            className="p-1.5 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-lg border border-slate-200/80 transition-colors cursor-pointer" 
+                            onClick={()=>handleAnularMovimiento(m)} 
+                            title="Anular Movimiento"
+                          >
+                            <Ban className="w-3.5 h-3.5"/>
+                          </button>
+                        </>
+                      )}
+                      {userRole === 'Master' && (
+                        <button 
+                          className="p-1.5 text-slate-500 hover:text-rose-600 bg-slate-50 hover:bg-rose-50 rounded-lg border border-slate-200/80 transition-colors cursor-pointer" 
+                          onClick={() => handleDeleteMovimiento(m)} 
+                          title="Eliminar Permanentemente"
+                        >
+                          <Trash2 className="w-3.5 h-3.5"/>
+                        </button>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              );
+            })}
+
+            {paginatedMayor.length === 0 && (
+              <div className="text-center py-10 px-4 bg-gradient-to-b from-white to-slate-50/60">
+                <div className="flex flex-col items-center justify-center max-w-sm mx-auto text-slate-400">
+                  <div className="w-12 h-12 rounded-2xl bg-indigo-50/80 border border-indigo-100 flex items-center justify-center text-indigo-500 mb-3 shadow-sm">
+                    <BookOpen className="w-6 h-6" />
+                  </div>
+                  <h4 className="font-black text-slate-800 text-sm">
+                    {mayorSearch ? 'Sin resultados para la búsqueda' : 'No se encontraron movimientos'}
+                  </h4>
+                  <p className="text-xs text-slate-500 mt-1 leading-relaxed text-center">
+                    {mayorSearch 
+                      ? `No hay operaciones que coincidan con "${mayorSearch}".`
+                      : `No hay operaciones bancarias registradas para el período seleccionado.`
+                    }
+                  </p>
+                  <div className="flex flex-wrap items-center justify-center gap-2 mt-4">
+                    <button 
+                      onClick={() => { resetMovForm(); setSubView('form_movimiento'); }}
+                      className="inline-flex items-center gap-1.5 px-3.5 py-2 bg-indigo-600 hover:bg-indigo-700 text-white rounded-xl text-xs font-bold shadow-md transition-all cursor-pointer active:scale-95"
+                    >
+                      <Plus className="w-4 h-4 stroke-[2.5]" /> Registrar Movimiento
+                    </button>
+                    {(filtros.tipo !== 'todo' || mayorSearch || mayorTypeFilter !== 'todos') && (
+                      <button 
+                        onClick={() => {
+                          setFiltros({ ...filtros, tipo: 'todo' });
+                          setMayorSearch('');
+                          setMayorTypeFilter('todos');
+                        }}
+                        className="inline-flex items-center gap-1.5 px-3 py-2 bg-white hover:bg-slate-50 text-slate-700 rounded-xl text-xs font-bold border border-slate-200 shadow-xs transition-all cursor-pointer"
+                      >
+                        Ver Todo
+                      </button>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Tabla Estandarizada del Mayor Analítico (>= md) */}
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
                 <tr className="bg-slate-50/80 border-b border-slate-200 text-[11px] font-extrabold uppercase tracking-wider text-slate-500">
@@ -4162,19 +4376,21 @@ export default function BancosView({
       : rawDetalles;
 
     return (
-      <div className="px-4 sm:px-8 py-6 animate-in fade-in duration-200 w-full max-w-[1920px] mx-auto font-sans space-y-6">
+      <div className="px-1 sm:px-8 py-3 sm:py-6 animate-in fade-in duration-200 w-full max-w-[1920px] mx-auto font-sans space-y-4 sm:space-y-6">
         {/* Header Superior Moderno */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4 bg-white p-6 rounded-3xl border border-slate-200/80 shadow-xs">
-          <div className="flex items-center gap-4">
-            <BackButton onClick={() => { setSapsResult(null); setSubView('cuentas'); }} label="Volver a Bancos" />
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 bg-white p-4 sm:p-6 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs">
+          <div className="flex flex-col sm:flex-row sm:items-center gap-3 sm:gap-4">
+            <div className="self-start">
+              <BackButton onClick={() => { setSapsResult(null); setSubView('cuentas'); }} label="Volver a Bancos" />
+            </div>
             <div className="h-9 w-px bg-slate-200 hidden sm:block" />
-            <div className="flex items-center gap-3.5">
-              <div className="w-12 h-12 rounded-2xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-center text-indigo-600 shadow-xs">
-                <RefreshCw className="w-6 h-6 text-indigo-600" />
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-indigo-50 border border-indigo-100/80 flex items-center justify-center text-indigo-600 shadow-xs shrink-0">
+                <RefreshCw className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600" />
               </div>
               <div>
                 <div className="flex items-center gap-2">
-                  <h2 className="text-xl sm:text-2xl font-black text-slate-900 tracking-tight">
+                  <h2 className="text-lg sm:text-2xl font-black text-slate-900 tracking-tight">
                     Revalorización SAPS (FX)
                   </h2>
                   <span className="hidden sm:inline-flex px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700 border border-indigo-200/60">
@@ -4188,17 +4404,17 @@ export default function BancosView({
             </div>
           </div>
 
-          <div className="flex items-center gap-2.5 self-end lg:self-center">
+          <div className="flex flex-wrap items-center gap-2 self-stretch sm:self-end lg:self-center">
             <button
               type="button"
               onClick={() => setShowSapsGuide(!showSapsGuide)}
-              className={`flex items-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
+              className={`flex-1 sm:flex-none flex items-center justify-center gap-2 px-3.5 py-2 rounded-xl text-xs font-bold transition-all border cursor-pointer ${
                 showSapsGuide
                   ? 'bg-indigo-50 text-indigo-700 border-indigo-200 shadow-xs'
                   : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 hover:text-slate-800'
               }`}
             >
-              <Info className="w-4 h-4 text-indigo-500" />
+              <Info className="w-4 h-4 text-indigo-500 shrink-0" />
               <span>¿Cómo funciona?</span>
               {showSapsGuide ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
             </button>
@@ -4207,11 +4423,11 @@ export default function BancosView({
               <button
                 type="button"
                 onClick={handlePrintSapsReport}
-                className="flex items-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow transition-all active:scale-98 cursor-pointer"
+                className="flex-1 sm:flex-none flex items-center justify-center gap-2 px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white rounded-xl text-xs font-bold shadow-xs hover:shadow transition-all active:scale-98 cursor-pointer"
                 title="Imprimir el reporte analítico auditado de SAPS (PDF)"
               >
-                <Printer className="w-4 h-4" />
-                <span>Imprimir Reporte PDF</span>
+                <Printer className="w-4 h-4 shrink-0" />
+                <span>Imprimir PDF</span>
               </button>
             )}
           </div>
@@ -4440,57 +4656,57 @@ export default function BancosView({
             </div>
 
             {/* 4 CARDS FINANCIERAS (KPIS EJECUTIVOS) */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-2.5 sm:gap-4">
               {/* Tarjeta 1: Saldo Teórico en Dólares */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-all flex flex-col justify-between">
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-all flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">Libros Contables</span>
-                    <span title="Saldo acumulado en USD que debería existir en libros según los registros individuales de ingresos y egresos."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
+                  <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                    <span className="px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">Libros Contables</span>
+                    <span className="hidden sm:inline" title="Saldo acumulado en USD que debería existir en libros según los registros individuales de ingresos y egresos."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Saldo Teórico (USD)</h4>
-                  <p className="text-2xl font-black text-slate-900 font-mono mt-1.5">$ {formatoES(sapsResult.sTeoricoUSD)}</p>
+                  <h4 className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide">Saldo Teórico (USD)</h4>
+                  <p className="text-base sm:text-2xl font-black text-slate-900 font-mono mt-1 sm:mt-1.5 truncate">$ {formatoES(sapsResult.sTeoricoUSD)}</p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-mono leading-tight">
+                <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-mono leading-tight hidden sm:block">
                   <span className="text-slate-400 font-bold block mb-0.5">Composición:</span>
                   Arrastre (${formatoES(sapsResult.arrUSD)}) + Ing. (${formatoES(sapsResult.ingUSD)}) - Egr. (${formatoES(sapsResult.egrUSD)})
                 </div>
               </div>
 
               {/* Tarjeta 2: Saldo Físico en Bolívares */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-all flex flex-col justify-between">
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-all flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700">Moneda Local</span>
-                    <span title="Saldo total disponible en la cuenta bancaria expresado en Bolívares."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
+                  <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                    <span className="px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-indigo-50 text-indigo-700">Moneda Local</span>
+                    <span className="hidden sm:inline" title="Saldo total disponible en la cuenta bancaria expresado en Bolívares."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Saldo Físico (VES)</h4>
-                  <p className="text-2xl font-black text-indigo-700 font-mono mt-1.5">Bs. {formatoES(sapsResult.sFinalVES)}</p>
+                  <h4 className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide">Saldo Físico (VES)</h4>
+                  <p className="text-base sm:text-2xl font-black text-indigo-700 font-mono mt-1 sm:mt-1.5 truncate">Bs. {formatoES(sapsResult.sFinalVES)}</p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-mono leading-tight">
+                <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-mono leading-tight hidden sm:block">
                   <span className="text-slate-400 font-bold block mb-0.5">Composición:</span>
                   Arrastre (Bs. {formatoES(sapsResult.arrVES)}) + Ing. (Bs. {formatoES(sapsResult.ingVES)}) - Egr. (Bs. {formatoES(sapsResult.egrVES)})
                 </div>
               </div>
 
               {/* Tarjeta 3: Valor Real a Tasa BCV */}
-              <div className="bg-white p-5 rounded-3xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-all flex flex-col justify-between">
+              <div className="bg-white p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border border-slate-200/80 shadow-xs hover:border-indigo-200 transition-all flex flex-col justify-between">
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className="px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">Tasa: {formatoES(sapsResult.tasaCierre)}</span>
-                    <span title="Conversión del saldo en bolívares a dólares usando la tasa BCV de corte seleccionada."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
+                  <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                    <span className="px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider bg-slate-100 text-slate-700">Tasa: {formatoES(sapsResult.tasaCierre)}</span>
+                    <span className="hidden sm:inline" title="Conversión del saldo en bolívares a dólares usando la tasa BCV de corte seleccionada."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Valor Real al Cierre (USD)</h4>
-                  <p className="text-2xl font-black text-slate-900 font-mono mt-1.5">$ {formatoES(sapsResult.valorRealUSD)}</p>
+                  <h4 className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide">Valor Real (USD)</h4>
+                  <p className="text-base sm:text-2xl font-black text-slate-900 font-mono mt-1 sm:mt-1.5 truncate">$ {formatoES(sapsResult.valorRealUSD)}</p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-mono leading-tight">
+                <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-slate-100 text-[10px] text-slate-500 font-mono leading-tight hidden sm:block">
                   <span className="text-slate-400 font-bold block mb-0.5">Cálculo:</span>
                   Bs. {formatoES(sapsResult.sFinalVES)} ÷ {formatoES(sapsResult.tasaCierre)} Bs/$
                 </div>
               </div>
 
               {/* Tarjeta 4: Diferencial Cambiario */}
-              <div className={`p-5 rounded-3xl border shadow-xs transition-all flex flex-col justify-between ${
+              <div className={`p-3.5 sm:p-5 rounded-2xl sm:rounded-3xl border shadow-xs transition-all flex flex-col justify-between ${
                 sapsResult.tipo === 'ajuste_ganancia'
                   ? 'bg-emerald-50/50 border-emerald-200'
                   : sapsResult.tipo === 'ajuste_perdida'
@@ -4498,8 +4714,8 @@ export default function BancosView({
                   : 'bg-white border-slate-200/80'
               }`}>
                 <div>
-                  <div className="flex items-center justify-between mb-2">
-                    <span className={`px-2 py-0.5 rounded-md text-[10px] font-black uppercase tracking-wider ${
+                  <div className="flex items-center justify-between mb-1.5 sm:mb-2">
+                    <span className={`px-2 py-0.5 rounded-md text-[9px] sm:text-[10px] font-black uppercase tracking-wider ${
                       sapsResult.tipo === 'ajuste_ganancia'
                         ? 'bg-emerald-100 text-emerald-800'
                         : sapsResult.tipo === 'ajuste_perdida'
@@ -4508,10 +4724,10 @@ export default function BancosView({
                     }`}>
                       Diferencia Neta
                     </span>
-                    <span title="Variación entre el valor real ajustado y el saldo teórico que reflejan los libros."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
+                    <span className="hidden sm:inline" title="Variación entre el valor real ajustado y el saldo teórico que reflejan los libros."><HelpCircle className="w-4 h-4 text-slate-300 cursor-help" /></span>
                   </div>
-                  <h4 className="text-xs font-bold text-slate-500 uppercase tracking-wide">Diferencial FX</h4>
-                  <p className={`text-2xl font-black font-mono mt-1.5 ${
+                  <h4 className="text-[11px] sm:text-xs font-bold text-slate-500 uppercase tracking-wide">Diferencial FX</h4>
+                  <p className={`text-base sm:text-2xl font-black font-mono mt-1 sm:mt-1.5 truncate ${
                     sapsResult.tipo === 'ajuste_ganancia'
                       ? 'text-emerald-700'
                       : sapsResult.tipo === 'ajuste_perdida'
@@ -4521,7 +4737,7 @@ export default function BancosView({
                     {sapsResult.diferencial >= 0 ? '+' : '-'}$ {formatoES(Math.abs(sapsResult.diferencial))}
                   </p>
                 </div>
-                <div className="mt-3 pt-3 border-t border-slate-200/60 text-[10px] text-slate-500 font-mono leading-tight">
+                <div className="mt-2.5 sm:mt-3 pt-2.5 sm:pt-3 border-t border-slate-200/60 text-[10px] text-slate-500 font-mono leading-tight hidden sm:block">
                   <span className="text-slate-400 font-bold block mb-0.5">Diferencia:</span>
                   USD Real (${formatoES(sapsResult.valorRealUSD)}) - USD Teórico (${formatoES(sapsResult.sTeoricoUSD)})
                 </div>
@@ -4835,35 +5051,35 @@ export default function BancosView({
         {/* MODAL EJECUTIVO: CONFIRMAR Y REGISTRAR ASIENTO CONTABLE SAPS (FX) */}
         {showSapsConfirmModal && sapsResult && (
           <div 
-            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-3 sm:p-5 overflow-y-auto" 
+            className="fixed inset-0 bg-slate-950/60 backdrop-blur-sm z-[110] flex items-center justify-center p-2.5 sm:p-5 overflow-y-auto" 
             onClick={() => !isApplyingSaps && setShowSapsConfirmModal(false)}
           >
             <div 
-              className="bg-white rounded-3xl shadow-2xl w-full max-w-3xl overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150 my-auto" 
+              className="bg-white rounded-2xl sm:rounded-3xl shadow-2xl w-full max-w-3xl max-h-[92vh] flex flex-col overflow-hidden border border-slate-200 animate-in zoom-in-95 duration-150 my-auto" 
               onClick={e => e.stopPropagation()}
             >
               {/* Header con Membrete y Estilo de Comprobante */}
-              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-6 relative overflow-hidden">
+              <div className="bg-gradient-to-r from-slate-900 via-indigo-950 to-slate-900 text-white p-4 sm:p-6 relative overflow-hidden shrink-0">
                 <div className="absolute -right-8 -bottom-8 w-40 h-40 bg-indigo-500/15 rounded-full blur-3xl pointer-events-none" />
                 
-                <div className="flex items-start justify-between relative z-10 gap-4">
-                  <div className="flex items-center gap-3.5">
-                    <div className="w-12 h-12 rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-indigo-300 shadow-inner">
-                      <BookOpen className="w-6 h-6 text-indigo-300" />
+                <div className="flex items-start justify-between relative z-10 gap-3 sm:gap-4">
+                  <div className="flex items-start sm:items-center gap-3 min-w-0">
+                    <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-xl sm:rounded-2xl bg-white/10 border border-white/20 flex items-center justify-center text-indigo-300 shadow-inner shrink-0">
+                      <BookOpen className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-300" />
                     </div>
-                    <div>
-                      <div className="flex items-center gap-2">
-                        <span className="px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
+                    <div className="min-w-0">
+                      <div className="flex items-center flex-wrap gap-1.5 sm:gap-2">
+                        <span className="px-2 sm:px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase tracking-wider bg-indigo-500/30 text-indigo-200 border border-indigo-400/30">
                           Comprobante de Diario • SAPS FX
                         </span>
                         <span className="text-[11px] font-mono text-slate-300 font-bold">
                           Ref: AUTO-FX
                         </span>
                       </div>
-                      <h3 className="text-lg sm:text-xl font-black text-white mt-1 tracking-tight">
+                      <h3 className="text-base sm:text-xl font-black text-white mt-1 tracking-tight">
                         Confirmación de Asiento Contable
                       </h3>
-                      <p className="text-xs text-slate-300 font-medium">
+                      <p className="text-[11px] sm:text-xs text-slate-300 font-medium">
                         Revalorización por Diferencial Cambiario al Cierre (NIC 21 / NIIF)
                       </p>
                     </div>
@@ -4871,7 +5087,7 @@ export default function BancosView({
 
                   <button 
                     disabled={isApplyingSaps}
-                    className="text-slate-400 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition cursor-pointer" 
+                    className="text-slate-400 hover:text-white bg-white/10 hover:bg-white/20 p-2 rounded-full transition cursor-pointer shrink-0" 
                     onClick={() => setShowSapsConfirmModal(false)}
                   >
                     <X className="w-5 h-5" />
@@ -4880,7 +5096,7 @@ export default function BancosView({
               </div>
 
               {/* Cuerpo del Modal */}
-              <div className="p-6 space-y-5 max-h-[calc(85vh-130px)] overflow-y-auto">
+              <div className="p-4 sm:p-6 space-y-4 sm:space-y-5 flex-1 overflow-y-auto">
                 {/* 4 Cards con Metadatos Clave */}
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
                   <div className="bg-slate-50 p-3 rounded-2xl border border-slate-200/80">
@@ -4942,7 +5158,7 @@ export default function BancosView({
 
                 {/* Tabla del Asiento Contable (Partida Doble) */}
                 <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-2xs">
-                  <div className="bg-slate-100/80 px-4 py-2.5 border-b border-slate-200 flex items-center justify-between">
+                  <div className="bg-slate-100/80 px-3.5 sm:px-4 py-2.5 border-b border-slate-200 flex flex-wrap items-center justify-between gap-2">
                     <span className="text-xs font-black uppercase tracking-wider text-slate-700 flex items-center gap-1.5">
                       <Scale className="w-3.5 h-3.5 text-indigo-600" />
                       Detalle de Partidas (Débitos & Créditos)
@@ -4952,7 +5168,8 @@ export default function BancosView({
                     </span>
                   </div>
 
-                  <table className="w-full text-left text-xs">
+                  <div className="overflow-x-auto">
+                  <table className="w-full min-w-[540px] text-left text-xs">
                     <thead className="bg-slate-50 text-slate-500 font-bold uppercase tracking-wider text-[10px] border-b border-slate-200">
                       <tr>
                         <th className="py-2.5 px-3.5">Cuenta Contable</th>
@@ -5098,6 +5315,7 @@ export default function BancosView({
                       </tr>
                     </tfoot>
                   </table>
+                  </div>
                 </div>
 
                 {/* Nota NIIF Informativa */}
@@ -5174,40 +5392,40 @@ export default function BancosView({
     );
 
     return (
-      <div className="px-3 sm:px-6 pt-1 pb-6 max-w-[1920px] mx-auto w-full animate-in slide-in-from-bottom-4">
+      <div className="px-1 sm:px-6 pt-1 pb-6 max-w-[1920px] mx-auto w-full animate-in slide-in-from-bottom-4">
         {renderTabs()}
         
-        <div className="odoo-card p-6 md:p-8 bg-white shadow-sm rounded-3xl border border-slate-100">
-          <div className="flex flex-col md:flex-row md:items-center justify-between gap-4 pb-6 border-b border-slate-150">
+        <div className="odoo-card p-4 sm:p-6 md:p-8 bg-white shadow-sm rounded-2xl sm:rounded-3xl border border-slate-100">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3.5 sm:gap-4 pb-4 sm:pb-6 border-b border-slate-150">
             <div>
-              <h3 className="text-xl font-extrabold text-slate-900 flex items-center gap-2">
-                <History className="w-6 h-6 text-indigo-600" />
+              <h3 className="text-lg sm:text-xl font-extrabold text-slate-900 flex items-center gap-2">
+                <History className="w-5 h-5 sm:w-6 sm:h-6 text-indigo-600 shrink-0" />
                 Historial de Traspasos Bancarios
               </h3>
-              <p className="text-sm text-slate-500 mt-1">
+              <p className="text-xs sm:text-sm text-slate-500 mt-1">
                 Visualice, audite y revierta de forma completa los traspasos realizados entre cuentas bancarias.
               </p>
             </div>
-            <div className="flex flex-wrap gap-3">
+            <div className="flex flex-wrap items-center gap-2 sm:gap-3 w-full md:w-auto">
               <button 
                 onClick={() => setTransferForm({...transferForm, showModal: true})} 
-                className="inline-flex items-center justify-center whitespace-nowrap rounded-xl text-sm font-bold transition-all bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg h-10 px-4"
+                className="flex-1 sm:flex-none inline-flex items-center justify-center whitespace-nowrap rounded-xl text-xs sm:text-sm font-bold transition-all bg-indigo-600 hover:bg-indigo-700 text-white shadow-md hover:shadow-lg h-10 px-4 cursor-pointer"
               >
-                <ArrowRightLeft className="w-4 h-4 mr-2" />
+                <ArrowRightLeft className="w-4 h-4 mr-1.5" />
                 Nuevo Traspaso
               </button>
               <BackButton onClick={() => { setSearchTraspaso(''); setSubView('cuentas'); }} label="Volver a Cuentas" />
             </div>
           </div>
 
-          <div className="my-6 max-w-md relative">
+          <div className="my-4 sm:my-6 max-w-md relative">
             <div className="absolute inset-y-0 left-0 pl-3.5 flex items-center pointer-events-none text-slate-400">
               <Search className="w-4 h-4" />
             </div>
             <input 
               type="text" 
               placeholder="Buscar por banco, concepto, N° de transacción..." 
-              className="w-full pl-10 pr-4 py-2.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-sm transition-all outline-none text-slate-800 placeholder-slate-400"
+              className="w-full pl-10 pr-4 py-2 sm:py-2.5 bg-slate-50 hover:bg-slate-100/70 focus:bg-white border border-slate-200 focus:border-indigo-500 focus:ring-1 focus:ring-indigo-500 rounded-xl text-xs sm:text-sm transition-all outline-none text-slate-800 placeholder-slate-400"
               value={searchTraspaso}
               onChange={e => setSearchTraspaso(e.target.value)}
             />
@@ -5215,7 +5433,86 @@ export default function BancosView({
 
           {filteredTraspasos.length > 0 ? (
             <div className="border border-slate-200 rounded-2xl overflow-hidden shadow-sm">
-              <div className="overflow-x-auto">
+              {/* Mobile Transfers Card View (< md) */}
+              <div className="md:hidden divide-y divide-slate-100 bg-white">
+                {paginatedTraspasos.map(t => {
+                  const formattedDate = (t.fecha || '').split('T')[0].split('-').reverse().join('/');
+                  return (
+                    <div key={t.id} className="p-3.5 space-y-2.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div>
+                          <span className="inline-flex items-center gap-1 font-mono font-bold text-[11px] bg-indigo-50 text-indigo-700 border border-indigo-100 px-2 py-0.5 rounded-md">
+                            TRF-{t.id}
+                          </span>
+                          <span className="block text-[11px] text-slate-500 font-semibold mt-1">{formattedDate}</span>
+                        </div>
+                        <div className="text-right font-mono">
+                          <p className="font-extrabold text-sm text-slate-900">$ {formatoES(t.monto)}</p>
+                          {t.bancoOrigenMoneda === 'Bolivares' && t.montoBsOrigen && (
+                            <p className="text-[10px] font-bold text-red-500">Egreso: Bs. {formatoES(t.montoBsOrigen)}</p>
+                          )}
+                          {t.bancoDestinoMoneda === 'Bolivares' && t.montoBsDestino && (
+                            <p className="text-[10px] font-bold text-emerald-600">Ingreso: Bs. {formatoES(t.montoBsDestino)}</p>
+                          )}
+                        </div>
+                      </div>
+
+                      <div className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold">
+                        <span className="text-red-600 bg-red-50 px-2 py-0.5 rounded border border-red-100 truncate max-w-[145px]" title={t.bancoOrigen}>
+                          {t.bancoOrigen}
+                        </span>
+                        <ArrowRight className="w-3 h-3 text-slate-400 shrink-0" />
+                        <span className="text-emerald-700 bg-emerald-50 px-2 py-0.5 rounded border border-emerald-100 truncate max-w-[145px]" title={t.bancoDestino}>
+                          {t.bancoDestino}
+                        </span>
+                      </div>
+
+                      <div>
+                        <p className="text-xs font-semibold text-slate-800 line-clamp-2">{t.concepto}</p>
+                        {t.comp?.numero && (
+                          <p className="text-[11px] text-indigo-500 font-bold mt-0.5">Asiento: {t.comp.numero}</p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-end gap-1.5 pt-2 border-t border-slate-100">
+                        {t.comp && (
+                          <button
+                            onClick={() => setViewingComprobante(t.comp)}
+                            className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-indigo-600 hover:text-white border border-slate-200 transition-colors"
+                          >
+                            <BookOpen className="w-3.5 h-3.5" />
+                            <span>Asiento</span>
+                          </button>
+                        )}
+                        <button
+                          onClick={() => {
+                            const bancoO = bancos.find(b => String(b.id) === String(t.outMov?.banco_id));
+                            if (t.outMov) {
+                              navigate('/reports/comprobante-movimiento-banco', { state: { movimiento: t.outMov, banco: bancoO } });
+                            } else {
+                              showToast('Movimiento de egreso no encontrado.', 'error');
+                            }
+                          }}
+                          className="inline-flex items-center gap-1 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-slate-700 bg-slate-100 hover:bg-emerald-600 hover:text-white border border-slate-200 transition-colors"
+                        >
+                          <Eye className="w-3.5 h-3.5" />
+                          <span>Comprobante</span>
+                        </button>
+                        <button
+                          onClick={() => handleDeleteTraspaso(t)}
+                          className="inline-flex items-center justify-center p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 border border-slate-200 transition-colors"
+                          title="Eliminar Traspaso"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {/* Desktop Transfers Table (>= md) */}
+              <div className="hidden md:block overflow-x-auto">
                 <table className="w-full text-left border-collapse">
                   <thead>
                     <tr className="bg-slate-50 border-b border-slate-200 text-slate-600 text-xs uppercase font-black tracking-widest">
@@ -5325,7 +5622,7 @@ export default function BancosView({
               </div>
 
               {totalTraspasoPages > 1 && (
-                <div className="flex items-center justify-between px-6 py-4 bg-slate-50 border-t border-slate-200">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-2.5 px-4 sm:px-6 py-3 sm:py-4 bg-slate-50 border-t border-slate-200">
                   <span className="text-xs text-slate-500 font-semibold">
                     Mostrando {((traspasoPage - 1) * TRASPASOS_PER_PAGE) + 1} a {Math.min(traspasoPage * TRASPASOS_PER_PAGE, filteredTraspasos.length)} de {filteredTraspasos.length} traspasos
                   </span>
@@ -5352,7 +5649,7 @@ export default function BancosView({
               )}
             </div>
           ) : (
-            <div className="border border-dashed border-slate-200 rounded-3xl p-12 text-center bg-slate-50/50">
+            <div className="border border-dashed border-slate-200 rounded-2xl sm:rounded-3xl p-8 sm:p-12 text-center bg-slate-50/50">
               <History className="w-12 h-12 text-slate-300 mx-auto mb-4" />
               <h4 className="font-extrabold text-slate-800 text-base">No se encontraron traspasos</h4>
               <p className="text-sm text-slate-500 mt-1 max-w-md mx-auto">
@@ -5469,10 +5766,10 @@ export default function BancosView({
                     </div>
 
                     {/* Botones de Edición y Eliminación */}
-                    <div className="flex items-center gap-0.5 opacity-60 group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
+                    <div className="flex items-center gap-0.5 opacity-100 sm:opacity-60 sm:group-hover:opacity-100 transition-opacity" onClick={e => e.stopPropagation()}>
                       <button 
                         type="button"
-                        className="p-1 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" 
+                        className="p-1.5 text-slate-400 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition-colors cursor-pointer" 
                         title="Editar Banco / Cuenta" 
                         onClick={() => handleEditBanco(b)}
                       >
@@ -5480,7 +5777,7 @@ export default function BancosView({
                       </button>
                       <button 
                         type="button"
-                        className="p-1 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" 
+                        className="p-1.5 text-slate-400 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-colors cursor-pointer" 
                         title="Eliminar Banco" 
                         onClick={() => handleDeleteBanco(b.id, b.banco)}
                       >
@@ -5532,7 +5829,7 @@ export default function BancosView({
               setCuentaForm({banco:'', cuenta:'', tipo:'Corriente', moneda:'USD', tasa:'1', saldo:'0', saldoBs:'0', cuenta_contable_id:'', es_caja: false, tipo_cuenta: 'nacional'}); 
               setSubView('nueva_cuenta');
             }}
-            className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl bg-white hover:bg-indigo-50/20 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center text-center p-6 min-h-[190px] group shadow-2xs hover:shadow-xs"
+            className="border-2 border-dashed border-slate-200 hover:border-indigo-400 rounded-2xl bg-white hover:bg-indigo-50/20 transition-all duration-200 cursor-pointer flex flex-col items-center justify-center text-center p-4 sm:p-6 min-h-[140px] sm:min-h-[190px] group shadow-2xs hover:shadow-xs"
           >
             <div className="w-10 h-10 bg-slate-100 group-hover:bg-indigo-600 group-hover:text-white text-slate-500 rounded-xl flex items-center justify-center mb-2.5 transition-all group-hover:scale-105">
               <Plus className="w-5 h-5" />
@@ -5546,7 +5843,88 @@ export default function BancosView({
       ) : (
         /* Vista en Lista (Estilo Saint / Gálac) */
         <div className="bg-white rounded-2xl border border-slate-200/90 shadow-2xs overflow-hidden animate-in fade-in">
-          <div className="overflow-x-auto">
+          <div className="md:hidden divide-y divide-slate-100">
+            {filteredBancos.length === 0 ? (
+              <div className="text-center py-8 px-4 text-slate-400 text-xs">
+                No se encontraron cuentas que coincidan con la búsqueda.
+              </div>
+            ) : (
+              filteredBancos.map(b => {
+                const isVES = b.moneda === 'Bolivares';
+                const isOverdraft = b.saldoUSD < 0;
+                const isCaja = (b.tipo || '').toLowerCase().includes('caja');
+
+                return (
+                  <div
+                    key={b.id}
+                    onClick={() => { setSelectedBancoId(b.id); setSubView('mayor_analitico'); }}
+                    className="p-3.5 space-y-2.5 active:bg-slate-50 cursor-pointer"
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div className="w-8 h-8 rounded-lg bg-slate-100 flex items-center justify-center text-slate-700 shrink-0">
+                          {isCaja ? <Wallet className="w-4 h-4" /> : <Landmark className="w-4 h-4" />}
+                        </div>
+                        <div className="min-w-0">
+                          <div className="text-xs font-black text-slate-900 uppercase truncate">{b.banco}</div>
+                          <div className="text-[10px] text-slate-500 font-mono truncate">
+                            {b.tipo} · {b.cuenta || 'Cuenta Operativa'}
+                          </div>
+                        </div>
+                      </div>
+                      <span className={`inline-flex items-center text-[10px] font-black uppercase px-2 py-0.5 rounded-full border shrink-0 ${
+                        isVES 
+                          ? 'bg-blue-50 text-blue-700 border-blue-200' 
+                          : 'bg-emerald-50 text-emerald-700 border-emerald-200'
+                      }`}>
+                        {isVES ? 'VES' : 'USD'}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center justify-between gap-2 pt-1.5 border-t border-slate-100">
+                      <div>
+                        <div className={`text-sm font-black font-mono ${isOverdraft ? 'text-rose-600' : 'text-slate-900'}`}>
+                          {isOverdraft ? '-' : ''}$ {formatoES(Math.abs(b.saldoUSD))}
+                        </div>
+                        {isVES && (
+                          <div className="text-[10px] font-mono font-bold text-slate-500">
+                            Bs. {formatoES(Math.abs(b.saldoVES))}
+                          </div>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1" onClick={e => e.stopPropagation()}>
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedBancoId(b.id); setSubView('mayor_analitico'); }}
+                          className="p-1.5 text-indigo-600 bg-indigo-50 hover:bg-indigo-100 rounded-lg transition"
+                          title="Ver Mayor Analítico"
+                        >
+                          <ArrowRight className="w-4 h-4" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleEditBanco(b)}
+                          className="p-1.5 text-slate-500 hover:text-indigo-600 hover:bg-indigo-50 rounded-lg transition"
+                          title="Editar"
+                        >
+                          <Pencil className="w-3.5 h-3.5" />
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDeleteBanco(b.id, b.banco)}
+                          className="p-1.5 text-slate-500 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition"
+                          title="Eliminar"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })
+            )}
+          </div>
+          <div className="hidden md:block overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead className="bg-slate-100/80 text-slate-700 font-bold uppercase text-[10px] tracking-wider border-b border-slate-200">
                 <tr>

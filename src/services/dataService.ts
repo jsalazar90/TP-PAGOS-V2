@@ -545,6 +545,107 @@ export interface HistoryQueryResult {
   stats: HistoryStats;
 }
 
+function parseBankDetailsSafe(raw: any): Record<string, any> {
+  if (!raw) return {};
+  if (typeof raw === 'string') {
+    try {
+      const parsed = JSON.parse(raw);
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  }
+  return typeof raw === 'object' ? raw : {};
+}
+
+function resolveHistoryDateRange(
+  params: Pick<HistoryQueryParams, 'startDate' | 'endDate' | 'dateFilter'>
+): { startIso: string | null; endIso: string | null } {
+  const now = new Date();
+  let startIso: string | null = null;
+  let endIso: string | null = null;
+
+  if (params.startDate) {
+    startIso = new Date(params.startDate + 'T00:00:00.000').toISOString();
+  }
+  if (params.endDate) {
+    endIso = new Date(params.endDate + 'T23:59:59.999').toISOString();
+  }
+
+  if (!params.startDate && !params.endDate && params.dateFilter && params.dateFilter !== 'all') {
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    if (params.dateFilter === 'today') {
+      startIso = startOfToday.toISOString();
+    } else if (params.dateFilter === 'week') {
+      const startOfWeek = new Date(startOfToday.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
+      startIso = startOfWeek.toISOString();
+    } else if (params.dateFilter === 'month') {
+      const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      startIso = startOfMonth.toISOString();
+    }
+  }
+
+  return { startIso, endIso };
+}
+
+function computeHistoryStats(
+  items: any[],
+  statusFilter?: 'all' | 'realizado' | 'anulado'
+): HistoryStats {
+  let countRealizadas = 0;
+  let countAnuladas = 0;
+  let totalDirectUsd = 0;
+  let totalUsdFromBs = 0;
+  let totalBS = 0;
+
+  for (const r of items) {
+    if (r.status === 'realizado') countRealizadas++;
+    else if (r.status === 'anulado') countAnuladas++;
+
+    if (r.status !== 'realizado' || statusFilter === 'anulado') continue;
+
+    const bankDetails = parseBankDetailsSafe(r.bank_details);
+    const method = String(bankDetails.payment_method || '').toLowerCase();
+    const amountUsd = Number(r.amount_usd) || 0;
+    const amountBs = Number(r.amount_bs) || 0;
+    const bcvRate = Number(r.bcv_rate) || 0;
+
+    const isDirectUsd =
+      String(r.currency || '').toUpperCase() === 'USD' ||
+      method === 'binance' ||
+      method === 'zelle_usd' ||
+      method === 'transferencia_usd' ||
+      method === 'efectivo_usd' ||
+      Boolean(bankDetails.binance_email || bankDetails.zelle_email) ||
+      (amountBs <= 0 && bcvRate <= 0 && amountUsd > 0);
+
+    if (isDirectUsd) {
+      totalDirectUsd += amountUsd;
+      if (amountBs > 0) totalBS += amountBs;
+    } else {
+      const usdVal =
+        amountUsd > 0 ? amountUsd : amountBs > 0 && bcvRate > 0 ? amountBs / bcvRate : 0;
+      const bsVal =
+        amountBs > 0 ? amountBs : amountUsd > 0 && bcvRate > 0 ? amountUsd * bcvRate : 0;
+      totalUsdFromBs += usdVal;
+      totalBS += bsVal;
+    }
+  }
+
+  const roundedDirectUsd = Number(totalDirectUsd.toFixed(2));
+  const roundedUsdFromBs = Number(totalUsdFromBs.toFixed(2));
+  const roundedBS = Number(totalBS.toFixed(2));
+
+  return {
+    countRealizadas,
+    countAnuladas,
+    totalDirectUsd: roundedDirectUsd,
+    totalUsdFromBs: roundedUsdFromBs,
+    totalUSD: Number((roundedDirectUsd + roundedUsdFromBs).toFixed(2)),
+    totalBS: roundedBS
+  };
+}
+
 export async function fetchHistoricalPaymentRequests(
   params: HistoryQueryParams = {}
 ): Promise<HistoryQueryResult> {
@@ -552,88 +653,99 @@ export async function fetchHistoricalPaymentRequests(
   const pageSize = Math.max(1, params.pageSize || 20);
   const from = (page - 1) * pageSize;
   const to = from + pageSize - 1;
+  const { startIso, endIso } = resolveHistoryDateRange(params);
+  const searchTerm = (params.search || '').trim();
+  const searchExpr = searchTerm
+    ? `locator.ilike.%${searchTerm}%,client.ilike.%${searchTerm}%,title.ilike.%${searchTerm}%,hotel_name.ilike.%${searchTerm}%,guest_name.ilike.%${searchTerm}%,guest_ci.ilike.%${searchTerm}%,route_from_to.ilike.%${searchTerm}%`
+    : '';
 
   if (isSupabaseConfigured && supabase) {
     try {
+      const sb = supabase;
+
       // 1. Query paginada de registros completos
-      let query = supabase
+      let query = sb
         .from('payment_requests')
         .select('*, profiles:created_by(full_name, username)', { count: 'exact' });
 
-      // 2. Query ligera para estadísticas contables (sin adjuntos ni payloads pesados)
-      let statsQuery = supabase
-        .from('payment_requests')
-        .select('id, status, currency, amount_usd, amount_bs, bcv_rate, bank_details');
-
-      // Filtro de Estatus
       if (params.status === 'realizado') {
         query = query.eq('status', 'realizado');
-        statsQuery = statsQuery.eq('status', 'realizado');
       } else if (params.status === 'anulado') {
         query = query.eq('status', 'anulado');
-        statsQuery = statsQuery.eq('status', 'anulado');
       } else {
         query = query.in('status', ['realizado', 'anulado']);
-        statsQuery = statsQuery.in('status', ['realizado', 'anulado']);
       }
 
-      // Restricción por rol de operador
       if (params.currentUser && params.currentUser.role === 'operador') {
         query = query.eq('created_by', params.currentUser.id);
-        statsQuery = statsQuery.eq('created_by', params.currentUser.id);
       }
-
-      // Filtro Temporal
-      const now = new Date();
-      let startIso: string | null = null;
-      let endIso: string | null = null;
-
-      if (params.startDate) {
-        startIso = new Date(params.startDate + 'T00:00:00.000').toISOString();
-      }
-      if (params.endDate) {
-        endIso = new Date(params.endDate + 'T23:59:59.999').toISOString();
-      }
-
-      if (!params.startDate && !params.endDate && params.dateFilter && params.dateFilter !== 'all') {
-        const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-        if (params.dateFilter === 'today') {
-          startIso = startOfToday.toISOString();
-        } else if (params.dateFilter === 'week') {
-          const startOfWeek = new Date(startOfToday.getTime() - now.getDay() * 24 * 60 * 60 * 1000);
-          startIso = startOfWeek.toISOString();
-        } else if (params.dateFilter === 'month') {
-          const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-          startIso = startOfMonth.toISOString();
-        }
-      }
-
       if (startIso) {
         query = query.or(`paid_at.gte.${startIso},and(paid_at.is.null,created_at.gte.${startIso})`);
-        statsQuery = statsQuery.or(`paid_at.gte.${startIso},and(paid_at.is.null,created_at.gte.${startIso})`);
       }
       if (endIso) {
         query = query.or(`paid_at.lte.${endIso},and(paid_at.is.null,created_at.lte.${endIso})`);
-        statsQuery = statsQuery.or(`paid_at.lte.${endIso},and(paid_at.is.null,created_at.lte.${endIso})`);
       }
-
-      // Búsqueda textual
-      if (params.search && params.search.trim()) {
-        const q = params.search.trim();
-        const searchExpr = `locator.ilike.%${q}%,client.ilike.%${q}%,title.ilike.%${q}%,hotel_name.ilike.%${q}%,guest_name.ilike.%${q}%,guest_ci.ilike.%${q}%,route_from_to.ilike.%${q}%`;
+      if (searchExpr) {
         query = query.or(searchExpr);
-        statsQuery = statsQuery.or(searchExpr);
       }
 
-      // Orden y Paginación
       query = query
         .order('paid_at', { ascending: false, nullsFirst: false })
         .order('created_at', { ascending: false })
         .range(from, to);
 
-      const [{ data, count, error }, { data: statsData }] = await Promise.all([
+      // 2. Query paginada completa por lotes para estadísticas contables (evita límite de 1,000 filas de Supabase)
+      const fetchAllStatsRows = async (
+        columns: string
+      ): Promise<{ rows: any[]; error: any }> => {
+        const allRows: any[] = [];
+        const batchSize = 1000;
+        let offset = 0;
+
+        while (true) {
+          let statsQuery = sb
+            .from('payment_requests')
+            .select(columns)
+            .in('status', ['realizado', 'anulado']);
+
+          if (params.currentUser && params.currentUser.role === 'operador') {
+            statsQuery = statsQuery.eq('created_by', params.currentUser.id);
+          }
+          if (startIso) {
+            statsQuery = statsQuery.or(
+              `paid_at.gte.${startIso},and(paid_at.is.null,created_at.gte.${startIso})`
+            );
+          }
+          if (endIso) {
+            statsQuery = statsQuery.or(
+              `paid_at.lte.${endIso},and(paid_at.is.null,created_at.lte.${endIso})`
+            );
+          }
+          if (searchExpr) {
+            statsQuery = statsQuery.or(searchExpr);
+          }
+
+          const { data: batchData, error: batchError } = await statsQuery
+            .order('created_at', { ascending: false })
+            .order('id', { ascending: false })
+            .range(offset, offset + batchSize - 1);
+
+          if (batchError) {
+            return { rows: [], error: batchError };
+          }
+          if (!batchData || batchData.length === 0) break;
+
+          allRows.push(...batchData);
+          if (batchData.length < batchSize) break;
+          offset += batchSize;
+        }
+
+        return { rows: allRows, error: null };
+      };
+
+      const [{ data, count, error }, primaryStatsRes] = await Promise.all([
         query,
-        statsQuery
+        fetchAllStatsRows('id, status, currency, amount_usd, amount_bs, bcv_rate, bank_details')
       ]);
 
       if (error) {
@@ -642,45 +754,31 @@ export async function fetchHistoricalPaymentRequests(
       }
 
       const totalCount = count || 0;
-      const normalizedList = (data || []).map(item => normalizePaymentRequest(item, undefined, params.currentUser));
+      const normalizedList = (data || []).map(item =>
+        normalizePaymentRequest(item, undefined, params.currentUser)
+      );
 
-      // Cálculo de Estadísticas Contables del Conjunto Filtrado
-      const statItems = statsData || [];
-      let countRealizadas = 0;
-      let countAnuladas = 0;
-      let totalDirectUsd = 0;
-      let totalUsdFromBs = 0;
-      let totalBS = 0;
-
-      for (const r of statItems) {
-        if (r.status === 'realizado') countRealizadas++;
-        else if (r.status === 'anulado') countAnuladas++;
-
-        if (r.status === 'anulado') continue;
-
-        const isDirectUsd =
-          r.currency === 'USD' ||
-          r.bank_details?.payment_method === 'binance' ||
-          r.bank_details?.payment_method === 'zelle_usd' ||
-          r.bank_details?.payment_method === 'transferencia_usd' ||
-          r.bank_details?.payment_method === 'efectivo_usd';
-
-        const amountUsd = Number(r.amount_usd) || 0;
-        const amountBs = Number(r.amount_bs) || 0;
-        const bcvRate = Number(r.bcv_rate) || 0;
-
-        if (isDirectUsd) {
-          totalDirectUsd += amountUsd;
-          if (amountBs > 0) totalBS += amountBs;
+      let statItems: any[] = primaryStatsRes.rows;
+      if (primaryStatsRes.error) {
+        console.warn(
+          'fetchHistoricalPaymentRequests stats query failed, retrying without currency:',
+          primaryStatsRes.error
+        );
+        const fallbackStatsRes = await fetchAllStatsRows(
+          'id, status, amount_usd, amount_bs, bcv_rate, bank_details'
+        );
+        if (fallbackStatsRes.error) {
+          console.warn(
+            'fetchHistoricalPaymentRequests fallback stats query failed, using normalized page:',
+            fallbackStatsRes.error
+          );
+          statItems = normalizedList;
         } else {
-          const usdVal = amountUsd > 0 ? amountUsd : (amountBs > 0 && bcvRate > 0 ? amountBs / bcvRate : 0);
-          totalUsdFromBs += usdVal;
-          const bsVal = amountBs > 0 ? amountBs : (amountUsd > 0 && bcvRate > 0 ? amountUsd * bcvRate : 0);
-          totalBS += bsVal;
+          statItems = fallbackStatsRes.rows;
         }
       }
 
-      const totalUSD = totalDirectUsd + totalUsdFromBs;
+      const stats = computeHistoryStats(statItems, params.status);
 
       return {
         data: normalizedList,
@@ -688,14 +786,7 @@ export async function fetchHistoricalPaymentRequests(
         page,
         pageSize,
         totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
-        stats: {
-          countRealizadas,
-          countAnuladas,
-          totalDirectUsd,
-          totalUsdFromBs,
-          totalUSD,
-          totalBS
-        }
+        stats
       };
     } catch (e) {
       console.warn('fetchHistoricalPaymentRequests Supabase failed, fallback to local:', e);
@@ -704,27 +795,53 @@ export async function fetchHistoricalPaymentRequests(
 
   // Fallback Local Storage
   const allLocal = getLocalRequests();
-  let localHistorical = allLocal.filter(r => r.status === 'realizado' || r.status === 'anulado');
+  let baseHistorical = allLocal.filter(r => r.status === 'realizado' || r.status === 'anulado');
 
-  if (params.status && params.status !== 'all') {
-    localHistorical = localHistorical.filter(r => r.status === params.status);
-  }
   if (params.currentUser && params.currentUser.role === 'operador') {
-    localHistorical = localHistorical.filter(r => r.created_by === params.currentUser!.id);
+    baseHistorical = baseHistorical.filter(r => r.created_by === params.currentUser!.id);
   }
-  if (params.search && params.search.trim()) {
-    const q = params.search.toLowerCase().trim();
-    localHistorical = localHistorical.filter(r =>
+  if (startIso) {
+    const startMs = new Date(startIso).getTime();
+    baseHistorical = baseHistorical.filter(
+      r => new Date(r.paid_at || r.created_at).getTime() >= startMs
+    );
+  }
+  if (endIso) {
+    const endMs = new Date(endIso).getTime();
+    baseHistorical = baseHistorical.filter(
+      r => new Date(r.paid_at || r.created_at).getTime() <= endMs
+    );
+  }
+  if (searchTerm) {
+    const q = searchTerm.toLowerCase();
+    baseHistorical = baseHistorical.filter(r =>
       (r.locator || '').toLowerCase().includes(q) ||
       (r.client || '').toLowerCase().includes(q) ||
       (r.title || '').toLowerCase().includes(q) ||
       (r.hotel_name || '').toLowerCase().includes(q) ||
-      (r.guest_name || '').toLowerCase().includes(q)
+      (r.guest_name || '').toLowerCase().includes(q) ||
+      (r.guest_ci || '').toLowerCase().includes(q) ||
+      (r.route_from_to || '').toLowerCase().includes(q)
     );
   }
 
-  const totalCount = localHistorical.length;
-  const sliced = localHistorical.slice(from, to + 1).map(item => normalizePaymentRequest(item, undefined, params.currentUser));
+  const normalizedBase = baseHistorical
+    .map(item => normalizePaymentRequest(item, undefined, params.currentUser))
+    .sort(
+      (a, b) =>
+        new Date(b.paid_at || b.created_at).getTime() -
+        new Date(a.paid_at || a.created_at).getTime()
+    );
+
+  const stats = computeHistoryStats(normalizedBase, params.status);
+
+  const filteredByStatus =
+    params.status && params.status !== 'all'
+      ? normalizedBase.filter(r => r.status === params.status)
+      : normalizedBase;
+
+  const totalCount = filteredByStatus.length;
+  const sliced = filteredByStatus.slice(from, to + 1);
 
   return {
     data: sliced,
@@ -732,14 +849,7 @@ export async function fetchHistoricalPaymentRequests(
     page,
     pageSize,
     totalPages: Math.max(1, Math.ceil(totalCount / pageSize)),
-    stats: {
-      countRealizadas: localHistorical.filter(r => r.status === 'realizado').length,
-      countAnuladas: localHistorical.filter(r => r.status === 'anulado').length,
-      totalDirectUsd: 0,
-      totalUsdFromBs: 0,
-      totalUSD: 0,
-      totalBS: 0
-    }
+    stats
   };
 }
 

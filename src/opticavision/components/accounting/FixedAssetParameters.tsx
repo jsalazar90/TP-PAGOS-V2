@@ -101,11 +101,11 @@ export default function FixedAssetParameters({ categoriasActivos, cuentasContabl
   };
 
   return (
-    <div className="p-6 w-full">
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-6">
+    <div className="p-3 sm:p-6 w-full">
+      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 sm:gap-4 mb-4 sm:mb-6">
         <div>
-          <h2 className="text-xl font-bold text-slate-800">Parámetros de Activo Fijo</h2>
-          <p className="text-slate-500 text-sm">Configuración de categorías, métodos y cuentas contables</p>
+          <h2 className="text-lg sm:text-xl font-bold text-slate-800">Parámetros de Activo Fijo</h2>
+          <p className="text-slate-500 text-xs sm:text-sm">Configuración de categorías, métodos y cuentas contables</p>
         </div>
         <button 
           onClick={() => {
@@ -121,7 +121,7 @@ export default function FixedAssetParameters({ categoriasActivos, cuentasContabl
             });
             setShowModal(true);
           }}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors"
+          className="w-full md:w-auto flex items-center justify-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-xl hover:bg-indigo-700 transition-colors cursor-pointer"
         >
           <Plus className="w-4 h-4" />
           <span className="text-sm font-medium">Nueva Categoría</span>
@@ -187,18 +187,18 @@ export default function FixedAssetParameters({ categoriasActivos, cuentasContabl
 
       {/* Modal Nueva Categoría */}
       {showModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl overflow-hidden animate-in zoom-in-95 duration-200">
-            <div className="flex items-center justify-between p-6 border-b border-slate-200 bg-slate-50">
-              <h2 className="text-xl font-bold text-slate-800">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-900/50 backdrop-blur-sm p-2.5 sm:p-4">
+          <div className="bg-white rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] flex flex-col overflow-hidden animate-in zoom-in-95 duration-200">
+            <div className="flex items-center justify-between p-4 sm:p-6 border-b border-slate-200 bg-slate-50 shrink-0">
+              <h2 className="text-base sm:text-xl font-bold text-slate-800">
                 {formData.id ? 'Editar Categoría de Activo' : 'Nueva Categoría de Activo'}
               </h2>
               <button onClick={() => setShowModal(false)} className="p-2 text-slate-400 hover:bg-rose-100 hover:text-rose-600 rounded-lg transition-colors">
-                <X className="w-6 h-6" />
+                <X className="w-5 h-5 sm:w-6 sm:h-6" />
               </button>
             </div>
-            <div className="p-6">
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 sm:p-6 overflow-y-auto flex-1">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-3.5 sm:gap-4">
                 <div>
                   <label className="block text-sm font-medium text-slate-700 mb-1">Código *</label>
                   <input 
@@ -276,11 +276,11 @@ export default function FixedAssetParameters({ categoriasActivos, cuentasContabl
                 </div>
               </div>
             </div>
-            <div className="p-6 border-t border-slate-200 bg-slate-50 flex justify-end gap-3">
-              <button disabled={isSubmitting} onClick={() => setShowModal(false)} className="px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50">
+            <div className="p-4 sm:p-6 border-t border-slate-200 bg-slate-50 flex flex-col-reverse sm:flex-row justify-end gap-2.5 sm:gap-3 shrink-0">
+              <button disabled={isSubmitting} onClick={() => setShowModal(false)} className="w-full sm:w-auto px-4 py-2 text-slate-600 hover:bg-slate-200 rounded-lg font-medium transition-colors disabled:opacity-50">
                 Cancelar
               </button>
-              <button disabled={isSubmitting} onClick={handleSave} className="px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50">
+              <button disabled={isSubmitting} onClick={handleSave} className="w-full sm:w-auto px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 font-medium transition-colors disabled:opacity-50">
                 {isSubmitting ? 'Guardando...' : 'Guardar Categoría'}
               </button>
             </div>

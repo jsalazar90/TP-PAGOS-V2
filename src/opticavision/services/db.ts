@@ -128,28 +128,70 @@ export const SAMPLE_FULL_BALANCE_CUENTAS = [
   // 3. PATRIMONIO
   { id: '3', codigo: '3', nombre: 'PATRIMONIO', nivel: 1, tipo: 'Título General', grupo: 'Patrimonio', naturaleza: 'Acreedora' },
   { id: '3.1', codigo: '3.1', nombre: 'Patrimonio Neto y Reservas', nivel: 2, tipo: 'Título de Cuenta Movimiento', grupo: 'Patrimonio', naturaleza: 'Acreedora' },
+  { id: '3.1.01', codigo: '3.1.01', nombre: 'Capital Social', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Patrimonio', naturaleza: 'Acreedora' },
   { id: '3.1.01.001', codigo: '3.1.01.001', nombre: 'Capital Social Suscrito y Pagado', nivel: 4, tipo: 'Movimiento', grupo: 'Patrimonio', naturaleza: 'Acreedora', saldo: 0, saldoActual: 0 },
+  { id: '3.1.03', codigo: '3.1.03', nombre: 'Resultados Acumulados y del Ejercicio', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Patrimonio', naturaleza: 'Acreedora' },
   { id: '3.1.03.001', codigo: '3.1.03.001', nombre: 'Utilidades Retenidas de Ejercicios Anteriores', nivel: 4, tipo: 'Movimiento', grupo: 'Patrimonio', naturaleza: 'Acreedora', saldo: 0, saldoActual: 0 },
   { id: '3.1.03.003', codigo: '3.1.03.003', nombre: 'Resultado del Ejercicio Actual (Utilidad Neta)', nivel: 4, tipo: 'Movimiento', grupo: 'Patrimonio', naturaleza: 'Acreedora', saldo: 0, saldoActual: 0 },
 
   // 4. INGRESOS
   { id: '4', codigo: '4', nombre: 'INGRESOS', nivel: 1, tipo: 'Título General', grupo: 'Ingresos', naturaleza: 'Acreedora' },
   { id: '4.1', codigo: '4.1', nombre: 'Ingresos por Servicios Turísticos y Operaciones', nivel: 2, tipo: 'Título de Cuenta Movimiento', grupo: 'Ingresos', naturaleza: 'Acreedora' },
+  { id: '4.1.01', codigo: '4.1.01', nombre: 'Ingresos Operativos y Diferencial Cambiario', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Ingresos', naturaleza: 'Acreedora' },
   { id: '4.1.01.001', codigo: '4.1.01.001', nombre: 'Ingresos por Emisión de Boletos, Hoteles y Servicios', nivel: 4, tipo: 'Movimiento', grupo: 'Ingresos', naturaleza: 'Acreedora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'cobranzas' },
   { id: '4.1.01.002', codigo: '4.1.01.002', nombre: 'Ganancia en Diferencial Cambiario (SAPS)', nivel: 4, tipo: 'Movimiento', grupo: 'Ingresos', naturaleza: 'Acreedora', saldo: 0, saldoActual: 0 },
 
   // 5. COSTOS Y GASTOS OPERATIVOS (JT PAGOS PRO)
   { id: '5', codigo: '5', nombre: 'COSTOS Y GASTOS OPERATIVOS', nivel: 1, tipo: 'Título General', grupo: 'Egresos', naturaleza: 'Deudora' },
   { id: '5.1', codigo: '5.1', nombre: 'Costos Directos de Operación (Boletos, Hoteles, Traslados)', nivel: 2, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
+  { id: '5.1.01', codigo: '5.1.01', nombre: 'Costos de Boletos Aéreos y Remisiones', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
   { id: '5.1.01.001', codigo: '5.1.01.001', nombre: 'Costo de Emisión Boletos Aéreos (BSP / Consolidadores)', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'proveedores_real' },
   { id: '5.1.01.002', codigo: '5.1.01.002', nombre: 'Costo de Remisiones y Penalidades Aéreas', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'proveedores_real' },
+  { id: '5.1.02', codigo: '5.1.02', nombre: 'Costos de Hoteles y Hospedaje', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
   { id: '5.1.02.001', codigo: '5.1.02.001', nombre: 'Costo de Reservas y Emisión de Hoteles (Hospedaje)', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'proveedores_real' },
+  { id: '5.1.03', codigo: '5.1.03', nombre: 'Costos de Traslados y Transporte', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
   { id: '5.1.03.001', codigo: '5.1.03.001', nombre: 'Costo de Traslados Ejecutivos y Transporte Terrestre', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'proveedores_real' },
+  { id: '5.1.04', codigo: '5.1.04', nombre: 'Compras Directas y Gastos de Apoyo', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
   { id: '5.1.04.001', codigo: '5.1.04.001', nombre: 'Compras Directas por Página Web / Gastos de Apoyo', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'gastos_er' },
+  { id: '5.2', codigo: '5.2', nombre: 'Gastos Financieros y Bancarios', nivel: 2, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
+  { id: '5.2.01', codigo: '5.2.01', nombre: 'Comisiones Bancarias y Diferencial Cambiario', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
   { id: '5.2.01.001', codigo: '5.2.01.001', nombre: 'Comisiones Bancarias y Puntos de Venta (POS)', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'gastos_er' },
   { id: '5.2.01.002', codigo: '5.2.01.002', nombre: 'Pérdida en Diferencial Cambiario (SAPS)', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0 },
+
+  // 6. GASTOS ADMINISTRATIVOS Y DE PERSONAL
+  { id: '6', codigo: '6', nombre: 'GASTOS ADMINISTRATIVOS Y DE PERSONAL', nivel: 1, tipo: 'Título General', grupo: 'Egresos', naturaleza: 'Deudora' },
+  { id: '6.1', codigo: '6.1', nombre: 'Gastos Generales de Administración', nivel: 2, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
+  { id: '6.1.01', codigo: '6.1.01', nombre: 'Viáticos y Gastos de Personal', nivel: 3, tipo: 'Título de Cuenta Movimiento', grupo: 'Egresos', naturaleza: 'Deudora' },
   { id: '6.1.01.001', codigo: '6.1.01.001', nombre: 'Viáticos y Gastos Operativos de Personal', nivel: 4, tipo: 'Movimiento', grupo: 'Egresos', naturaleza: 'Deudora', saldo: 0, saldoActual: 0, areaFlujoCaja: 'gastos_er' }
 ];
+
+export function ensureBaseHierarchyTitles(cuentas: any[]): any[] {
+  if (!Array.isArray(cuentas) || cuentas.length === 0) return cuentas || [];
+  const existingCodes = new Set(
+    cuentas.map((c) => String(c?.codigo || '').trim()).filter(Boolean)
+  );
+  const missing: any[] = [];
+
+  for (const base of SAMPLE_FULL_BALANCE_CUENTAS) {
+    if (base.tipo === 'Movimiento') continue;
+    if (existingCodes.has(base.codigo)) continue;
+    const prefix = `${base.codigo}.`;
+    const hasDescendant = cuentas.some((c) =>
+      String(c?.codigo || '').trim().startsWith(prefix)
+    );
+    if (hasDescendant) {
+      missing.push({ ...base });
+      existingCodes.add(base.codigo);
+    }
+  }
+
+  if (missing.length === 0) return cuentas;
+  return [...cuentas, ...missing].sort((a, b) =>
+    String(a?.codigo || '').localeCompare(String(b?.codigo || ''), undefined, {
+      numeric: true
+    })
+  );
+}
 
 export async function dbResetToFullDemoCuentas(): Promise<any[]> {
   saveToStorage(ERP_STORAGE_KEYS.CUENTAS, SAMPLE_FULL_BALANCE_CUENTAS);
@@ -174,6 +216,58 @@ export async function dbResetToFullDemoCuentas(): Promise<any[]> {
     }
   }
   return SAMPLE_FULL_BALANCE_CUENTAS;
+}
+
+export async function dbBulkSaveCuentasContables(
+  cuentas: any[],
+  replaceAll = false
+): Promise<void> {
+  saveToStorage(ERP_STORAGE_KEYS.CUENTAS, cuentas);
+  if (!isSupabaseConfigured || !supabase) return;
+
+  try {
+    const validRows = (cuentas || []).filter((c) => c && c.id && c.codigo && c.nombre);
+    const keepIds = new Set(validRows.map((c) => String(c.id)));
+
+    if (replaceAll) {
+      const { data: existingRows, error: fetchErr } = await supabase
+        .from('cuentas_contables')
+        .select('id');
+
+      if (!fetchErr && Array.isArray(existingRows)) {
+        const toDelete = existingRows
+          .map((r: any) => String(r.id))
+          .filter((id) => !keepIds.has(id));
+
+        for (let i = 0; i < toDelete.length; i += 100) {
+          const chunk = toDelete.slice(i, i + 100);
+          await supabase.from('cuentas_contables').delete().in('id', chunk);
+        }
+      }
+    }
+
+    const nowIso = new Date().toISOString();
+    const mappedRows = validRows.map((c) => ({
+      id: String(c.id),
+      codigo: String(c.codigo || ''),
+      nombre: String(c.nombre || ''),
+      nivel: Number(c.nivel) || 4,
+      tipo: c.tipo || 'Movimiento',
+      grupo: c.grupo || 'Activo',
+      naturaleza: c.naturaleza || 'Deudora',
+      area_flujo_caja: c.areaFlujoCaja || c.area_flujo_caja || null,
+      saldo: Number(c.saldo ?? c.saldoActual) || 0,
+      payload: c,
+      updated_at: nowIso
+    }));
+
+    for (let i = 0; i < mappedRows.length; i += 100) {
+      const chunk = mappedRows.slice(i, i + 100);
+      await supabase.from('cuentas_contables').upsert(chunk, { onConflict: 'id' });
+    }
+  } catch (err) {
+    console.warn('[ERP Supabase Bulk Save cuentas_contables]:', err);
+  }
 }
 
 export async function dbFetchTerminalesPos(_empresaId?: string): Promise<any[]> {

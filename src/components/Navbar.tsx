@@ -80,10 +80,15 @@ export const Navbar: React.FC<NavbarProps> = ({
   return (
     <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-slate-200/90 shadow-2xs print:hidden">
       <div className="max-w-7xl mx-auto px-3 sm:px-6">
-        <div className="flex items-center justify-between h-14 sm:h-16 gap-2">
+        <div className="flex items-center justify-between h-13 sm:h-16 gap-2">
           {/* Brand Logo */}
           <div className="cursor-pointer py-1 shrink-0" onClick={() => setActiveTab('dashboard')}>
-            <TPLogo size="md" showSubtitle={true} />
+            <div className="sm:hidden">
+              <TPLogo size="sm" showSubtitle={false} />
+            </div>
+            <div className="hidden sm:block">
+              <TPLogo size="md" showSubtitle={true} />
+            </div>
           </div>
 
           {/* Desktop Nav Items (Elevated Segmented Control) */}
@@ -183,13 +188,19 @@ export const Navbar: React.FC<NavbarProps> = ({
               aria-haspopup="true"
               title="Menú de usuario y configuración"
             >
-              <div className="w-7 h-7 rounded-xl bg-teal-100/90 text-teal-700 flex items-center justify-center shrink-0">
+              <div className="relative w-7 h-7 rounded-xl bg-teal-100/90 text-teal-700 flex items-center justify-center shrink-0">
                 {currentUser.role === 'admin' ? (
                   <ShieldCheck className="w-4 h-4 text-teal-700" />
                 ) : currentUser.role === 'operador' ? (
                   <UserCog className="w-4 h-4 text-teal-700" />
                 ) : (
                   <UserCheck className="w-4 h-4 text-teal-700" />
+                )}
+                {!(currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted') && (
+                  <span
+                    className="sm:hidden absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full bg-amber-500 ring-2 ring-white animate-pulse"
+                    title="Alertas pendientes por activar"
+                  />
                 )}
               </div>
 
@@ -211,7 +222,7 @@ export const Navbar: React.FC<NavbarProps> = ({
 
             {/* Dropdown Menu Modal */}
             {isUserMenuOpen && (
-              <div className="absolute right-0 top-full mt-2 w-72 bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 animate-fade-in divide-y divide-slate-100">
+              <div className="absolute right-0 top-full mt-2 w-[min(18rem,calc(100vw-1.5rem))] bg-white rounded-2xl shadow-xl border border-slate-200 p-2 z-50 animate-fade-in divide-y divide-slate-100">
                 {/* 1. Header con Información y Rol */}
                 <div className="p-2.5 pb-3">
                   <div className="flex items-center gap-2.5">
@@ -322,123 +333,95 @@ export const Navbar: React.FC<NavbarProps> = ({
         </div>
       </div>
 
-      {/* Mobile Bottom Navigation Bar (Ultra Accessible on Phones) */}
-      <div className="md:hidden fixed bottom-0 left-0 right-0 z-50 bg-white/95 backdrop-blur-md border-t border-slate-200/90 px-1.5 py-1.5 flex items-center justify-around shadow-2xl safe-area-bottom">
-        <button
-          onClick={() => setActiveTab('dashboard')}
-          className={`active-press relative flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl text-[10px] font-bold transition-all ${
-            activeTab === 'dashboard'
-              ? 'text-white bg-gradient-to-r from-[#00b4a2] to-[#009b8b] shadow-xs shadow-teal-600/20'
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <div className="relative">
-            <LayoutDashboard className="w-4 h-4" />
+      {/* Mobile Top Module Movement Bar */}
+      <nav
+        aria-label="Navegación de módulos móvil"
+        className="md:hidden border-t border-slate-100 bg-slate-50/90 px-2 py-1.5"
+      >
+        <div className="flex items-center gap-1 overflow-x-auto no-scrollbar bg-slate-200/65 p-1 rounded-xl border border-slate-200/80">
+          <button
+            type="button"
+            onClick={() => setActiveTab('dashboard')}
+            className={`flex-1 min-w-fit active-press flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'dashboard'
+                ? 'bg-gradient-to-r from-[#00b4a2] to-[#009b8b] text-white shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+            }`}
+          >
+            <LayoutDashboard className="w-3.5 h-3.5 shrink-0" />
+            <span>Bandeja</span>
             {pendingCount > 0 && (
               <span
-                className={`absolute -top-1.5 -right-2.5 px-1 min-w-[15px] h-3.5 flex items-center justify-center text-[9px] font-black rounded-full shadow-xs ${
+                className={`px-1.5 py-0.2 min-w-[17px] text-[10px] font-black rounded-full text-center ${
                   urgentCount > 0
                     ? 'bg-rose-500 text-white animate-pulse'
                     : activeTab === 'dashboard'
-                    ? 'bg-white text-[#009b8b]'
-                    : 'bg-[#00b4a2] text-white'
+                    ? 'bg-white/25 text-white'
+                    : 'bg-slate-800 text-white'
                 }`}
               >
                 {pendingCount}
               </span>
             )}
-          </div>
-          <span>Bandeja</span>
-        </button>
+          </button>
 
-        <button
-          onClick={() => setActiveTab('history')}
-          className={`active-press flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl text-[10px] font-bold transition-all ${
-            activeTab === 'history'
-              ? 'text-white bg-gradient-to-r from-[#00b4a2] to-[#009b8b] shadow-xs shadow-teal-600/20'
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <History className="w-4 h-4" />
-          <span>Historial</span>
-        </button>
-
-        <button
-          onClick={() => setActiveTab('beneficiaries')}
-          className={`active-press flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl text-[10px] font-bold transition-all ${
-            activeTab === 'beneficiaries'
-              ? 'text-white bg-gradient-to-r from-[#00b4a2] to-[#009b8b] shadow-xs shadow-teal-600/20'
-              : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
-          }`}
-        >
-          <Building2 className="w-4 h-4" />
-          <span>Beneficiarios</span>
-        </button>
-
-        {currentUser.role === 'admin' && (
           <button
-            onClick={() => setActiveTab('accounting')}
-            className={`active-press flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl text-[10px] font-bold transition-all ${
-              activeTab === 'accounting'
-                ? 'text-white bg-gradient-to-r from-[#00b4a2] to-[#009b8b] shadow-xs shadow-teal-600/20'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+            type="button"
+            onClick={() => setActiveTab('history')}
+            className={`flex-1 min-w-fit active-press flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'history'
+                ? 'bg-gradient-to-r from-[#00b4a2] to-[#009b8b] text-white shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
             }`}
           >
-            <BookOpen className="w-4 h-4" />
-            <span>Cuentas</span>
+            <History className="w-3.5 h-3.5 shrink-0" />
+            <span>Historial</span>
           </button>
-        )}
 
-        {currentUser.role === 'admin' && (
           <button
-            onClick={() => setActiveTab('users')}
-            className={`active-press flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl text-[10px] font-bold transition-all ${
-              activeTab === 'users'
-                ? 'text-white bg-gradient-to-r from-[#00b4a2] to-[#009b8b] shadow-xs shadow-teal-600/20'
-                : 'text-slate-500 hover:text-slate-800 hover:bg-slate-100'
+            type="button"
+            onClick={() => setActiveTab('beneficiaries')}
+            className={`flex-1 min-w-fit active-press flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+              activeTab === 'beneficiaries'
+                ? 'bg-gradient-to-r from-[#00b4a2] to-[#009b8b] text-white shadow-xs font-black'
+                : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
             }`}
           >
-            <Users className="w-4 h-4" />
-            <span>Usuarios</span>
+            <Building2 className="w-3.5 h-3.5 shrink-0" />
+            <span>Beneficiarios</span>
           </button>
-        )}
 
-        {/* Mobile Notifications Button in Bottom Bar */}
-        <button
-          onClick={handleToggleNotifications}
-          className={`active-press flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl text-[10px] font-bold transition-all ${
-            (currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted')
-              ? 'text-teal-700 hover:bg-teal-50'
-              : 'text-amber-700 bg-amber-50 animate-pulse'
-          }`}
-          title="Activar o probar alertas"
-        >
-          {(currentUser.role === 'admin' ? isPushActive : notifPermission === 'granted') ? (
-            <BellRing className="w-4 h-4 text-[#00b4a2]" />
-          ) : (
-            <Bell className="w-4 h-4 text-amber-600" />
+          {currentUser.role === 'admin' && (
+            <>
+              <button
+                type="button"
+                onClick={() => setActiveTab('accounting')}
+                className={`flex-1 min-w-fit active-press flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  activeTab === 'accounting'
+                    ? 'bg-gradient-to-r from-[#00b4a2] to-[#009b8b] text-white shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                }`}
+              >
+                <BookOpen className="w-3.5 h-3.5 shrink-0" />
+                <span>Cuentas</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() => setActiveTab('users')}
+                className={`flex-1 min-w-fit active-press flex items-center justify-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold whitespace-nowrap transition-all cursor-pointer ${
+                  activeTab === 'users'
+                    ? 'bg-gradient-to-r from-[#00b4a2] to-[#009b8b] text-white shadow-xs font-black'
+                    : 'text-slate-600 hover:text-slate-900 hover:bg-white/80'
+                }`}
+              >
+                <Users className="w-3.5 h-3.5 shrink-0" />
+                <span>Usuarios</span>
+              </button>
+            </>
           )}
-          <span>
-            {currentUser.role === 'admin'
-              ? isPushActive
-                ? 'Push 24/7'
-                : 'Activar'
-              : notifPermission === 'granted'
-              ? 'Alertas'
-              : 'Activar'}
-          </span>
-        </button>
-
-        {/* Mobile Logout Button in Bottom Bar */}
-        <button
-          onClick={onLogout}
-          className="active-press flex flex-col items-center gap-0.5 py-1.5 px-2.5 rounded-xl text-[10px] font-bold text-rose-600 hover:bg-rose-50 transition-all"
-          title="Cerrar Sesión"
-        >
-          <LogOut className="w-4 h-4" />
-          <span>Salir</span>
-        </button>
-      </div>
+        </div>
+      </nav>
     </header>
   );
 };
